@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2025 Mateo Carvajal Tamayo
+ * Todos los derechos reservados.
+ * 
+ * Este código es propiedad de Mateo Carvajal Tamayo.
+ * Uso no autorizado está prohibido.
+ */
+
 // src/core/config/firebase.config.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
