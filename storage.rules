@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Función auxiliar
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Imágenes de propiedades
+    match /properties/{allPaths=**} {
+      allow read: if true; // Público para ver imágenes
+      allow write: if isAuthenticated();
+    }
+    
+    // Documentos de contratos
+    match /contracts/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Chat - archivos
+    match /chat/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Avatares de usuarios
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}

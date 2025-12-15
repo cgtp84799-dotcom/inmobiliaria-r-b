@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar para verificar autenticación
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función para verificar si el usuario es el dueño
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Función para verificar roles
+    function hasRole(role) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    
+    // Usuarios
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(userId) || hasRole('admin');
+      allow delete: if hasRole('admin');
+    }
+    
+    // Propiedades
+    match /properties/{propertyId} {
+      // Lectura pública para propiedades con visibility = 'public'
+      allow read: if resource.data.visibility == 'public' || isAuthenticated();
+      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
+      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
+      allow delete: if hasRole('admin');
+    }
+    
+    // Clientes
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
+      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
+      allow delete: if hasRole('admin');
+    }
+    
+    // Contratos
+    match /contracts/{contractId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('lawyer') || hasRole('agent'));
+      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('lawyer'));
+      allow delete: if hasRole('admin');
+    }
+    
+    // Chats
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow delete: if hasRole('admin');
+    }
+    
+    // Mensajes
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.sender.uid;
+      allow delete: if hasRole('admin');
+    }
+    
+    // Notificaciones
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+  }
+}

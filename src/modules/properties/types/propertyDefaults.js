@@ -1,0 +1,105 @@
+import { PROPERTY_TYPES, TRANSACTION_TYPES, PROPERTY_STATUS } from '../types/property.types';
+
+export const createEmptyProperty = () => ({
+  title: '',
+  description: '',
+  type: PROPERTY_TYPES.HOUSE,
+  transactionType: TRANSACTION_TYPES.RENT,
+  status: PROPERTY_STATUS.DRAFT,
+  price: {
+    sale: null,
+    rent: null,
+    currency: 'COP',
+    negotiable: true,
+    includeAdminFee: false,
+  },
+  agentId: null,
+  ownerClientId: null,
+  currentTenantId: null,
+
+  location: {
+    country: 'Colombia',
+    department: '',
+    city: '',
+    neighborhood: '',
+    addressPublic: '',
+    addressPrivate: '',
+    stratum: null,
+    geo: { lat: null, lng: null },
+  },
+
+  features: {
+    builtArea: null,
+    lotArea: null,
+    rooms: null,
+    bathrooms: null,
+    parking: null,
+    floor: null,
+    yearBuilt: null,
+    propertyHorizontal: {
+      isPH: false,
+      buildingName: '',
+      unitNumber: '',
+      adminFee: null,
+    },
+    services: {
+      water: true,
+      energy: true,
+      gas: false,
+      sewerage: true,
+      internet: false,
+    },
+    amenities: [],
+    use: 'residential',
+  },
+
+  legalInfo: {
+    matriculaInmobiliaria: '',
+    circuloRegistral: '',
+    cedulaCatastral: '',
+    entidadCatastral: '',
+    tipoTenencia: 'pleno_dominio',
+    notasTenencia: '',
+    afectacionViviendaFamiliar: false,
+    patrimonioDeFamilia: false,
+    hipotecas: [],
+    embargos: [],
+    servidumbres: [],
+    propiedadHorizontal: {
+      aplica: false,
+      reglamentoPH: false,
+      numeroEscrituraReglamento: '',
+      circuloRegistroReglamento: '',
+      coeficienteCopropiedad: null,
+      bienesComunesEsenciales: [],
+    },
+    usoSuelo: '',
+    notasJuridicas: '',
+    checklistTitulos: {
+      cadenaTradicion20: 'no_revisada',
+      ultimaEscritura: '',
+      hipotecasCanceladas: 'no_aplica',
+      procesosJudiciales: 'desconocido',
+      detalleProcesos: '',
+      coincideCatastroRegistro: 'desconocido',
+      recomendacion: 'apto',
+    },
+  },
+
+  media: {
+    photos: [],
+    videos: [],
+    tours3D: [],
+    planos: [],
+  },
+
+  documents: [],
+  relations: {
+    leads: [],
+    contratos: [],
+  },
+
+  visibility: 'public',
+  createdAt: null,
+  updatedAt: null,
+});
