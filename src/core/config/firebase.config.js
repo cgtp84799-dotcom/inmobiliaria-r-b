@@ -2,7 +2,10 @@
  * Copyright (c) 2025 Mateo Carvajal Tamayo
  * Todos los derechos reservados.
  * 
- * Este código es propiedad de Mateo Carvajal Tamayo.
+ * Software desarrollado para Andrés Medardo Rincón Bedoya
+ * NIT: 1087985594-7 | Matrícula Mercantil: 238639
+ * Cámara de Comercio de Manizales por Caldas
+ * 
  * Uso no autorizado está prohibido.
  */
 
