@@ -22,9 +22,12 @@
     ],
     "rewrites": [
       {
-        "source": "!/@(*.js|*.css|*.png|*.jpg|*.ico|*.svg)",
+        "source": "**",
         "destination": "/index.html"
       }
     ]
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

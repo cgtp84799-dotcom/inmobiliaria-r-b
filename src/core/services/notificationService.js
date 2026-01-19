@@ -1,23 +1,25 @@
+// src/core/services/notificationService.js
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
-import { 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  getDoc,           // ✅ AGREGADO
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  query, 
-  where, 
-  getDocs, 
-  orderBy, 
-  limit 
+import {
+  doc,
+  updateDoc,
+  getDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit
 } from 'firebase/firestore';
+
 import { db } from '../config/firebase.config';
 import app from '../config/firebase.config';
 
 // ✅ TU CLAVE VAPID
-const VAPID_KEY = 'BEjKiJLZDYvPsTIrx1zOiTpmjpczmmcQA9kpA1Ziyf3G2GzmCo2BdfTmBzCuryDGe1mnEeOC5pXn25qVItbqeoo';
+const VAPID_KEY =
+  'BEjKiJLZDYvPsTIrx1zOiTpmjpczmmcQA9kpA1Ziyf3G2GzmCo2BdfTmBzCuryDGe1mnEeOC5pXn25qVItbqeoo';
 
 let messaging = null;
 
@@ -25,94 +27,89 @@ let messaging = null;
 export const initializeMessaging = async () => {
   try {
     const supported = await isSupported();
-    if (supported) {
-      messaging = getMessaging(app);
-      console.log('✅ Firebase Messaging inicializado');
-      return messaging;
-    } else {
+    if (!supported) {
       console.warn('⚠️ Firebase Messaging no soportado en este navegador');
       return null;
     }
+
+    messaging = getMessaging(app);
+    console.log('✅ Firebase Messaging inicializado');
+    return messaging;
   } catch (error) {
     console.error('❌ Error inicializando messaging:', error);
     return null;
   }
 };
 
-// Solicitar permiso de notificaciones
-export const requestNotificationPermission = async (userId) => {
+// Solicitar permiso de notificaciones (usa EMAIL como ID de users/{email})
+export const requestNotificationPermission = async (userEmail) => {
   try {
-    console.log('🔔 Solicitando permiso de notificaciones...');
+    // Validaciones básicas
+    if (!userEmail) {
+      console.warn('⚠️ requestNotificationPermission: userEmail vacío');
+      return null;
+    }
 
     // Verificar soporte del navegador
     if (!('Notification' in window)) {
-      console.error('Este navegador no soporta notificaciones');
+      console.warn('⚠️ Este navegador no soporta notificaciones');
       return null;
     }
 
     const permission = await Notification.requestPermission();
-    
-    if (permission === 'granted') {
-      console.log('✅ Permiso concedido');
-      
-      // Inicializar messaging si no está inicializado
-      if (!messaging) {
-        messaging = await initializeMessaging();
-      }
 
-      if (!messaging) {
-        console.error('No se pudo inicializar messaging');
-        return null;
-      }
-
-      // Obtener token FCM
-      const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-      console.log('🔑 Token FCM obtenido:', token);
-
-      // Guardar token en Firestore
-      await saveTokenToDatabase(userId, token);
-
-      return token;
-    } else if (permission === 'denied') {
-      console.log('❌ Permiso denegado');
-      return null;
-    } else {
-      console.log('⚠️ Permiso por defecto');
+    if (permission !== 'granted') {
+      if (permission === 'denied') console.log('❌ Permiso denegado');
+      else console.log('⚠️ Permiso por defecto');
       return null;
     }
+
+    // Inicializar messaging si no está inicializado
+    if (!messaging) messaging = await initializeMessaging();
+    if (!messaging) return null;
+
+    // Obtener token FCM
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    if (!token) {
+      console.warn('⚠️ No se pudo obtener token FCM');
+      return null;
+    }
+
+    // Guardar token en Firestore SIN crear usuarios fantasma
+    await saveTokenToDatabase(userEmail, token);
+
+    return token;
   } catch (error) {
-    console.error('Error solicitando permiso:', error);
+    console.error('❌ Error solicitando permiso:', error);
     return null;
   }
 };
 
-// ✅ CORREGIDO - Guardar token en Firestore SIN crear usuarios duplicados
-const saveTokenToDatabase = async (userId, token) => {
+// Guardar token en Firestore (NO crea docs nuevos en users)
+const saveTokenToDatabase = async (userEmail, token) => {
   try {
-    const userRef = doc(db, 'users', userId);
-    
-    // ✅ Verificar si el usuario existe
+    const userRef = doc(db, 'users', userEmail);
+
+    // Verificar si el usuario existe
     const userSnap = await getDoc(userRef);
-    
-    if (userSnap.exists()) {
-      // Usuario existe - Solo actualizar el token
-      await updateDoc(userRef, {
-        fcmToken: token,
-        lastTokenUpdate: serverTimestamp(),
-        notificationsEnabled: true
-      });
-      console.log('✅ Token actualizado en usuario existente');
-    } else {
-      // Usuario NO existe - Crear documento mínimo
-      console.warn('⚠️ Usuario no encontrado. Creando documento de notificaciones...');
-      await setDoc(userRef, {
-        fcmToken: token,
-        lastTokenUpdate: serverTimestamp(),
-        notificationsEnabled: true,
-        createdAt: serverTimestamp()
-      }, { merge: true });
-      console.log('✅ Token guardado en nuevo documento de usuario');
+
+    if (!userSnap.exists()) {
+      // ⚠️ CLAVE: NO crear documento mínimo (eso genera "usuarios fantasma")
+      console.warn(
+        '⚠️ Usuario no encontrado en Firestore. No se creará documento de notificaciones:',
+        userEmail
+      );
+      return;
     }
+
+    // Usuario existe -> actualizar
+    await updateDoc(userRef, {
+      fcmToken: token,
+      lastTokenUpdate: serverTimestamp(),
+      notificationsEnabled: true
+    });
+
+    console.log('✅ Token actualizado en usuario existente:', userEmail);
   } catch (error) {
     console.error('❌ Error guardando token:', error);
   }
@@ -120,14 +117,8 @@ const saveTokenToDatabase = async (userId, token) => {
 
 // Escuchar mensajes en foreground
 export const onMessageListener = async () => {
-  if (!messaging) {
-    messaging = await initializeMessaging();
-  }
-
-  if (!messaging) {
-    console.error('Messaging no inicializado');
-    return null;
-  }
+  if (!messaging) messaging = await initializeMessaging();
+  if (!messaging) return null;
 
   return new Promise((resolve) => {
     onMessage(messaging, (payload) => {
@@ -141,7 +132,7 @@ export const onMessageListener = async () => {
 export const createNotification = async (notification) => {
   try {
     const notificationsRef = collection(db, 'notifications');
-    
+
     const notificationData = {
       ...notification,
       read: false,
@@ -151,10 +142,10 @@ export const createNotification = async (notification) => {
 
     const docRef = await addDoc(notificationsRef, notificationData);
     console.log('✅ Notificación creada:', docRef.id);
-    
+
     return docRef.id;
   } catch (error) {
-    console.error('Error creando notificación:', error);
+    console.error('❌ Error creando notificación:', error);
     throw error;
   }
 };
@@ -171,14 +162,14 @@ export const getUserNotifications = async (userId, limitCount = 50) => {
     );
 
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate()
+
+    return snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate()
     }));
   } catch (error) {
-    console.error('Error obteniendo notificaciones:', error);
+    console.error('❌ Error obteniendo notificaciones:', error);
     return [];
   }
 };
@@ -192,7 +183,7 @@ export const markNotificationAsRead = async (notificationId) => {
       readAt: serverTimestamp()
     });
   } catch (error) {
-    console.error('Error marcando como leída:', error);
+    console.error('❌ Error marcando como leída:', error);
   }
 };
 
@@ -207,29 +198,39 @@ export const markAllAsRead = async (userId) => {
     );
 
     const snapshot = await getDocs(q);
-    
-    const updates = snapshot.docs.map(doc => 
-      updateDoc(doc.ref, { read: true, readAt: serverTimestamp() })
+
+    const updates = snapshot.docs.map((d) =>
+      updateDoc(d.ref, { read: true, readAt: serverTimestamp() })
     );
 
     await Promise.all(updates);
     console.log('✅ Todas las notificaciones marcadas como leídas');
   } catch (error) {
-    console.error('Error marcando todas como leídas:', error);
+    console.error('❌ Error marcando todas como leídas:', error);
   }
 };
 
-// Deshabilitar notificaciones
-export const disableNotifications = async (userId) => {
+// Deshabilitar notificaciones (usa EMAIL como ID de users/{email})
+export const disableNotifications = async (userEmail) => {
   try {
-    const userRef = doc(db, 'users', userId);
+    if (!userEmail) return;
+
+    const userRef = doc(db, 'users', userEmail);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      console.warn('⚠️ disableNotifications: usuario no existe:', userEmail);
+      return;
+    }
+
     await updateDoc(userRef, {
       notificationsEnabled: false,
       fcmToken: null
     });
-    console.log('🔕 Notificaciones deshabilitadas');
+
+    console.log('🔕 Notificaciones deshabilitadas:', userEmail);
   } catch (error) {
-    console.error('Error deshabilitando notificaciones:', error);
+    console.error('❌ Error deshabilitando notificaciones:', error);
   }
 };
 
@@ -246,7 +247,7 @@ export const NOTIFICATION_TYPES = {
 };
 
 // Plantillas de notificaciones
-export const createChatNotification = (userId, senderId, senderName, message) => 
+export const createChatNotification = (userId, senderId, senderName, message) =>
   createNotification({
     userId,
     type: NOTIFICATION_TYPES.CHAT_MESSAGE,

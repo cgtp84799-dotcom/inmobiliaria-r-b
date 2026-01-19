@@ -1,57 +1,56 @@
-/**
- * Copyright (c) 2025 Mateo Carvajal Tamayo
- * Todos los derechos reservados.
- * 
- * Software desarrollado para Andrés Medardo Rincón Bedoya
- * NIT: 1087985594-7 | Matrícula Mercantil: 238639
- * Cámara de Comercio de Manizales por Caldas
- * 
- * Uso no autorizado está prohibido.
- */
-
 // src/core/config/firebase.config.js
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import { getDatabase } from "firebase/database";
-import { getFunctions } from "firebase/functions";
-import { getMessaging, isSupported } from "firebase/messaging";
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
+import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
-// ✅ TU CONFIGURACIÓN DE FIREBASE
+// ✅ Configuración desde variables de entorno
 const firebaseConfig = {
-  apiKey: "AIzaSyDvvpKdGNLJj-2dg8BdqBJQuGLAQOdZCk8",
-  authDomain: "inmobiliaria-ryb-y-asociados.firebaseapp.com",
-  databaseURL: "https://inmobiliaria-ryb-y-asociados-default-rtdb.firebaseio.com",
-  projectId: "inmobiliaria-ryb-y-asociados",
-  storageBucket: "inmobiliaria-ryb-y-asociados.firebasestorage.app",
-  messagingSenderId: "943352451306",
-  appId: "1:943352451306:web:b6b570cf36c0d996d5c793"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Validar que todas las variables existen
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!import.meta.env[envVar]) {
+    throw new Error(`❌ Falta la variable de entorno: ${envVar}`);
+  }
+}
+
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize services
+// Exportar servicios
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 export const rtdb = getDatabase(app);
-export const functions = getFunctions(app); // ✅ AGREGADO
+export const storage = getStorage(app);
+export const functions = getFunctions(app);
 
-// ✅ Initialize messaging (con verificación de soporte)
-export const messaging = (async () => {
-  try {
-    const isSupportedBrowser = await isSupported();
-    if (isSupportedBrowser) {
-      return getMessaging(app);
-    }
-    console.warn('Firebase Messaging no está soportado en este navegador');
-    return null;
-  } catch (err) {
-    console.error('Error al inicializar messaging:', err);
-    return null;
+// Messaging (solo si el navegador lo soporta)
+let messaging = null;
+isSupported().then(yes => {
+  if (yes) {
+    messaging = getMessaging(app);
   }
-})();
+});
+export { messaging };
 
 export default app;

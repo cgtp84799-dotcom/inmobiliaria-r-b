@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FaChevronDown, 
-  FaChevronUp, 
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FaChevronDown,
+  FaChevronUp,
   FaHome,
   FaMapMarkerAlt,
   FaCog,
@@ -15,18 +15,18 @@ import {
   FaTimes,
   FaMapMarkedAlt,
   FaPercentage,
-  FaCalculator
-} from 'react-icons/fa';
-import toast from 'react-hot-toast';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../../core/config/firebase.config';
+  FaCalculator,
+} from "react-icons/fa";
+import toast from "react-hot-toast";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../../../core/config/firebase.config";
 
 // Formatear precio
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
   }).format(price || 0);
 };
 
@@ -35,11 +35,13 @@ const compressImage = (file, maxWidth = 1920, quality = 0.8) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
+
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target.result;
+
       img.onload = () => {
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
 
@@ -50,14 +52,13 @@ const compressImage = (file, maxWidth = 1920, quality = 0.8) => {
 
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+
+        const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob(
-          (blob) => {
-            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-          },
-          'image/jpeg',
+          (blob) => resolve(new File([blob], file.name, { type: "image/jpeg" })),
+          "image/jpeg",
           quality
         );
       };
@@ -65,8 +66,8 @@ const compressImage = (file, maxWidth = 1920, quality = 0.8) => {
   });
 };
 
-// ✅ COMPONENTE SECTION FUERA DEL PROPERTYFORM
-const Section = ({ id, title, icon: Icon, children, color = 'primary', isOpen, onToggle }) => {
+// COMPONENTE SECTION FUERA DEL PROPERTYFORM
+const Section = ({ id, title, icon: Icon, children, color = "primary", isOpen, onToggle }) => {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-4">
       <button
@@ -80,24 +81,18 @@ const Section = ({ id, title, icon: Icon, children, color = 'primary', isOpen, o
           </div>
           <h3 className="text-lg font-bold text-light">{title}</h3>
         </div>
-        {isOpen ? (
-          <FaChevronUp className="text-slate-400" />
-        ) : (
-          <FaChevronDown className="text-slate-400" />
-        )}
+        {isOpen ? <FaChevronUp className="text-slate-400" /> : <FaChevronDown className="text-slate-400" />}
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="px-6 py-4 border-t border-slate-800">
-              {children}
-            </div>
+            <div className="px-6 py-4 border-t border-slate-800">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -106,120 +101,153 @@ const Section = ({ id, title, icon: Icon, children, color = 'primary', isOpen, o
 };
 
 const PropertyForm = ({ property = null, onClose, onSave }) => {
+  // ✅ FIX: Bloquear scroll del fondo y conservar la posición
+  useEffect(() => {
+    const scrollY = window.scrollY;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
   // Estados del formulario
   const [formData, setFormData] = useState({
-    title: property?.title || '',
-    type: property?.type || 'casa',
-    transactionType: property?.transactionType || 'venta',
-    price: property?.price || '',
-    description: property?.description || '',
-    status: property?.status || 'disponible',
-    
+    title: property?.title || "",
+    type: property?.type || "casa",
+    transactionType: property?.transactionType || "venta",
+    price: property?.price || "",
+    description: property?.description || "",
+    status: property?.status || "disponible",
+
     // Comisiones
-    commissionPercentage: property?.commissionPercentage || '',
-    
+    commissionPercentage: property?.commissionPercentage || "",
+
     // Ubicación
-    department: property?.department || 'Caldas',
-    city: property?.city || 'Anserma',
-    neighborhood: property?.neighborhood || '',
-    address: property?.address || '',
-    
+    department: property?.department || "Caldas",
+    city: property?.city || "Anserma",
+    neighborhood: property?.neighborhood || "",
+    address: property?.address || "",
+
     // Características
-    area: property?.area || '',
-    builtArea: property?.builtArea || '',
-    rooms: property?.rooms || '',
-    bathrooms: property?.bathrooms || '',
-    parkingSpots: property?.parkingSpots || '',
-    floors: property?.floors || '',
-    yearBuilt: property?.yearBuilt || '',
-    stratum: property?.stratum || '',
-    
+    area: property?.area || "",
+    builtArea: property?.builtArea || "",
+    rooms: property?.rooms || "",
+    bathrooms: property?.bathrooms || "",
+    parkingSpots: property?.parkingSpots || "",
+    floors: property?.floors || "",
+    yearBuilt: property?.yearBuilt || "",
+    stratum: property?.stratum || "",
+
     // Amenidades
     amenities: property?.amenities || [],
     customAmenities: property?.customAmenities || [],
-    
+
     // Jurídico
-    cadastralReference: property?.cadastralReference || '',
-    registrationNumber: property?.registrationNumber || '',
-    propertyTax: property?.propertyTax || '',
-    administrationFee: property?.administrationFee || '',
+    cadastralReference: property?.cadastralReference || "",
+    registrationNumber: property?.registrationNumber || "",
+    propertyTax: property?.propertyTax || "",
+    administrationFee: property?.administrationFee || "",
     horizontalProperty: property?.horizontalProperty || false,
-    legalStatus: property?.legalStatus || 'saneado',
-    
+    legalStatus: property?.legalStatus || "saneado",
+
     // Arriendo
-    rentalDeposit: property?.rentalDeposit || '',
-    minimumRentalPeriod: property?.minimumRentalPeriod || '',
-    
+    rentalDeposit: property?.rentalDeposit || "",
+    minimumRentalPeriod: property?.minimumRentalPeriod || "",
+
     // Multimedia
     images: property?.images || [],
     documents: property?.documents || [],
-    
+
     // Propietario
-    ownerName: property?.ownerName || '',
-    ownerPhone: property?.ownerPhone || '',
-    ownerEmail: property?.ownerEmail || ''
+    ownerName: property?.ownerName || "",
+    ownerPhone: property?.ownerPhone || "",
+    ownerEmail: property?.ownerEmail || "",
   });
 
   const [loading, setLoading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingDocs, setUploadingDocs] = useState(false);
-  const [newAmenity, setNewAmenity] = useState('');
-  const [openSection, setOpenSection] = useState(null);
+
+  const [newAmenity, setNewAmenity] = useState("");
+  const [openSection, setOpenSection] = useState("basic");
   const [calculatedCommission, setCalculatedCommission] = useState(0);
+
+  // Cerrar con ESC (UX pro)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   // Calcular comisión manualmente
   const handleCalculateCommission = () => {
-    const price = parseFloat(formData.price) || 0;
-    const percentage = parseFloat(formData.commissionPercentage) || 0;
-    
-    if (price === 0 || percentage === 0) {
-      toast.error('Ingresa el precio y el porcentaje de comisión');
+    const price = parseFloat(formData.price || 0);
+    const percentage = parseFloat(formData.commissionPercentage || 0);
+
+    if (price <= 0 || percentage <= 0) {
+      toast.error("Ingresa el precio y el porcentaje de comisión");
       return;
     }
 
-    const commission = price * (percentage / 100);
+    const commission = (price * percentage) / 100;
     setCalculatedCommission(commission);
-    toast.success('Comisión calculada');
+    toast.success("Comisión calculada");
   };
 
   // Manejadores
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
   const handleAmenityToggle = (amenity) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       amenities: prev.amenities.includes(amenity)
-        ? prev.amenities.filter(a => a !== amenity)
-        : [...prev.amenities, amenity]
+        ? prev.amenities.filter((a) => a !== amenity)
+        : [...prev.amenities, amenity],
     }));
   };
 
   const handleAddCustomAmenity = () => {
     if (!newAmenity.trim()) return;
-    
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      customAmenities: [...prev.customAmenities, newAmenity.trim()]
+      customAmenities: [...prev.customAmenities, newAmenity.trim()],
     }));
-    setNewAmenity('');
-    toast.success('Amenidad agregada');
+    setNewAmenity("");
+    toast.success("Amenidad agregada");
   };
 
   const handleRemoveCustomAmenity = (amenity) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      customAmenities: prev.customAmenities.filter(a => a !== amenity)
+      customAmenities: prev.customAmenities.filter((a) => a !== amenity),
     }));
   };
 
   const handleImageUpload = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setUploadingImages(true);
@@ -228,35 +256,32 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
         const compressedFile = await compressImage(file);
         const timestamp = Date.now();
         const randomStr = Math.random().toString(36).substring(7);
-        const storageRef = ref(storage, `properties/${timestamp}_${randomStr}_${file.name}`);
+        const storageRef = ref(storage, `properties/${timestamp}-${randomStr}-${file.name}`);
         await uploadBytes(storageRef, compressedFile);
         const url = await getDownloadURL(storageRef);
         return url;
       });
 
       const urls = await Promise.all(uploadPromises);
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, ...urls]
-      }));
-      toast.success(`${files.length} imagen(es) subida(s)`);
+      setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
+      toast.success(`${files.length} imágenes subidas`);
     } catch (error) {
-      console.error('Error subiendo imágenes:', error);
-      toast.error('Error subiendo imágenes');
+      console.error("Error subiendo imágenes:", error);
+      toast.error("Error subiendo imágenes");
     } finally {
       setUploadingImages(false);
     }
   };
 
   const handleRemoveImage = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index)
+      images: prev.images.filter((_, i) => i !== index),
     }));
   };
 
   const handleDocumentUpload = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setUploadingDocs(true);
@@ -264,51 +289,63 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
       const uploadPromises = files.map(async (file) => {
         const timestamp = Date.now();
         const randomStr = Math.random().toString(36).substring(7);
-        const storageRef = ref(storage, `documents/${timestamp}_${randomStr}_${file.name}`);
+        const storageRef = ref(storage, `documents/${timestamp}-${randomStr}-${file.name}`);
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);
         return { name: file.name, url };
       });
 
       const docs = await Promise.all(uploadPromises);
-      setFormData(prev => ({
-        ...prev,
-        documents: [...prev.documents, ...docs]
-      }));
-      toast.success(`${files.length} documento(s) subido(s)`);
+      setFormData((prev) => ({ ...prev, documents: [...prev.documents, ...docs] }));
+      toast.success(`${files.length} documentos subidos`);
     } catch (error) {
-      console.error('Error subiendo documentos:', error);
-      toast.error('Error subiendo documentos');
+      console.error("Error subiendo documentos:", error);
+      toast.error("Error subiendo documentos");
     } finally {
       setUploadingDocs(false);
     }
   };
 
   const handleRemoveDocument = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      documents: prev.documents.filter((_, i) => i !== index)
+      documents: prev.documents.filter((_, i) => i !== index),
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       await onSave(formData);
     } catch (error) {
-      console.error('Error al guardar:', error);
+      console.error("Error al guardar:", error);
     } finally {
       setLoading(false);
     }
   };
 
   const availableAmenities = [
-    'Piscina', 'Gimnasio', 'Salón social', 'Zonas verdes', 'Parqueadero visitantes',
-    'Portería 24/7', 'Ascensor', 'Balcón', 'Terraza', 'Patio',
-    'Cocina integral', 'Closets', 'Aire acondicionado', 'Calentador', 'Gas natural',
-    'Vigilancia', 'CCTV', 'Citófono', 'Internet', 'TV Cable'
+    "Piscina",
+    "Gimnasio",
+    "Salón social",
+    "Zonas verdes",
+    "Parqueadero visitantes",
+    "Portería 24/7",
+    "Ascensor",
+    "Balcón",
+    "Terraza",
+    "Patio",
+    "Cocina integral",
+    "Closets",
+    "Aire acondicionado",
+    "Calentador",
+    "Gas natural",
+    "Vigilancia",
+    "CCTV",
+    "Citófono",
+    "Internet",
+    "TV Cable",
   ];
 
   return (
@@ -316,23 +353,24 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+      // ✅ FIX: overlay sin scroll (evita doble scroll + saltos)
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain"
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
+        if (e.target === e.currentTarget) onClose?.();
       }}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.92, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl my-8"
+        exit={{ scale: 0.92, opacity: 0 }}
+        // ✅ El scroll queda solo aquí
+        className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto overscroll-contain shadow-2xl my-6"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header sticky */}
         <div className="sticky top-0 bg-slate-950 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-2xl font-bold text-primary">
-            {property ? 'Editar Propiedad' : 'Nueva Propiedad'}
+            {property ? "Editar Propiedad" : "Nueva Propiedad"}
           </h2>
           <button
             onClick={onClose}
@@ -344,18 +382,17 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          
           {/* INFORMACIÓN BÁSICA */}
-          <Section 
-            id="basic" 
-            title="Información Básica" 
+          <Section
+            id="basic"
+            title="Información Básica"
             icon={FaHome}
-            isOpen={openSection === 'basic'}
-            onToggle={() => setOpenSection(openSection === 'basic' ? null : 'basic')}
+            isOpen={openSection === "basic"}
+            onToggle={() => setOpenSection(openSection === "basic" ? null : "basic")}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-light mb-2 font-semibold">Título de la propiedad *</label>
+                <label className="block text-light mb-2 font-semibold">Título de la propiedad</label>
                 <input
                   type="text"
                   name="title"
@@ -368,7 +405,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Tipo de propiedad *</label>
+                <label className="block text-light mb-2 font-semibold">Tipo de propiedad</label>
                 <select
                   name="type"
                   value={formData.type}
@@ -386,7 +423,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Tipo de negocio *</label>
+                <label className="block text-light mb-2 font-semibold">Tipo de negocio</label>
                 <select
                   name="transactionType"
                   value={formData.transactionType}
@@ -401,7 +438,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
 
               <div>
                 <label className="block text-light mb-2 font-semibold">
-                  {formData.transactionType === 'venta' ? 'Precio de venta' : 'Canon de arriendo'} *
+                  {formData.transactionType === "venta" ? "Precio de venta" : "Canon de arriendo"}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-3 text-slate-400">$</span>
@@ -438,12 +475,10 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   <FaPercentage className="text-primary text-lg" />
                   <h4 className="text-light font-bold text-lg">Comisiones y honorarios</h4>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-light mb-2 font-semibold">
-                      Comisión (%)
-                    </label>
+                    <label className="block text-light mb-2 font-semibold">Comisión (%)</label>
                     <input
                       type="number"
                       name="commissionPercentage"
@@ -452,17 +487,13 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       step="0.1"
                       min="0"
                       max="100"
-                      placeholder={formData.transactionType === 'venta' 
-                        ? (formData.type === 'finca' || formData.type === 'lote' ? '5' : '3')
-                        : '100'
-                      }
+                      placeholder={formData.transactionType === "venta" ? "3" : "100"}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                     />
                     <p className="text-slate-500 text-xs mt-1">
-                      {formData.transactionType === 'venta' 
-                        ? 'Estándar: 3% urbano, 5-8% rural'
-                        : 'Estándar: 100% (1 mes completo)'
-                      }
+                      {formData.transactionType === "venta"
+                        ? "Estándar 3% urbano, 5-8% rural"
+                        : "Estándar 100% = 1 mes completo"}
                     </p>
                   </div>
 
@@ -481,9 +512,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   <div>
                     <label className="block text-light mb-2 font-semibold">Comisión total</label>
                     <div className="w-full bg-gradient-to-r from-primary/10 to-yellow-500/10 border border-primary/30 rounded-lg px-4 py-3">
-                      <div className="text-primary font-bold text-lg">
-                        {formatPrice(calculatedCommission)}
-                      </div>
+                      <div className="text-primary font-bold text-lg">{formatPrice(calculatedCommission)}</div>
                     </div>
                   </div>
                 </div>
@@ -537,22 +566,22 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
-                  rows="4"
+                  rows={4}
                   placeholder="Describe las características y ventajas de la propiedad..."
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none"
-                ></textarea>
+                />
               </div>
             </div>
           </Section>
 
           {/* UBICACIÓN */}
-          <Section 
-            id="location" 
-            title="Ubicación" 
-            icon={FaMapMarkerAlt} 
+          <Section
+            id="location"
+            title="Ubicación"
+            icon={FaMapMarkerAlt}
             color="blue-500"
-            isOpen={openSection === 'location'}
-            onToggle={() => setOpenSection(openSection === 'location' ? null : 'location')}
+            isOpen={openSection === "location"}
+            onToggle={() => setOpenSection(openSection === "location" ? null : "location")}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -567,7 +596,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Ciudad/Municipio *</label>
+                <label className="block text-light mb-2 font-semibold">Ciudad / Municipio</label>
                 <input
                   type="text"
                   name="city"
@@ -579,7 +608,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Barrio/Sector</label>
+                <label className="block text-light mb-2 font-semibold">Barrio / Sector</label>
                 <input
                   type="text"
                   name="neighborhood"
@@ -590,7 +619,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Dirección completa *</label>
+                <label className="block text-light mb-2 font-semibold">Dirección completa</label>
                 <input
                   type="text"
                   name="address"
@@ -611,8 +640,11 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     </div>
                     <div className="bg-slate-900 rounded-lg h-64 flex items-center justify-center">
                       <p className="text-slate-500 text-center px-4">
-                        Mapa se generará automáticamente con: <br/>
-                        <span className="text-light">{formData.address}, {formData.city}</span>
+                        Mapa se generará automáticamente con:
+                        <br />
+                        <span className="text-light">
+                          {formData.address}, {formData.city}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -622,13 +654,13 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
           </Section>
 
           {/* CARACTERÍSTICAS */}
-          <Section 
-            id="features" 
-            title="Características Principales" 
-            icon={FaCog} 
+          <Section
+            id="features"
+            title="Características Principales"
+            icon={FaCog}
             color="green-500"
-            isOpen={openSection === 'features'}
-            onToggle={() => setOpenSection(openSection === 'features' ? null : 'features')}
+            isOpen={openSection === "features"}
+            onToggle={() => setOpenSection(openSection === "features" ? null : "features")}
           >
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
@@ -642,7 +674,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 />
               </div>
 
-              {formData.type !== 'lote' && (
+              {formData.type !== "lote" && (
                 <div>
                   <label className="block text-light mb-2 font-semibold">Área construida (m²)</label>
                   <input
@@ -655,7 +687,25 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 </div>
               )}
 
-              {(formData.type === 'casa' || formData.type === 'apartamento' || formData.type === 'finca') && (
+              <div>
+                <label className="block text-light mb-2 font-semibold">Estrato</label>
+                <select
+                  name="stratum"
+                  value={formData.stratum}
+                  onChange={handleChange}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                >
+                  <option value="">Seleccionar...</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                </select>
+              </div>
+
+              {(formData.type === "casa" || formData.type === "apartamento" || formData.type === "finca") && (
                 <>
                   <div>
                     <label className="block text-light mb-2 font-semibold">Habitaciones</label>
@@ -678,30 +728,30 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-light mb-2 font-semibold">Parqueaderos</label>
-                    <input
-                      type="number"
-                      name="parkingSpots"
-                      value={formData.parkingSpots}
-                      onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-light mb-2 font-semibold">Pisos/Niveles</label>
-                    <input
-                      type="number"
-                      name="floors"
-                      value={formData.floors}
-                      onChange={handleChange}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                    />
-                  </div>
                 </>
               )}
+
+              <div>
+                <label className="block text-light mb-2 font-semibold">Parqueaderos</label>
+                <input
+                  type="number"
+                  name="parkingSpots"
+                  value={formData.parkingSpots}
+                  onChange={handleChange}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-light mb-2 font-semibold">Pisos / Niveles</label>
+                <input
+                  type="number"
+                  name="floors"
+                  value={formData.floors}
+                  onChange={handleChange}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                />
+              </div>
 
               <div>
                 <label className="block text-light mb-2 font-semibold">Año de construcción</label>
@@ -714,151 +764,102 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                 />
               </div>
-
-              <div>
-                <label className="block text-light mb-2 font-semibold">Estrato</label>
-                <select
-                  name="stratum"
-                  value={formData.stratum}
-                  onChange={handleChange}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                >
-                  <option value="">Seleccionar...</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-                  <option value="6">6</option>
-                </select>
-              </div>
             </div>
-
-            {formData.transactionType === 'arriendo' && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <h4 className="text-light font-semibold mb-3">Información de arriendo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-light mb-2 font-semibold">Depósito (meses)</label>
-                    <input
-                      type="number"
-                      name="rentalDeposit"
-                      value={formData.rentalDeposit}
-                      onChange={handleChange}
-                      placeholder="1"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-light mb-2 font-semibold">Tiempo mínimo (meses)</label>
-                    <input
-                      type="number"
-                      name="minimumRentalPeriod"
-                      value={formData.minimumRentalPeriod}
-                      onChange={handleChange}
-                      placeholder="12"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </Section>
 
           {/* AMENIDADES */}
-          <Section 
-            id="amenities" 
-            title="Amenidades" 
-            icon={FaPlus} 
+          <Section
+            id="amenities"
+            title="Amenidades"
+            icon={FaBalanceScale}
             color="purple-500"
-            isOpen={openSection === 'amenities'}
-            onToggle={() => setOpenSection(openSection === 'amenities' ? null : 'amenities')}
+            isOpen={openSection === "amenities"}
+            onToggle={() => setOpenSection(openSection === "amenities" ? null : "amenities")}
           >
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-light font-semibold mb-3">Amenidades comunes</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {availableAmenities.map((amenity) => (
-                    <label
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {availableAmenities.map((amenity) => (
+                <label
+                  key={amenity}
+                  className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.amenities.includes(amenity)}
+                    onChange={() => handleAmenityToggle(amenity)}
+                    className="w-4 h-4 text-primary bg-slate-700 border-slate-600 rounded focus:ring-primary"
+                  />
+                  <span className="text-light text-sm">{amenity}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-slate-700 mt-4">
+              <h4 className="text-light font-semibold mb-3">Amenidades personalizadas</h4>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newAmenity}
+                  onChange={(e) => setNewAmenity(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomAmenity();
+                    }
+                  }}
+                  placeholder="Ej: Cancha de tenis, Zona BBQ..."
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomAmenity}
+                  className="px-6 py-3 bg-primary hover:bg-yellow-500 text-slate-950 font-semibold rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <FaPlus />
+                  Agregar
+                </button>
+              </div>
+
+              {formData.customAmenities.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.customAmenities.map((amenity) => (
+                    <div
                       key={amenity}
-                      className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
+                      className="flex items-center gap-2 bg-slate-800/70 border border-slate-700 rounded-full px-3 py-1"
                     >
-                      <input
-                        type="checkbox"
-                        checked={formData.amenities.includes(amenity)}
-                        onChange={() => handleAmenityToggle(amenity)}
-                        className="w-4 h-4 text-primary bg-slate-700 border-slate-600 rounded focus:ring-primary"
-                      />
-                      <span className="text-light text-sm">{amenity}</span>
-                    </label>
+                      <span className="text-slate-200 text-xs">{amenity}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCustomAmenity(amenity)}
+                        className="text-red-400 hover:text-red-300 text-xs"
+                        title="Quitar"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-700">
-                <h4 className="text-light font-semibold mb-3">Amenidades personalizadas</h4>
-                
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newAmenity}
-                    onChange={(e) => setNewAmenity(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCustomAmenity())}
-                    placeholder="Ej: Cancha de tenis, Zona BBQ..."
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomAmenity}
-                    className="px-6 py-3 bg-primary hover:bg-yellow-500 text-slate-950 font-semibold rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <FaPlus />
-                    Agregar
-                  </button>
-                </div>
-
-                {formData.customAmenities.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.customAmenities.map((amenity, index) => (
-                      <div
-                        key={index}
-                        className="inline-flex items-center gap-2 px-3 py-2 bg-primary/20 border border-primary/30 rounded-lg text-primary"
-                      >
-                        <span className="text-sm font-medium">{amenity}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCustomAmenity(amenity)}
-                          className="hover:text-red-400 transition-colors"
-                        >
-                          <FaTimes />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </Section>
 
-          {/* INFORMACIÓN JURÍDICA */}
-          <Section 
-            id="legal" 
-            title="Información Jurídica" 
-            icon={FaBalanceScale} 
-            color="orange-500"
-            isOpen={openSection === 'legal'}
-            onToggle={() => setOpenSection(openSection === 'legal' ? null : 'legal')}
+          {/* JURÍDICO */}
+          <Section
+            id="legal"
+            title="Información Legal"
+            icon={FaFileAlt}
+            color="yellow-500"
+            isOpen={openSection === "legal"}
+            onToggle={() => setOpenSection(openSection === "legal" ? null : "legal")}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-light mb-2 font-semibold">Cédula/Ficha catastral</label>
+                <label className="block text-light mb-2 font-semibold">Ficha catastral</label>
                 <input
                   type="text"
                   name="cadastralReference"
                   value={formData.cadastralReference}
                   onChange={handleChange}
-                  placeholder="00-00-0000-0000-000"
+                  placeholder="Ej: 123-456-789"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                 />
               </div>
@@ -876,7 +877,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-light mb-2 font-semibold">Impuesto predial (anual)</label>
+                <label className="block text-light mb-2 font-semibold">Impuesto predial anual</label>
                 <input
                   type="number"
                   name="propertyTax"
@@ -887,19 +888,17 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 />
               </div>
 
-              {(formData.type === 'apartamento' || formData.horizontalProperty) && (
-                <div>
-                  <label className="block text-light mb-2 font-semibold">Administración (mensual)</label>
-                  <input
-                    type="number"
-                    name="administrationFee"
-                    value={formData.administrationFee}
-                    onChange={handleChange}
-                    placeholder="0"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-light mb-2 font-semibold">Administración (mensual)</label>
+                <input
+                  type="number"
+                  name="administrationFee"
+                  value={formData.administrationFee}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                />
+              </div>
 
               <div className="md:col-span-2">
                 <label className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors">
@@ -910,72 +909,82 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     onChange={handleChange}
                     className="w-4 h-4 text-primary bg-slate-700 border-slate-600 rounded focus:ring-primary"
                   />
-                  <span className="text-light font-semibold">Régimen de propiedad horizontal</span>
+                  <span className="text-light text-sm">Propiedad horizontal (PH)</span>
                 </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-light mb-2 font-semibold">Estado jurídico</label>
-                <select
-                  name="legalStatus"
-                  value={formData.legalStatus}
-                  onChange={handleChange}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                >
-                  <option value="saneado">Saneado (tradición completa)</option>
-                  <option value="en_proceso">En proceso de saneamiento</option>
-                  <option value="pendiente">Pendiente por verificar</option>
-                </select>
               </div>
             </div>
           </Section>
 
-          {/* MULTIMEDIA */}
-          <Section 
-            id="multimedia" 
-            title="Imágenes de la Propiedad" 
-            icon={FaImages} 
-            color="pink-500"
-            isOpen={openSection === 'multimedia'}
-            onToggle={() => setOpenSection(openSection === 'multimedia' ? null : 'multimedia')}
-          >
-            <div className="space-y-4">
-              <div>
-                <label className="block text-light mb-2 font-semibold">Fotografías</label>
-                <label className="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer block">
+          {/* ARRIENDO */}
+          {formData.transactionType === "arriendo" && (
+            <Section
+              id="rent"
+              title="Información de Arriendo"
+              icon={FaBalanceScale}
+              color="blue-500"
+              isOpen={openSection === "rent"}
+              onToggle={() => setOpenSection(openSection === "rent" ? null : "rent")}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-light mb-2 font-semibold">Depósito (meses)</label>
                   <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    disabled={uploadingImages}
+                    type="number"
+                    name="rentalDeposit"
+                    value={formData.rentalDeposit}
+                    onChange={handleChange}
+                    placeholder="1"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                   />
-                  <FaImages className="text-4xl text-slate-600 mx-auto mb-3" />
-                  {uploadingImages ? (
-                    <p className="text-primary mb-2">Subiendo imágenes...</p>
-                  ) : (
-                    <>
-                      <p className="text-slate-400 mb-2">Arrastra imágenes aquí o haz clic para seleccionar</p>
-                      <p className="text-slate-500 text-sm">Ilimitadas • JPG/PNG • Se comprimen automáticamente</p>
-                    </>
-                  )}
+                </div>
+
+                <div>
+                  <label className="block text-light mb-2 font-semibold">Tiempo mínimo (meses)</label>
+                  <input
+                    type="number"
+                    name="minimumRentalPeriod"
+                    value={formData.minimumRentalPeriod}
+                    onChange={handleChange}
+                    placeholder="6"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            </Section>
+          )}
+
+          {/* MULTIMEDIA */}
+          <Section
+            id="media"
+            title="Imágenes y Documentos"
+            icon={FaImages}
+            color="primary"
+            isOpen={openSection === "media"}
+            onToggle={() => setOpenSection(openSection === "media" ? null : "media")}
+          >
+            {/* Imágenes */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-light font-semibold">Imágenes</h4>
+                <label className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg cursor-pointer transition-colors inline-flex items-center gap-2">
+                  <FaPlus />
+                  {uploadingImages ? "Subiendo..." : "Subir imágenes"}
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
                 </label>
               </div>
 
-              {formData.images.length > 0 && (
+              {formData.images.length === 0 ? (
+                <p className="text-slate-500 text-sm">No hay imágenes cargadas.</p>
+              ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {formData.images.map((url, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={url}
-                        alt={`Imagen ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
+                    <div key={url + index} className="relative rounded-lg overflow-hidden border border-slate-700">
+                      <img src={url} alt={`Imagen ${index + 1}`} className="w-full h-28 object-cover" />
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(index)}
-                        className="absolute top-2 right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 text-red-300 rounded-full flex items-center justify-center transition-colors"
+                        title="Eliminar imagen"
                       >
                         <FaTrash className="text-sm" />
                       </button>
@@ -984,53 +993,37 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 </div>
               )}
             </div>
-          </Section>
 
-          {/* DOCUMENTOS */}
-          <Section 
-            id="documents" 
-            title="Documentos Legales" 
-            icon={FaFileAlt} 
-            color="red-500"
-            isOpen={openSection === 'documents'}
-            onToggle={() => setOpenSection(openSection === 'documents' ? null : 'documents')}
-          >
-            <div className="space-y-4">
-              <label className="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer block">
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx"
-                  onChange={handleDocumentUpload}
-                  className="hidden"
-                  disabled={uploadingDocs}
-                />
-                <FaFileAlt className="text-4xl text-slate-600 mx-auto mb-3" />
-                {uploadingDocs ? (
-                  <p className="text-primary mb-2">Subiendo documentos...</p>
-                ) : (
-                  <>
-                    <p className="text-slate-400 mb-2">Arrastra documentos PDF aquí</p>
-                    <p className="text-slate-500 text-sm">Ilimitados • PDF, DOC, DOCX</p>
-                  </>
-                )}
-              </label>
+            {/* Documentos */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-light font-semibold">Documentos</h4>
+                <label className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg cursor-pointer transition-colors inline-flex items-center gap-2">
+                  <FaPlus />
+                  {uploadingDocs ? "Subiendo..." : "Subir documentos"}
+                  <input type="file" multiple className="hidden" onChange={handleDocumentUpload} />
+                </label>
+              </div>
 
-              {formData.documents.length > 0 && (
+              {formData.documents.length === 0 ? (
+                <p className="text-slate-500 text-sm">No hay documentos cargados.</p>
+              ) : (
                 <div className="space-y-2">
-                  {formData.documents.map((doc, index) => (
+                  {formData.documents.map((docu, index) => (
                     <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors"
+                      key={(docu?.url || docu?.name || "doc") + index}
+                      className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-lg"
                     >
-                      <div className="flex items-center gap-3">
-                        <FaFileAlt className="text-primary" />
-                        <span className="text-light text-sm">{doc.name}</span>
+                      <div className="min-w-0">
+                        <p className="text-light text-sm font-semibold truncate">{docu?.name || "Documento"}</p>
+                        {docu?.url && <p className="text-slate-500 text-xs truncate">{docu.url}</p>}
                       </div>
+
                       <button
                         type="button"
                         onClick={() => handleRemoveDocument(index)}
                         className="w-8 h-8 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg flex items-center justify-center transition-colors"
+                        title="Eliminar documento"
                       >
                         <FaTrash className="text-sm" />
                       </button>
@@ -1050,13 +1043,14 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
             >
               Cancelar
             </button>
+
             <button
               type="submit"
               disabled={loading}
               className="px-6 py-3 bg-primary hover:bg-yellow-500 text-slate-950 font-bold rounded-xl transition-colors inline-flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
             >
               <FaSave />
-              {loading ? 'Guardando...' : (property ? 'Actualizar' : 'Guardar Propiedad')}
+              {loading ? "Guardando..." : property ? "Actualizar" : "Guardar Propiedad"}
             </button>
           </div>
         </form>

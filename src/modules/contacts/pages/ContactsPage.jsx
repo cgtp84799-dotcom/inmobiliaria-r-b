@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FaEnvelope,
   FaUser,
@@ -12,40 +12,49 @@ import {
   FaArchive,
   FaUserPlus,
   FaExclamationTriangle,
-  FaTimes
-} from 'react-icons/fa';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../../core/config/firebase.config';
-import toast from 'react-hot-toast';
+} from "react-icons/fa";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+} from "firebase/firestore";
+import { db } from "../../../core/config/firebase.config";
+import toast from "react-hot-toast";
 
 const ContactsPage = () => {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState("pending");
   const [processingId, setProcessingId] = useState(null);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [contactToArchive, setContactToArchive] = useState(null);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'contacts'),
-      orderBy('createdAt', 'desc')
-    );
+    const q = query(collection(db, "contacts"), orderBy("createdAt", "desc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const contactsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
-      }));
-      setContacts(contactsData);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error cargando consultas:', error);
-      toast.error('Error al cargar las consultas');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const contactsData = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+          createdAt: d.data().createdAt?.toDate(),
+          updatedAt: d.data().updatedAt?.toDate(),
+        }));
+        setContacts(contactsData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error cargando consultas:", error);
+        toast.error("Error al cargar las consultas");
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -53,62 +62,57 @@ const ContactsPage = () => {
   const markAsContacted = async (contactId) => {
     setProcessingId(contactId);
     try {
-      await updateDoc(doc(db, 'contacts', contactId), {
-        status: 'contacted',
-        updatedAt: new Date()
+      await updateDoc(doc(db, "contacts", contactId), {
+        status: "contacted",
+        updatedAt: new Date(),
       });
-      toast.success('Marcado como contactado');
+      toast.success("Marcado como contactado");
     } catch (error) {
-      console.error('Error actualizando estado:', error);
-      toast.error('Error al actualizar');
+      console.error("Error actualizando estado:", error);
+      toast.error("Error al actualizar");
     } finally {
       setProcessingId(null);
     }
   };
 
-  // ✅ FUNCIÓN CORREGIDA - Usar nombres de campos compatibles
+  // ✅ Crear cliente y cerrar consulta
   const closeAndCreateClient = async (contact) => {
     setProcessingId(contact.id);
-    console.log('📋 Creando cliente desde consulta:', contact);
-    
+
     try {
-      // 1. Crear el cliente en el CRM con nombres de campos correctos
       const clientData = {
-        nombre: contact.name,  // ✅ nombre, no name
+        nombre: contact.name,
         email: contact.email,
-        telefono: contact.phone,  // ✅ telefono, no phone
-        tipoCliente: 'Lead',  // ✅ tipoCliente, no type
-        estado: 'Activo',
-        presupuesto: '',
-        tipoPropiedad: '',
-        ubicacionInteres: '',
-        notas: contact.message || 'Contacto desde formulario web',
-        propiedadVinculada: contact.propertyId || '',
+        telefono: contact.phone,
+        tipoCliente: "Lead",
+        estado: "Activo",
+        presupuesto: "",
+        tipoPropiedad: "",
+        ubicacionInteres: "",
+        notas: contact.message || "Contacto desde formulario web",
+        propiedadVinculada: contact.propertyId || "",
         fechaRegistro: new Date().toISOString(),
         createdAt: new Date(),
         updatedAt: new Date(),
-        createdFrom: 'contact_inquiry',
-        source: 'web_contact_form',
+        createdFrom: "contact_inquiry",
+        source: "web_contact_form",
         interestedProperty: contact.propertyId || null,
         interestedPropertyTitle: contact.propertyTitle || null,
       };
 
-      // Crear cliente
-      const clientRef = doc(collection(db, 'clients'));
+      const clientRef = doc(collection(db, "clients"));
       await setDoc(clientRef, clientData);
-      console.log('✅ Cliente creado con ID:', clientRef.id);
 
-      // 2. Marcar la consulta como cerrada
-      await updateDoc(doc(db, 'contacts', contact.id), {
-        status: 'closed',
+      await updateDoc(doc(db, "contacts", contact.id), {
+        status: "closed",
         closedAt: new Date(),
         convertedToClientId: clientRef.id,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
 
-      toast.success('✅ Consulta cerrada y cliente creado en el CRM');
+      toast.success("✅ Consulta cerrada y cliente creado en el CRM");
     } catch (error) {
-      console.error('❌ Error cerrando consulta:', error);
+      console.error("❌ Error cerrando consulta:", error);
       toast.error(`Error: ${error.message}`);
     } finally {
       setProcessingId(null);
@@ -125,14 +129,13 @@ const ContactsPage = () => {
 
     setProcessingId(contactToArchive.id);
     try {
-      await deleteDoc(doc(db, 'contacts', contactToArchive.id));
-      
-      toast.success('✅ Consulta archivada correctamente');
+      await deleteDoc(doc(db, "contacts", contactToArchive.id));
+      toast.success("✅ Consulta archivada correctamente");
       setShowArchiveModal(false);
       setContactToArchive(null);
     } catch (error) {
-      console.error('Error archivando consulta:', error);
-      toast.error('❌ Error al archivar la consulta');
+      console.error("Error archivando consulta:", error);
+      toast.error("❌ Error al archivar la consulta");
     } finally {
       setProcessingId(null);
     }
@@ -147,192 +150,254 @@ const ContactsPage = () => {
     const badges = {
       pending: {
         icon: FaClock,
-        text: 'Pendiente',
-        class: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+        text: "Pendiente",
+        class: "bg-yellow-500/15 text-yellow-300 border-yellow-500/25",
       },
       contacted: {
         icon: FaCheckCircle,
-        text: 'Contactado',
-        class: 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+        text: "Contactado",
+        class: "bg-blue-500/15 text-blue-300 border-blue-500/25",
       },
       closed: {
         icon: FaCheckCircle,
-        text: 'Cerrado',
-        class: 'bg-green-500/20 text-green-400 border-green-500/30'
-      }
+        text: "Cerrado",
+        class: "bg-green-500/15 text-green-300 border-green-500/25",
+      },
     };
 
     const badge = badges[status] || badges.pending;
     const Icon = badge.icon;
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${badge.class}`}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold border ${badge.class}`}
+      >
         <Icon size={12} />
         {badge.text}
       </span>
     );
   };
 
-  const filteredContacts = contacts.filter(contact => contact.status === filter);
+  const stats = useMemo(() => {
+    const pending = contacts.filter((c) => c.status === "pending").length;
+    const contacted = contacts.filter((c) => c.status === "contacted").length;
+    const closed = contacts.filter((c) => c.status === "closed").length;
+    return { pending, contacted, closed };
+  }, [contacts]);
+
+  const filteredContacts = contacts.filter((contact) => contact.status === filter);
 
   const formatDate = (date) => {
-    if (!date) return 'Fecha no disponible';
-    return new Intl.DateTimeFormat('es-CO', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    if (!date) return "Fecha no disponible";
+    return new Intl.DateTimeFormat("es-CO", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     }).format(date);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <FaSpinner className="animate-spin text-primary text-5xl" />
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <FaSpinner className="animate-spin text-primary text-4xl" />
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="px-4 py-5 sm:p-6 space-y-5 sm:space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-light mb-2">Consultas de Clientes</h1>
-        <p className="text-slate-400">
-          Gestiona las consultas recibidas desde el sitio web
-        </p>
+      <div className="card-soft p-4 sm:p-6 border border-slate-800/80">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white">
+              Consultas de clientes
+            </h1>
+            <p className="text-slate-400 text-sm sm:text-base mt-1">
+              Gestiona las consultas recibidas desde el sitio web.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-slate-900/40 border border-slate-800 rounded-xl px-3 py-2 text-center">
+              <p className="text-[10px] sm:text-xs text-slate-400">Pend.</p>
+              <p className="text-sm sm:text-lg font-extrabold text-yellow-300">{stats.pending}</p>
+            </div>
+            <div className="bg-slate-900/40 border border-slate-800 rounded-xl px-3 py-2 text-center">
+              <p className="text-[10px] sm:text-xs text-slate-400">Cont.</p>
+              <p className="text-sm sm:text-lg font-extrabold text-blue-300">{stats.contacted}</p>
+            </div>
+            <div className="bg-slate-900/40 border border-slate-800 rounded-xl px-3 py-2 text-center">
+              <p className="text-[10px] sm:text-xs text-slate-400">Hist.</p>
+              <p className="text-sm sm:text-lg font-extrabold text-green-300">{stats.closed}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Filtros (compactos en móvil) */}
+      <div className="flex flex-wrap gap-2 sm:gap-3">
         <button
-          onClick={() => setFilter('pending')}
-          className={`px-5 py-2.5 rounded-lg font-semibold transition-all ${
-            filter === 'pending'
-              ? 'bg-yellow-500 text-slate-900 shadow-lg'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          onClick={() => setFilter("pending")}
+          className={`px-3 sm:px-5 py-2 rounded-xl font-semibold transition-all text-xs sm:text-sm ${
+            filter === "pending"
+              ? "bg-yellow-500 text-slate-950 shadow-lg"
+              : "bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800"
           }`}
         >
           <FaClock className="inline mr-2" />
-          Pendientes ({contacts.filter(c => c.status === 'pending').length})
+          Pendientes ({stats.pending})
         </button>
+
         <button
-          onClick={() => setFilter('contacted')}
-          className={`px-5 py-2.5 rounded-lg font-semibold transition-all ${
-            filter === 'contacted'
-              ? 'bg-blue-500 text-white shadow-lg'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          onClick={() => setFilter("contacted")}
+          className={`px-3 sm:px-5 py-2 rounded-xl font-semibold transition-all text-xs sm:text-sm ${
+            filter === "contacted"
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800"
           }`}
         >
           <FaCheckCircle className="inline mr-2" />
-          Contactados ({contacts.filter(c => c.status === 'contacted').length})
+          Contactados ({stats.contacted})
         </button>
+
         <button
-          onClick={() => setFilter('closed')}
-          className={`px-5 py-2.5 rounded-lg font-semibold transition-all ${
-            filter === 'closed'
-              ? 'bg-green-500 text-white shadow-lg'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          onClick={() => setFilter("closed")}
+          className={`px-3 sm:px-5 py-2 rounded-xl font-semibold transition-all text-xs sm:text-sm ${
+            filter === "closed"
+              ? "bg-green-600 text-white shadow-lg"
+              : "bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800"
           }`}
         >
           <FaArchive className="inline mr-2" />
-          Historial ({contacts.filter(c => c.status === 'closed').length})
+          Historial ({stats.closed})
         </button>
       </div>
 
-      {/* Lista de contactos */}
+      {/* Lista */}
       {filteredContacts.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
-          <FaEnvelope className="text-slate-600 text-5xl mx-auto mb-4" />
-          <p className="text-slate-400 text-lg">
-            No hay consultas {filter === 'pending' ? 'pendientes' : filter === 'contacted' ? 'contactadas' : 'en el historial'}
+        <div className="card-soft border border-slate-800 rounded-2xl p-8 sm:p-12 text-center">
+          <FaEnvelope className="text-slate-600 text-4xl sm:text-5xl mx-auto mb-4" />
+          <p className="text-slate-300 text-sm sm:text-lg">
+            No hay consultas{" "}
+            {filter === "pending"
+              ? "pendientes"
+              : filter === "contacted"
+              ? "contactadas"
+              : "en el historial"}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {filteredContacts.map((contact) => (
-            <motion.div
-              key={contact.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-primary/50 transition-all"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                {/* Info principal */}
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-xl font-bold text-light mb-1 flex items-center gap-2">
-                        <FaUser className="text-primary" size={18} />
-                        {contact.name}
-                      </h3>
-                      {contact.propertyTitle && (
-                        <p className="text-slate-400 text-sm">
-                          Interesado en: <span className="text-primary font-semibold">{contact.propertyTitle}</span>
-                        </p>
-                      )}
-                    </div>
-                    {getStatusBadge(contact.status)}
-                  </div>
+        <div className="grid grid-cols-1 gap-3 sm:gap-4">
+          {filteredContacts.map((contact) => {
+            const isProcessing = processingId === contact.id;
+            const phoneDigits = String(contact.phone || "").replace(/\D/g, "");
 
-                  <div className="space-y-2 mb-4">
-                    <p className="text-slate-300 flex items-center gap-2">
-                      <FaEnvelope className="text-primary" size={14} />
-                      <a href={`mailto:${contact.email}`} className="hover:text-primary transition-colors">
-                        {contact.email}
-                      </a>
-                    </p>
-                    <p className="text-slate-300 flex items-center gap-2">
-                      <FaPhone className="text-primary" size={14} />
-                      <a href={`tel:${contact.phone}`} className="hover:text-primary transition-colors">
-                        {contact.phone}
-                      </a>
-                    </p>
-                    <p className="text-slate-400 text-sm flex items-center gap-2">
-                      <FaCalendarAlt className="text-slate-500" size={14} />
-                      {formatDate(contact.createdAt)}
-                    </p>
-                  </div>
+            return (
+              <motion.div
+                key={contact.id}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-6 hover:border-primary/50 transition-all"
+              >
+                {/* Top */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2 truncate">
+                      <FaUser className="text-primary flex-shrink-0" size={16} />
+                      <span className="truncate">{contact.name || "Sin nombre"}</span>
+                    </h3>
 
-                  {contact.message && (
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                      <p className="text-slate-300 text-sm leading-relaxed">
-                        {contact.message}
+                    {contact.propertyTitle && (
+                      <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                        Interesado en:{" "}
+                        <span className="text-primary font-semibold">
+                          {contact.propertyTitle}
+                        </span>
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  {getStatusBadge(contact.status)}
                 </div>
 
-                {/* Acciones */}
-                <div className="flex lg:flex-col gap-2">
+                {/* Info (en móvil se compacta mejor) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-3">
+                  <div className="text-slate-300 text-xs sm:text-sm flex items-center gap-2 min-w-0">
+                    <FaEnvelope className="text-primary flex-shrink-0" size={14} />
+                    <a
+                      href={`mailto:${contact.email}`}
+                      className="hover:text-primary transition-colors truncate"
+                    >
+                      {contact.email}
+                    </a>
+                  </div>
+
+                  <div className="text-slate-300 text-xs sm:text-sm flex items-center gap-2">
+                    <FaPhone className="text-primary flex-shrink-0" size={14} />
+                    <a
+                      href={`tel:${contact.phone}`}
+                      className="hover:text-primary transition-colors"
+                    >
+                      {contact.phone}
+                    </a>
+                  </div>
+
+                  <div className="text-slate-400 text-[11px] sm:text-sm flex items-center gap-2 sm:col-span-2">
+                    <FaCalendarAlt className="text-slate-500 flex-shrink-0" size={14} />
+                    {formatDate(contact.createdAt)}
+                  </div>
+                </div>
+
+                {/* Mensaje */}
+                {contact.message && (
+                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-3 sm:p-4 mb-3">
+                    <p className="text-slate-200 text-xs sm:text-sm leading-relaxed break-words">
+                      {contact.message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Acciones: en móvil -> 2 columnas / en desktop -> columna */}
+                <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
                   <a
-                    href={`https://wa.me/57${contact.phone.replace(/\D/g, '')}?text=Hola ${contact.name}, te contactamos desde Rincón Bedoya & Asociados`}
+                    href={`https://wa.me/57${phoneDigits}?text=Hola ${
+                      contact.name || ""
+                    }, te contactamos desde Rincón Bedoya & Asociados`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 lg:flex-none px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+                    className="px-4 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-xs sm:text-sm
+                               bg-green-600 hover:bg-green-700 text-white"
                   >
                     <FaWhatsapp />
                     WhatsApp
                   </a>
 
-                  {contact.status === 'pending' && (
+                  {contact.status === "pending" && (
                     <button
                       onClick={() => markAsContacted(contact.id)}
-                      disabled={processingId === contact.id}
-                      className="flex-1 lg:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+                      disabled={isProcessing}
+                      className="px-4 py-2.5 rounded-xl font-semibold transition-all text-xs sm:text-sm
+                                 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 flex items-center justify-center"
                     >
-                      {processingId === contact.id ? <FaSpinner className="animate-spin mx-auto" /> : 'Marcar contactado'}
+                      {isProcessing ? (
+                        <FaSpinner className="animate-spin" />
+                      ) : (
+                        "Marcar contactado"
+                      )}
                     </button>
                   )}
 
-                  {contact.status === 'contacted' && (
+                  {contact.status === "contacted" && (
                     <button
                       onClick={() => closeAndCreateClient(contact)}
-                      disabled={processingId === contact.id}
-                      className="flex-1 lg:flex-none px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={isProcessing}
+                      className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-semibold transition-all text-xs sm:text-sm
+                                 bg-primary hover:bg-yellow-500 text-slate-950 disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      {processingId === contact.id ? (
+                      {isProcessing ? (
                         <FaSpinner className="animate-spin" />
                       ) : (
                         <>
@@ -343,24 +408,25 @@ const ContactsPage = () => {
                     </button>
                   )}
 
-                  {contact.status === 'closed' && (
+                  {contact.status === "closed" && (
                     <button
                       onClick={() => openArchiveModal(contact)}
-                      disabled={processingId === contact.id}
-                      className="flex-1 lg:flex-none px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={isProcessing}
+                      className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-semibold transition-all text-xs sm:text-sm
+                                 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <FaArchive />
                       Archivar
                     </button>
                   )}
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
-      {/* MODAL DE CONFIRMACIÓN */}
+      {/* Modal confirmación */}
       <AnimatePresence>
         {showArchiveModal && (
           <motion.div
@@ -371,33 +437,37 @@ const ContactsPage = () => {
             onClick={cancelArchive}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FaExclamationTriangle className="text-red-500 text-3xl" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaExclamationTriangle className="text-red-500 text-2xl sm:text-3xl" />
               </div>
 
-              <h3 className="text-2xl font-bold text-light text-center mb-2">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-white text-center mb-2">
                 ¿Archivar consulta?
               </h3>
 
-              <p className="text-slate-400 text-center mb-6">
-                Esta acción eliminará permanentemente la consulta de <span className="text-primary font-semibold">{contactToArchive?.name}</span>. 
-                No se puede deshacer.
+              <p className="text-slate-400 text-center text-sm sm:text-base mb-5 sm:mb-6">
+                Esta acción eliminará permanentemente la consulta de{" "}
+                <span className="text-primary font-semibold">
+                  {contactToArchive?.name}
+                </span>
+                . No se puede deshacer.
               </p>
 
               <div className="flex gap-3">
                 <button
                   onClick={cancelArchive}
                   disabled={processingId === contactToArchive?.id}
-                  className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-light rounded-xl font-semibold transition-all"
+                  className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-all"
                 >
                   Cancelar
                 </button>
+
                 <button
                   onClick={confirmArchive}
                   disabled={processingId === contactToArchive?.id}

@@ -1,8 +1,6 @@
-import { auth, db, rtdb, functions } from '../../../core/config/firebase.config';
+import { auth, db } from '../../../core/config/firebase.config';
 import {
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendEmailVerification
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import {
   collection,
@@ -11,8 +9,10 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
-  Timestamp
+  Timestamp,
+  query,
+  where,
+  limit
 } from 'firebase/firestore';
 
 const USERS_COLLECTION = 'users';
@@ -21,17 +21,17 @@ class UserService {
   // ========================================
   // OBTENER USUARIOS
   // ========================================
-  
+
   async getAllUsers() {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
       const snapshot = await getDocs(usersRef);
-      
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
+
+      return snapshot.docs.map((d) => ({
+        id: d.id, // id = email
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate?.(),
+        updatedAt: d.data().updatedAt?.toDate?.()
       }));
     } catch (error) {
       console.error('Error obteniendo usuarios:', error);
@@ -39,19 +39,22 @@ class UserService {
     }
   }
 
-  async getUserById(userId) {
+  // ✅ En este proyecto el docId de users ES el email
+  async getUserByEmail(email) {
     try {
-      const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
-      
+      if (!email) throw new Error('Email requerido');
+
+      const userDoc = await getDoc(doc(db, USERS_COLLECTION, email));
+
       if (!userDoc.exists()) {
         throw new Error('Usuario no encontrado');
       }
 
       return {
-        id: userDoc.id,
+        id: userDoc.id, // id=email
         ...userDoc.data(),
-        createdAt: userDoc.data().createdAt?.toDate(),
-        updatedAt: userDoc.data().updatedAt?.toDate()
+        createdAt: userDoc.data().createdAt?.toDate?.(),
+        updatedAt: userDoc.data().updatedAt?.toDate?.()
       };
     } catch (error) {
       console.error('Error obteniendo usuario:', error);
@@ -59,87 +62,88 @@ class UserService {
     }
   }
 
-  // ========================================
-  // CREAR USUARIO (Auth + Firestore + EMAIL)
-  // ========================================
-  
-  async createUser(userData, password) {
-    let userCredential = null;
-    
+  // ✅ Fallback si alguna vez necesitas buscar por uid
+  async getUserByUid(uid) {
     try {
-      // 1. Crear en Firebase Auth
-      userCredential = await createUserWithEmailAndPassword(
-        auth,
-        userData.email,
-        password
+      if (!uid) throw new Error('uid requerido');
+
+      const q = query(
+        collection(db, USERS_COLLECTION),
+        where('uid', '==', uid),
+        limit(1)
       );
 
-      const { uid } = userCredential.user;
+      const snap = await getDocs(q);
+      if (snap.empty) throw new Error('Usuario no encontrado');
 
-      // 2. Enviar email de verificación
-      try {
-        await sendEmailVerification(userCredential.user);
-        console.log('✅ Email de verificación enviado a:', userData.email);
-      } catch (emailError) {
-        console.warn('⚠️ No se pudo enviar email de verificación:', emailError.message);
-        // Continuar aunque falle el email
-      }
-
-      // 3. Crear documento en Firestore usando email como ID
-      await setDoc(doc(db, USERS_COLLECTION, userData.email), {
-        uid,
-        email: userData.email,
-        displayName: userData.displayName || '',
-        phone: userData.phone || '',
-        role: userData.role || 'member',
-        status: userData.status || 'active',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
-
-      console.log('✅ Usuario creado exitosamente:', userData.email);
-      return { uid, ...userData };
+      const d = snap.docs[0];
+      return {
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate?.(),
+        updatedAt: d.data().updatedAt?.toDate?.()
+      };
     } catch (error) {
-      console.error('Error creando usuario:', error);
-      
-      // Si falla Firestore pero ya se creó en Auth, intentar limpiar
-      if (error.code !== 'auth/email-already-in-use' && userCredential?.user) {
-        try {
-          await userCredential.user.delete();
-          console.log('🧹 Usuario eliminado de Auth tras error');
-        } catch (cleanupError) {
-          console.error('Error limpiando usuario de Auth:', cleanupError);
-        }
-      }
-      
+      console.error('Error obteniendo usuario por uid:', error);
       throw error;
     }
   }
 
   // ========================================
-  // ACTUALIZAR USUARIO
+  // CREAR/ACTUALIZAR PERFIL EN FIRESTORE (solo Firestore)
   // ========================================
-  
-  async updateUser(userId, userData) {
+
+  // Útil si ya existe en Auth (por cloud function) y quieres asegurar datos/merge
+  async upsertUserProfileByEmail(email, userData) {
     try {
-      const userRef = doc(db, USERS_COLLECTION, userId);
-      
+      if (!email) throw new Error('Email requerido');
+
+      await setDoc(
+        doc(db, USERS_COLLECTION, email),
+        {
+          ...userData,
+          email,
+          updatedAt: Timestamp.now()
+        },
+        { merge: true }
+      );
+
+      return { id: email, ...userData };
+    } catch (error) {
+      console.error('Error upsert user profile:', error);
+      throw error;
+    }
+  }
+
+  // ========================================
+  // ACTUALIZAR USUARIO (Firestore)
+  // ========================================
+
+  // ✅ userId aquí realmente es email
+  async updateUser(email, userData) {
+    try {
+      if (!email) throw new Error('Email requerido');
+
+      const userRef = doc(db, USERS_COLLECTION, email);
+
       await updateDoc(userRef, {
         ...userData,
         updatedAt: Timestamp.now()
       });
 
-      return { id: userId, ...userData };
+      return { id: email, ...userData };
     } catch (error) {
       console.error('Error actualizando usuario:', error);
       throw error;
     }
   }
 
-  async changeUserStatus(userId, newStatus) {
+  async changeUserStatus(email, newStatus) {
     try {
-      const userRef = doc(db, USERS_COLLECTION, userId);
-      
+      if (!email) throw new Error('Email requerido');
+
+      const userRef = doc(db, USERS_COLLECTION, email);
+
       await updateDoc(userRef, {
         status: newStatus,
         updatedAt: Timestamp.now()
@@ -153,52 +157,9 @@ class UserService {
   }
 
   // ========================================
-  // ELIMINAR USUARIO (AUTOMÁTICO CON CLOUD FUNCTION)
-  // ========================================
-  
-  async deleteUser(userId) {
-    try {
-      console.log(`🗑️ Eliminando usuario completamente: ${userId}`);
-      
-      // Obtener token de autenticación
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('No estás autenticado');
-      }
-
-      const token = await user.getIdToken();
-      
-      // Llamar a la Cloud Function con el token
-      const functionUrl = 'https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net/deleteUserComplete';
-      
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ data: { userId } })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error eliminando usuario');
-      }
-
-      const result = await response.json();
-      console.log('✅ Usuario eliminado exitosamente:', result.result);
-      
-      return result.result;
-    } catch (error) {
-      console.error('❌ Error eliminando usuario:', error);
-      throw new Error(error.message || 'Error al eliminar usuario');
-    }
-  }
-
-  // ========================================
   // RESETEAR CONTRASEÑA
   // ========================================
-  
+
   async sendPasswordReset(email) {
     try {
       await sendPasswordResetEmail(auth, email);

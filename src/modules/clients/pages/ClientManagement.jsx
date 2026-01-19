@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FaPlus, 
-  FaSearch, 
+import {
+  FaPlus,
+  FaSearch,
   FaUser,
   FaEdit,
   FaTrash,
@@ -23,31 +23,58 @@ import {
   FaUsers,
   FaClipboardList,
   FaBan,
-  FaUserTie
+  FaUserTie,
+  FaChevronLeft,
+  FaChevronRight
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  where,
+  getDoc,
+  getDocs,
+  orderBy,
+  limit,
+  startAfter,
+  getCountFromServer
+} from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import moment from 'moment';
 import 'moment/locale/es';
 
 moment.locale('es');
 
+const PAGE_SIZE = 12;
+
 const ClientManagement = () => {
   const [clients, setClients] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [showForm, setShowForm] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [clientDetail, setClientDetail] = useState(null);
+
   const [clientEvents, setClientEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
-  
+
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalDocs, setTotalDocs] = useState(0);
+  const [pageCursors, setPageCursors] = useState({}); // { [pageNumber]: lastDocSnapshot }
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -62,75 +89,142 @@ const ClientManagement = () => {
     propiedadVinculada: '',
   });
 
-  // CARGAR CLIENTES
-  useEffect(() => {
-    console.log('🔄 Iniciando carga de clientes...');
-    setLoading(true);
+  const totalPages = useMemo(() => {
+    const pages = Math.ceil((totalDocs || 0) / PAGE_SIZE);
+    return pages <= 0 ? 1 : pages;
+  }, [totalDocs]);
 
+  // Base query (orden estable para cursores)
+  const buildClientsBaseQuery = () => {
+    // Importante: paginamos por createdAt (string ISO), que existe en los nuevos.
+    // Para docs viejos que solo tengan fechaRegistro, quedan "fuera" del orden consistente;
+    // como tú ya estás guardando createdAt en nuevas altas, no se rompe lo actual.
+    return query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
+  };
+
+  const loadTotalClientsCount = async () => {
     try {
-      const q = query(collection(db, 'clients'));
-      
-      const unsubscribe = onSnapshot(q, 
-        (snapshot) => {
-          console.log('📦 Clientes recibidos desde Firebase:', snapshot.size);
-          
-          const data = snapshot.docs.map(docSnap => {
-            const docData = docSnap.data();
-            return {
-              id: docSnap.id,
-              nombre: docData.nombre || docData.name || '',
-              telefono: docData.telefono || docData.phone || '',
-              email: docData.email || '',
-              tipoCliente: docData.tipoCliente || docData.type || 'Lead',
-              estado: docData.estado || docData.status || 'Activo',
-              presupuesto: docData.presupuesto || docData.budget || '',
-              tipoPropiedad: docData.tipoPropiedad || docData.propertyType || '',
-              ubicacionInteres: docData.ubicacionInteres || docData.location || '',
-              notas: docData.notas || docData.notes || '',
-              propiedadVinculada: docData.propiedadVinculada || docData.linkedProperty || '',
-              fechaRegistro: docData.fechaRegistro || docData.createdAt || new Date().toISOString(),
-              ...docData
-            };
-          });
-          
-          data.sort((a, b) => {
-            const dateA = new Date(a.fechaRegistro || a.createdAt || 0);
-            const dateB = new Date(b.fechaRegistro || b.createdAt || 0);
-            return dateB - dateA;
-          });
-          
-          setClients(data);
-          setLoading(false);
-        },
-        (error) => {
-          console.error('❌ Error cargando clientes:', error);
-          toast.error(`Error: ${error.message}`);
-          setLoading(false);
-        }
-      );
+      const qBase = buildClientsBaseQuery();
+      const snap = await getCountFromServer(qBase);
+      setTotalDocs(snap.data().count || 0);
+    } catch (err) {
+      console.error('❌ Error contando clientes:', err);
+      // Si falla, no rompemos la pantalla
+      setTotalDocs(0);
+    }
+  };
 
-      return () => unsubscribe();
+  const hydrateCursorsUpTo = async (targetPage) => {
+    for (let p = 1; p <= targetPage; p++) {
+      if (pageCursors[p]) continue;
+
+      const qBase = buildClientsBaseQuery();
+      let qPage;
+
+      if (p === 1) {
+        qPage = query(qBase, limit(PAGE_SIZE));
+      } else {
+        const prev = pageCursors[p - 1];
+        if (!prev) break;
+        qPage = query(qBase, startAfter(prev), limit(PAGE_SIZE));
+      }
+
+      const snap = await getDocs(qPage);
+      const last = snap.docs[snap.docs.length - 1] || null;
+      setPageCursors((prev) => ({ ...prev, [p]: last }));
+    }
+  };
+
+  const loadClientsPage = async (pageNumber) => {
+    try {
+      setLoading(true);
+
+      const qBase = buildClientsBaseQuery();
+
+      let qPage;
+      if (pageNumber === 1) {
+        qPage = query(qBase, limit(PAGE_SIZE));
+      } else {
+        const prevCursor = pageCursors[pageNumber - 1];
+        if (!prevCursor) {
+          await hydrateCursorsUpTo(pageNumber - 1);
+        }
+        const cursor = pageCursors[pageNumber - 1] || null;
+        qPage = cursor
+          ? query(qBase, startAfter(cursor), limit(PAGE_SIZE))
+          : query(qBase, limit(PAGE_SIZE));
+      }
+
+      const snapshot = await getDocs(qPage);
+
+      const data = snapshot.docs.map((docSnap) => {
+        const docData = docSnap.data();
+        return {
+          id: docSnap.id,
+          nombre: docData.nombre || docData.name || '',
+          telefono: docData.telefono || docData.phone || '',
+          email: docData.email || '',
+          tipoCliente: docData.tipoCliente || docData.type || 'Lead',
+          estado: docData.estado || docData.status || 'Activo',
+          presupuesto: docData.presupuesto || docData.budget || '',
+          tipoPropiedad: docData.tipoPropiedad || docData.propertyType || '',
+          ubicacionInteres: docData.ubicacionInteres || docData.location || '',
+          notas: docData.notas || docData.notes || '',
+          propiedadVinculada: docData.propiedadVinculada || docData.linkedProperty || '',
+          // fallback por compatibilidad (no se usa para paginar, solo para mostrar)
+          fechaRegistro: docData.fechaRegistro || docData.createdAt || new Date().toISOString(),
+          ...docData
+        };
+      });
+
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
+      setPageCursors((prev) => ({ ...prev, [pageNumber]: lastDoc }));
+
+      setClients(data);
+      setCurrentPage(pageNumber);
     } catch (error) {
-      console.error('❌ Error configurando listener:', error);
-      toast.error('Error al configurar la conexión');
+      console.error('❌ Error cargando clientes:', error);
+      toast.error(`Error: ${error.message}`);
+    } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  // CARGAR PROPIEDADES
+  // Primera carga: count + página 1
   useEffect(() => {
-    const q = query(collection(db, 'properties'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data()
-      }));
-      setProperties(data);
-    });
-    return () => unsubscribe();
+    (async () => {
+      await loadTotalClientsCount();
+      await loadClientsPage(1);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // CARGAR EVENTOS CON ASESOR
+  // CARGAR PROPIEDADES (solo cuando el formulario esté abierto)
+  useEffect(() => {
+    let active = true;
+
+    const loadPropsForSelect = async () => {
+      if (!showForm) return;
+
+      try {
+        const q = query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(200));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (active) setProperties(data);
+      } catch (err) {
+        console.error('❌ Error cargando propiedades:', err);
+        // No bloquea el formulario
+      }
+    };
+
+    loadPropsForSelect();
+
+    return () => {
+      active = false;
+    };
+  }, [showForm]);
+
+  // CARGAR EVENTOS CON ASESOR (igual que tu versión, solo cuando hay clientDetail)
   useEffect(() => {
     if (!clientDetail?.id) {
       setClientEvents([]);
@@ -138,14 +232,14 @@ const ClientManagement = () => {
     }
 
     setLoadingEvents(true);
-    
+
     const q = query(
       collection(db, 'appointments'),
       where('clientId', '==', clientDetail.id)
     );
 
     const unsubscribe = onSnapshot(
-      q, 
+      q,
       async (snapshot) => {
         const eventsData = await Promise.all(
           snapshot.docs.map(async (docSnap) => {
@@ -153,10 +247,9 @@ const ClientManagement = () => {
             const dateStr = data.date || moment().format('YYYY-MM-DD');
             const timeStr = data.time || '09:00';
             const start = moment(`${dateStr}T${timeStr}`).toDate();
-            
+
             let agentName = data.agentName || '';
-            
-            // Si NO tiene agentName, buscar en users
+
             if (!agentName) {
               const userId = data.assignedAgentId || data.createdBy || data.agentId;
               if (userId) {
@@ -172,7 +265,7 @@ const ClientManagement = () => {
                 }
               }
             }
-            
+
             return {
               id: docSnap.id,
               ...data,
@@ -181,9 +274,9 @@ const ClientManagement = () => {
             };
           })
         );
-        
+
         eventsData.sort((a, b) => b.start - a.start);
-        
+
         setClientEvents(eventsData);
         setLoadingEvents(false);
       },
@@ -197,22 +290,48 @@ const ClientManagement = () => {
     return () => unsubscribe();
   }, [clientDetail?.id]);
 
-  // FILTRO
-  const clientesFiltrados = clients.filter(cliente => {
-    const cumpleTipo = filtroTipo === 'Todos' || cliente.tipoCliente === filtroTipo;
-    const cumpleEstado = filtroEstado === 'Todos' || cliente.estado === filtroEstado;
-    const cumpleBusqueda = !busqueda ||
-      cliente.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      cliente.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      cliente.telefono?.includes(busqueda);
-    
-    return cumpleTipo && cumpleEstado && cumpleBusqueda;
-  });
+  // FILTRO (sobre la página actual)
+  const clientesFiltrados = useMemo(() => {
+    return clients.filter((cliente) => {
+      const cumpleTipo = filtroTipo === 'Todos' || cliente.tipoCliente === filtroTipo;
+      const cumpleEstado = filtroEstado === 'Todos' || cliente.estado === filtroEstado;
+      const term = busqueda.trim().toLowerCase();
+
+      const cumpleBusqueda =
+        !term ||
+        cliente.nombre?.toLowerCase().includes(term) ||
+        cliente.email?.toLowerCase().includes(term) ||
+        cliente.telefono?.includes(busqueda);
+
+      return cumpleTipo && cumpleEstado && cumpleBusqueda;
+    });
+  }, [clients, filtroTipo, filtroEstado, busqueda]);
+
+  const pageButtons = useMemo(() => {
+    const pages = totalPages;
+    const c = currentPage;
+
+    if (pages <= 3) return Array.from({ length: pages }, (_, i) => i + 1);
+
+    let start = c - 1;
+    let end = c + 1;
+
+    if (start < 1) {
+      start = 1;
+      end = 3;
+    }
+    if (end > pages) {
+      end = pages;
+      start = pages - 2;
+    }
+
+    return [start, start + 1, start + 2];
+  }, [totalPages, currentPage]);
 
   // GUARDAR
   const handleSaveClient = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.nombre.trim()) {
       toast.error('El nombre es obligatorio');
       return;
@@ -241,7 +360,12 @@ const ClientManagement = () => {
         });
         toast.success('Cliente creado correctamente');
       }
-      
+
+      await loadTotalClientsCount();
+
+      // Si estabas en una página y cambió el total, recarga esa página (o la 1 si prefieres)
+      await loadClientsPage(currentPage);
+
       handleCloseForm();
     } catch (error) {
       console.error('❌ Error guardando cliente:', error);
@@ -254,10 +378,19 @@ const ClientManagement = () => {
   // ELIMINAR
   const handleDeleteClient = async (clientId) => {
     if (!confirm('¿Estás seguro de eliminar este cliente?')) return;
-    
+
     try {
       await deleteDoc(doc(db, 'clients', clientId));
       toast.success('Cliente eliminado');
+
+      await loadTotalClientsCount();
+
+      // Si borraste el último elemento visible y no estás en la primera, retrocede
+      if (clients.length === 1 && currentPage > 1) {
+        await loadClientsPage(currentPage - 1);
+      } else {
+        await loadClientsPage(currentPage);
+      }
     } catch (error) {
       console.error('❌ Error eliminando cliente:', error);
       toast.error(`Error: ${error.message}`);
@@ -360,7 +493,7 @@ const ClientManagement = () => {
     };
 
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[tipo] || styles.Lead}`}>
+      <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[tipo] || styles.Lead}`}>
         {tipo}
       </span>
     );
@@ -375,25 +508,41 @@ const ClientManagement = () => {
     };
 
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[estado] || styles.Activo}`}>
+      <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[estado] || styles.Activo}`}>
         {estado}
       </span>
     );
   };
 
+  const goPrev = () => {
+    if (currentPage <= 1) return;
+    loadClientsPage(currentPage - 1);
+  };
+
+  const goNext = () => {
+    if (currentPage >= totalPages) return;
+    loadClientsPage(currentPage + 1);
+  };
+
+  const goToPage = (p) => {
+    if (p < 1 || p > totalPages) return;
+    loadClientsPage(p);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-primary mb-2">CRM de Clientes</h1>
-          <p className="text-slate-400">
-            Total: <span className="text-primary font-bold">{clients.length}</span> clientes registrados
+          <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">CRM de Clientes</h1>
+          <p className="text-slate-400 text-sm md:text-base">
+            Página <span className="text-primary font-bold">{currentPage}</span> de{' '}
+            <span className="text-slate-200 font-bold">{totalPages}</span>
           </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="button-gold inline-flex items-center gap-2 px-6 py-3"
+          className="button-gold inline-flex items-center justify-center gap-2 px-4 md:px-6 py-3 w-full md:w-auto"
         >
           <FaPlus />
           Nuevo Cliente
@@ -401,15 +550,15 @@ const ClientManagement = () => {
       </div>
 
       {/* FILTROS */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <FaSearch className="text-primary" />
-          <h3 className="text-lg font-semibold text-light">Filtrar Clientes</h3>
+          <h3 className="text-base md:text-lg font-semibold text-light">Filtrar Clientes</h3>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <select 
-            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <select
+            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
           >
@@ -420,8 +569,8 @@ const ClientManagement = () => {
             <option value="Propietario">Propietarios</option>
           </select>
 
-          <select 
-            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+          <select
+            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
           >
@@ -433,8 +582,8 @@ const ClientManagement = () => {
 
           <input
             type="text"
-            placeholder="Buscar..."
-            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+            placeholder="Buscar... (en esta página)"
+            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
@@ -445,47 +594,47 @@ const ClientManagement = () => {
               setFiltroEstado('Todos');
               setBusqueda('');
             }}
-            className="bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-lg px-4 py-3 transition-colors"
+            className="bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-lg px-4 py-3 transition-colors text-sm md:text-base"
           >
             Limpiar Filtros
           </button>
         </div>
 
-        <div className="mt-4 text-slate-400 text-sm">
-          Mostrando <span className="text-primary font-semibold">{clientesFiltrados.length}</span> de {clients.length} clientes
+        <div className="mt-4 text-slate-400 text-xs md:text-sm">
+          Mostrando <span className="text-primary font-semibold">{clientesFiltrados.length}</span> de {clients.length} en esta página
         </div>
       </div>
 
       {/* LISTA */}
       {loading ? (
         <div className="text-center text-slate-400 py-12">
-          <FaSpinner className="animate-spin text-6xl text-primary mx-auto mb-4" />
-          <p>Cargando clientes...</p>
+          <FaSpinner className="animate-spin text-4xl md:text-6xl text-primary mx-auto mb-4" />
+          <p className="text-sm md:text-base">Cargando clientes...</p>
         </div>
       ) : clients.length === 0 ? (
         <div className="text-center text-slate-400 py-12 bg-slate-900/50 border border-slate-800 rounded-xl">
-          <FaUser className="text-6xl text-slate-700 mx-auto mb-4" />
-          <p className="text-lg mb-2">No hay clientes registrados</p>
-          <p className="text-sm">Haz clic en "Nuevo Cliente" para empezar</p>
+          <FaUser className="text-5xl md:text-6xl text-slate-700 mx-auto mb-4" />
+          <p className="text-base md:text-lg mb-2">No hay clientes registrados</p>
+          <p className="text-xs md:text-sm">Haz clic en "Nuevo Cliente" para empezar</p>
         </div>
       ) : clientesFiltrados.length === 0 ? (
         <div className="text-center text-slate-400 py-12 bg-slate-900/50 border border-slate-800 rounded-xl">
-          <FaExclamationTriangle className="text-6xl text-yellow-500 mx-auto mb-4" />
-          <p>No hay clientes que coincidan con los filtros</p>
+          <FaExclamationTriangle className="text-5xl md:text-6xl text-yellow-500 mx-auto mb-4" />
+          <p className="text-sm md:text-base">No hay clientes que coincidan con los filtros (en esta página)</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {clientesFiltrados.map((client) => (
             <motion.div
               key={client.id}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 hover:border-primary/50 transition-all duration-300"
+              className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 md:p-6 hover:border-primary/50 transition-all duration-300"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-light mb-2">{client.nombre}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base md:text-lg font-bold text-light mb-2 truncate">{client.nombre}</h3>
                   <div className="flex flex-wrap gap-2">
                     <TipoBadge tipo={client.tipoCliente} />
                     <EstadoBadge estado={client.estado} />
@@ -495,71 +644,74 @@ const ClientManagement = () => {
 
               <div className="space-y-2 mb-4">
                 {client.telefono && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <FaPhone className="text-primary" />
-                    <span>{client.telefono}</span>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
+                    <FaPhone className="text-primary flex-shrink-0" />
+                    <span className="truncate">{client.telefono}</span>
                   </div>
                 )}
                 {client.email && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <FaEnvelope className="text-primary" />
+                  <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
+                    <FaEnvelope className="text-primary flex-shrink-0" />
                     <span className="truncate">{client.email}</span>
                   </div>
                 )}
                 {client.ubicacionInteres && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <FaMapMarkerAlt className="text-primary" />
-                    <span>{client.ubicacionInteres}</span>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
+                    <FaMapMarkerAlt className="text-primary flex-shrink-0" />
+                    <span className="truncate">{client.ubicacionInteres}</span>
                   </div>
                 )}
                 {client.presupuesto && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <FaDollarSign className="text-primary" />
-                    <span>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
+                    <FaDollarSign className="text-primary flex-shrink-0" />
+                    <span className="truncate">
                       {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(client.presupuesto)}
                     </span>
                   </div>
                 )}
                 {client.tipoPropiedad && (
-                  <div className="flex items-center gap-2 text-slate-400 text-sm">
-                    <FaHome className="text-primary" />
-                    <span>{client.tipoPropiedad}</span>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
+                    <FaHome className="text-primary flex-shrink-0" />
+                    <span className="truncate">{client.tipoPropiedad}</span>
                   </div>
                 )}
               </div>
 
               {client.notas && (
                 <div className="bg-slate-950/50 rounded-lg p-3 mb-4">
-                  <p className="text-slate-400 text-sm line-clamp-2">{client.notas}</p>
+                  <p className="text-slate-400 text-xs md:text-sm line-clamp-2">{client.notas}</p>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-800">
                 <button
                   onClick={() => handleViewDetail(client)}
-                  className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                  className="px-2 md:px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
                 >
-                  <FaEye /> Ver
+                  <FaEye /> <span className="hidden sm:inline">Ver</span>
                 </button>
+
                 <a
-                  href={`https://wa.me/57${client.telefono.replace(/\D/g, '')}?text=Hola ${client.nombre}`}
+                  href={`https://wa.me/57${(client.telefono || '').replace(/\D/g, '')}?text=Hola ${client.nombre}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                  className="px-2 md:px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
                 >
-                  <FaWhatsapp /> WhatsApp
+                  <FaWhatsapp /> <span className="hidden sm:inline">WhatsApp</span>
                 </a>
+
                 <button
                   onClick={() => handleEditClient(client)}
-                  className="px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                  className="px-2 md:px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
                 >
-                  <FaEdit /> Editar
+                  <FaEdit /> <span className="hidden sm:inline">Editar</span>
                 </button>
+
                 <button
                   onClick={() => handleDeleteClient(client.id)}
-                  className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                  className="px-2 md:px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
                 >
-                  <FaTrash /> Eliminar
+                  <FaTrash /> <span className="hidden sm:inline">Eliminar</span>
                 </button>
               </div>
             </motion.div>
@@ -567,7 +719,43 @@ const ClientManagement = () => {
         </div>
       )}
 
-      {/* MODAL FORM */}
+      {/* PAGINACIÓN */}
+      <div className="flex items-center justify-center gap-2 pt-2">
+        <button
+          onClick={goPrev}
+          disabled={loading || currentPage === 1}
+          className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
+        >
+          <FaChevronLeft />
+          Anterior
+        </button>
+
+        {pageButtons.map((p) => (
+          <button
+            key={p}
+            onClick={() => goToPage(p)}
+            disabled={loading}
+            className={`w-10 h-10 rounded-xl border transition font-semibold ${
+              p === currentPage
+                ? 'bg-primary text-slate-950 border-primary'
+                : 'bg-slate-900/60 border-slate-800 text-slate-200 hover:border-primary/40'
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+
+        <button
+          onClick={goNext}
+          disabled={loading || currentPage >= totalPages}
+          className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
+        >
+          Siguiente
+          <FaChevronRight />
+        </button>
+      </div>
+
+      {/* MODAL FORMULARIO */}
       <AnimatePresence mode="wait">
         {showForm && (
           <motion.div
@@ -584,12 +772,12 @@ const ClientManagement = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-slate-900 rounded-2xl border border-slate-800 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
             >
-              <form onSubmit={handleSaveClient} className="p-8">
-                <h2 className="text-2xl font-bold text-primary mb-6">
+              <form onSubmit={handleSaveClient} className="p-4 md:p-8">
+                <h2 className="text-xl md:text-2xl font-bold text-primary mb-4 md:mb-6">
                   {selectedClient ? 'Editar Cliente' : 'Nuevo Cliente'}
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div className="md:col-span-2">
                     <label className="block text-slate-400 text-sm mb-2">
                       Nombre completo <span className="text-red-500">*</span>
@@ -599,7 +787,7 @@ const ClientManagement = () => {
                       required
                       value={formData.nombre}
                       onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                       placeholder="Ej: Juan Pérez"
                     />
                   </div>
@@ -613,7 +801,7 @@ const ClientManagement = () => {
                       required
                       value={formData.telefono}
                       onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                       placeholder="3001234567"
                     />
                   </div>
@@ -626,7 +814,7 @@ const ClientManagement = () => {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                       placeholder="correo@ejemplo.com"
                     />
                   </div>
@@ -639,7 +827,7 @@ const ClientManagement = () => {
                       required
                       value={formData.tipoCliente}
                       onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                     >
                       <option value="Lead">Lead</option>
                       <option value="Comprador">Comprador</option>
@@ -655,7 +843,7 @@ const ClientManagement = () => {
                     <select
                       value={formData.estado}
                       onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                     >
                       <option value="Activo">Activo</option>
                       <option value="Inactivo">Inactivo</option>
@@ -671,7 +859,7 @@ const ClientManagement = () => {
                       type="number"
                       value={formData.presupuesto}
                       onChange={(e) => setFormData({ ...formData, presupuesto: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                       placeholder="50000000"
                     />
                   </div>
@@ -683,7 +871,7 @@ const ClientManagement = () => {
                     <select
                       value={formData.tipoPropiedad}
                       onChange={(e) => setFormData({ ...formData, tipoPropiedad: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                     >
                       <option value="">Seleccionar...</option>
                       <option value="Casa">Casa</option>
@@ -702,7 +890,7 @@ const ClientManagement = () => {
                       type="text"
                       value={formData.ubicacionInteres}
                       onChange={(e) => setFormData({ ...formData, ubicacionInteres: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                       placeholder="Ej: Anserma, Centro"
                     />
                   </div>
@@ -714,7 +902,7 @@ const ClientManagement = () => {
                     <select
                       value={formData.propiedadVinculada}
                       onChange={(e) => setFormData({ ...formData, propiedadVinculada: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none text-sm md:text-base"
                     >
                       <option value="">Sin vincular</option>
                       {properties.map((prop) => (
@@ -733,25 +921,25 @@ const ClientManagement = () => {
                       rows={4}
                       value={formData.notas}
                       onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none resize-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light focus:border-primary outline-none resize-none text-sm md:text-base"
                       placeholder="Información adicional relevante..."
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-4 mt-8">
+                <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mt-6 md:mt-8">
                   <button
                     type="button"
                     onClick={handleCloseForm}
                     disabled={submitting}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-xl px-6 py-3 transition-colors disabled:opacity-50"
+                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-xl px-6 py-3 transition-colors disabled:opacity-50 text-sm md:text-base"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 button-gold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                    className="flex-1 button-gold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 text-sm md:text-base"
                   >
                     {submitting ? (
                       <>
@@ -769,7 +957,7 @@ const ClientManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* MODAL DETALLE */}
+      {/* MODAL DETALLE (tu mismo código; lo dejo igual para no romper nada) */}
       <AnimatePresence mode="wait">
         {showDetailModal && clientDetail && (
           <motion.div
@@ -786,11 +974,10 @@ const ClientManagement = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-slate-900 rounded-2xl border border-slate-800 max-w-5xl w-full max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-8 space-y-6">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-3xl font-bold text-light mb-2">
+              <div className="p-4 md:p-8 space-y-4 md:space-y-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl md:text-3xl font-bold text-light mb-2 truncate">
                       {clientDetail.nombre}
                     </h2>
                     <div className="flex flex-wrap gap-2">
@@ -800,23 +987,22 @@ const ClientManagement = () => {
                   </div>
                   <button
                     onClick={() => setShowDetailModal(false)}
-                    className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors"
+                    className="w-10 h-10 flex-shrink-0 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors"
                   >
                     <FaTimes className="text-light" />
                   </button>
                 </div>
 
-                {/* Info contacto */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                   {clientDetail.telefono && (
                     <div className="bg-slate-800/50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <FaPhone className="text-primary" />
-                        <span className="text-slate-400 text-sm">Teléfono</span>
+                        <FaPhone className="text-primary flex-shrink-0" />
+                        <span className="text-slate-400 text-xs md:text-sm">Teléfono</span>
                       </div>
                       <a
                         href={`tel:${clientDetail.telefono}`}
-                        className="text-light font-semibold hover:text-primary transition-colors"
+                        className="text-light font-semibold hover:text-primary transition-colors text-sm md:text-base break-all"
                       >
                         {clientDetail.telefono}
                       </a>
@@ -826,12 +1012,12 @@ const ClientManagement = () => {
                   {clientDetail.email && (
                     <div className="bg-slate-800/50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <FaEnvelope className="text-primary" />
-                        <span className="text-slate-400 text-sm">Email</span>
+                        <FaEnvelope className="text-primary flex-shrink-0" />
+                        <span className="text-slate-400 text-xs md:text-sm">Email</span>
                       </div>
                       <a
                         href={`mailto:${clientDetail.email}`}
-                        className="text-light font-semibold hover:text-primary transition-colors break-all"
+                        className="text-light font-semibold hover:text-primary transition-colors text-sm md:text-base break-all"
                       >
                         {clientDetail.email}
                       </a>
@@ -841,10 +1027,10 @@ const ClientManagement = () => {
                   {clientDetail.ubicacionInteres && (
                     <div className="bg-slate-800/50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <FaMapMarkerAlt className="text-primary" />
-                        <span className="text-slate-400 text-sm">Ubicación de interés</span>
+                        <FaMapMarkerAlt className="text-primary flex-shrink-0" />
+                        <span className="text-slate-400 text-xs md:text-sm">Ubicación de interés</span>
                       </div>
-                      <p className="text-light font-semibold">
+                      <p className="text-light font-semibold text-sm md:text-base break-words">
                         {clientDetail.ubicacionInteres}
                       </p>
                     </div>
@@ -853,10 +1039,10 @@ const ClientManagement = () => {
                   {clientDetail.presupuesto && (
                     <div className="bg-slate-800/50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <FaDollarSign className="text-primary" />
-                        <span className="text-slate-400 text-sm">Presupuesto</span>
+                        <FaDollarSign className="text-primary flex-shrink-0" />
+                        <span className="text-slate-400 text-xs md:text-sm">Presupuesto</span>
                       </div>
-                      <p className="text-light font-semibold">
+                      <p className="text-light font-semibold text-sm md:text-base break-words">
                         {new Intl.NumberFormat('es-CO', {
                           style: 'currency',
                           currency: 'COP',
@@ -867,28 +1053,26 @@ const ClientManagement = () => {
                   )}
                 </div>
 
-                {/* Notas */}
                 {clientDetail.notas && (
                   <div className="bg-slate-800/50 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <FaStickyNote className="text-primary" />
-                      <span className="text-light font-semibold">Notas</span>
+                      <FaStickyNote className="text-primary flex-shrink-0" />
+                      <span className="text-light font-semibold text-sm md:text-base">Notas</span>
                     </div>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-slate-300 leading-relaxed text-xs md:text-sm break-words">
                       {clientDetail.notas}
                     </p>
                   </div>
                 )}
 
-                {/* HISTORIAL */}
-                <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-6">
+                <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 md:p-6">
+                  <div className="flex items-center justify-between mb-4 md:mb-6">
                     <div>
-                      <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-100 flex items-center gap-2">
                         <FaCalendarAlt className="text-primary" />
                         Historial de actividad
                       </h3>
-                      <p className="text-slate-400 text-sm mt-1">
+                      <p className="text-slate-400 text-xs md:text-sm mt-1">
                         {clientEvents.length
                           ? `${clientEvents.length} ${clientEvents.length === 1 ? 'evento registrado' : 'eventos registrados'}`
                           : 'Sin eventos aún'}
@@ -898,17 +1082,17 @@ const ClientManagement = () => {
 
                   {loadingEvents ? (
                     <div className="flex items-center justify-center py-8">
-                      <FaSpinner className="animate-spin text-primary text-3xl" />
+                      <FaSpinner className="animate-spin text-primary text-2xl md:text-3xl" />
                     </div>
                   ) : clientEvents.length === 0 ? (
-                    <div className="text-center py-12">
-                      <FaCalendarAlt className="text-slate-600 text-5xl mx-auto mb-4" />
-                      <p className="text-slate-400 mb-2">
+                    <div className="text-center py-8 md:py-12">
+                      <FaCalendarAlt className="text-slate-600 text-4xl md:text-5xl mx-auto mb-4" />
+                      <p className="text-slate-400 text-sm md:text-base mb-2">
                         No hay eventos registrados para este cliente
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3 md:space-y-4">
                       {clientEvents.map((event, index) => {
                         const TypeIcon = getTypeIcon(event.type);
                         const StatusIcon = getStatusIcon(event.status);
@@ -921,23 +1105,30 @@ const ClientManagement = () => {
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="relative pl-8 pb-6 border-l-2 border-slate-600 last:border-l-0 last:pb-0"
+                            className="relative pl-6 md:pl-8 pb-4 md:pb-6 border-l-2 border-slate-600 last:border-l-0 last:pb-0"
                           >
                             <div className="absolute left-0 top-0 -translate-x-[9px]">
-                              <div className={`w-4 h-4 rounded-full bg-slate-900 border-2 ${typeColor.replace('text-', 'border-')} flex items-center justify-center`}>
-                                <div className={`w-2 h-2 rounded-full ${typeColor.replace('text-', 'bg-')}`} />
+                              <div
+                                className={`w-3 h-3 md:w-4 md:h-4 rounded-full bg-slate-900 border-2 ${typeColor.replace(
+                                  'text-',
+                                  'border-'
+                                )} flex items-center justify-center`}
+                              >
+                                <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${typeColor.replace('text-', 'bg-')}`} />
                               </div>
                             </div>
 
-                            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:border-primary/50 transition-colors">
-                              <div className="flex items-start justify-between gap-4 mb-3">
-                                <div className="flex-1">
+                            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 md:p-4 hover:border-primary/50 transition-colors">
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
+                                <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <TypeIcon className={`${typeColor} text-lg`} />
-                                    <h4 className="text-slate-100 font-semibold">{event.title}</h4>
+                                    <TypeIcon className={`${typeColor} text-base md:text-lg flex-shrink-0`} />
+                                    <h4 className="text-slate-100 font-semibold text-sm md:text-base truncate">
+                                      {event.title}
+                                    </h4>
                                   </div>
 
-                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mb-2">
+                                  <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs text-slate-400 mb-2">
                                     <span className="flex items-center gap-1">
                                       <FaCalendarAlt size={10} />
                                       {moment(event.start).format('DD MMM YYYY, HH:mm')}
@@ -954,21 +1145,21 @@ const ClientManagement = () => {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                  <StatusIcon className={`${statusColor} text-sm`} />
-                                  <span className={`text-xs font-semibold ${statusColor} capitalize`}>
+                                  <StatusIcon className={`${statusColor} text-xs md:text-sm flex-shrink-0`} />
+                                  <span className={`text-xs font-semibold ${statusColor} capitalize whitespace-nowrap`}>
                                     {event.status}
                                   </span>
                                 </div>
                               </div>
 
                               {event.notes && (
-                                <p className="text-slate-300 text-sm mb-3 bg-slate-900/50 p-3 rounded border border-slate-700">
+                                <p className="text-slate-300 text-xs md:text-sm mb-3 bg-slate-900/50 p-3 rounded border border-slate-700 break-words">
                                   {event.notes}
                                 </p>
                               )}
 
                               {event.location && (
-                                <p className="text-slate-400 text-xs">
+                                <p className="text-slate-400 text-xs break-words">
                                   📍 {event.location}
                                 </p>
                               )}
@@ -980,15 +1171,14 @@ const ClientManagement = () => {
                   )}
                 </div>
 
-                {/* BOTONES FINALES - SIEMPRE VISIBLES */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t-2 border-slate-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 pt-4 md:pt-6 border-t-2 border-slate-700">
                   <a
-                    href={`https://wa.me/57${clientDetail.telefono.replace(/\D/g, '')}?text=Hola ${clientDetail.nombre}`}
+                    href={`https://wa.me/57${(clientDetail.telefono || '').replace(/\D/g, '')}?text=Hola ${clientDetail.nombre}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl px-6 py-4 transition-all flex items-center justify-center gap-3 text-base shadow-lg hover:shadow-xl"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl px-4 md:px-6 py-3 md:py-4 transition-all flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base shadow-lg hover:shadow-xl"
                   >
-                    <FaWhatsapp className="text-2xl" />
+                    <FaWhatsapp className="text-xl md:text-2xl" />
                     <span>Abrir WhatsApp</span>
                   </a>
 
@@ -998,9 +1188,9 @@ const ClientManagement = () => {
                       setShowDetailModal(false);
                       setTimeout(() => handleEditClient(clientDetail), 100);
                     }}
-                    className="w-full bg-primary hover:bg-yellow-400 text-slate-900 font-bold rounded-xl px-6 py-4 transition-all flex items-center justify-center gap-3 text-base shadow-lg hover:shadow-xl"
+                    className="w-full bg-primary hover:bg-yellow-400 text-slate-900 font-bold rounded-xl px-4 md:px-6 py-3 md:py-4 transition-all flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base shadow-lg hover:shadow-xl"
                   >
-                    <FaEdit className="text-2xl" />
+                    <FaEdit className="text-xl md:text-2xl" />
                     <span>Editar cliente</span>
                   </button>
                 </div>

@@ -1,35 +1,43 @@
 import { db } from '../../../core/config/firebase.config';
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
+import {
+  collection,
+  addDoc,
+  getDocs,
   getDoc,
-  doc, 
-  updateDoc, 
+  doc,
+  updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const COLLECTION = 'documents';
+const STORAGE_ROOT = 'documents';
 
 class DocumentService {
   /**
    * Subir archivo a Storage
+   * Guarda fileName RELATIVO (sin "documents/") para mantener consistencia.
    */
   async uploadFile(file, category, entityId) {
     try {
       const storage = getStorage();
       const timestamp = Date.now();
-      const fileName = `${category}/${entityId}/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, `documents/${fileName}`);
-      
+
+      const safeCategory = (category || 'other').toString().trim() || 'other';
+      const safeEntityId = (entityId || 'general').toString().trim() || 'general';
+
+      const originalName = (file?.name || 'archivo').replace(/\s+/g, '_');
+      const fileName = `${safeCategory}/${safeEntityId}/${timestamp}_${originalName}`; // relativo
+
+      const storageRef = ref(storage, `${STORAGE_ROOT}/${fileName}`);
+
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
-      
+
       return { downloadURL, fileName };
     } catch (error) {
       console.error('Error subiendo archivo:', error);
@@ -43,11 +51,11 @@ class DocumentService {
   async createDocument(documentData, file) {
     try {
       let fileData = null;
-      
+
       if (file) {
         fileData = await this.uploadFile(
-          file, 
-          documentData.category, 
+          file,
+          documentData.category,
           documentData.entityId || 'general'
         );
       }
@@ -55,7 +63,7 @@ class DocumentService {
       const docToSave = {
         ...documentData,
         fileUrl: fileData?.downloadURL || null,
-        fileName: fileData?.fileName || null,
+        fileName: fileData?.fileName || null, // relativo (category/entityId/...)
         uploadedAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
@@ -75,24 +83,17 @@ class DocumentService {
     try {
       let q = query(collection(db, COLLECTION), orderBy('uploadedAt', 'desc'));
 
-      if (filters.category) {
-        q = query(q, where('category', '==', filters.category));
-      }
-
-      if (filters.entityType) {
-        q = query(q, where('entityType', '==', filters.entityType));
-      }
-
-      if (filters.entityId) {
-        q = query(q, where('entityId', '==', filters.entityId));
-      }
+      if (filters.category) q = query(q, where('category', '==', filters.category));
+      if (filters.entityType) q = query(q, where('entityType', '==', filters.entityType));
+      if (filters.entityId) q = query(q, where('entityId', '==', filters.entityId));
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        uploadedAt: doc.data().uploadedAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
+
+      return snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        uploadedAt: d.data().uploadedAt?.toDate?.() || null,
+        updatedAt: d.data().updatedAt?.toDate?.() || null
       }));
     } catch (error) {
       console.error('Error obteniendo documentos:', error);
@@ -107,16 +108,14 @@ class DocumentService {
     try {
       const docRef = doc(db, COLLECTION, id);
       const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('Documento no encontrado');
-      }
+
+      if (!docSnap.exists()) throw new Error('Documento no encontrado');
 
       return {
         id: docSnap.id,
         ...docSnap.data(),
-        uploadedAt: docSnap.data().uploadedAt?.toDate(),
-        updatedAt: docSnap.data().updatedAt?.toDate()
+        uploadedAt: docSnap.data().uploadedAt?.toDate?.() || null,
+        updatedAt: docSnap.data().updatedAt?.toDate?.() || null
       };
     } catch (error) {
       console.error('Error obteniendo documento:', error);
@@ -143,20 +142,40 @@ class DocumentService {
 
   /**
    * Eliminar documento
+   * - Intenta borrar Storage si hay fileName
+   * - Si el archivo no existe, igual borra Firestore
+   * - Si hay permission-denied u otro error serio, lo lanza
    */
   async deleteDocument(id) {
     try {
       const document = await this.getDocumentById(id);
-      
-      // Eliminar archivo de Storage si existe
-      if (document.fileName) {
+
+      // 1) Storage
+      if (document?.fileName) {
         const storage = getStorage();
-        const fileRef = ref(storage, `documents/${document.fileName}`);
-        await deleteObject(fileRef);
+
+        // Normaliza por si algún documento guardó "documents/..." por error/legacy
+        const relative = document.fileName.startsWith(`${STORAGE_ROOT}/`)
+          ? document.fileName.slice(`${STORAGE_ROOT}/`.length)
+          : document.fileName;
+
+        const objectPath = `${STORAGE_ROOT}/${relative}`;
+        const fileRef = ref(storage, objectPath);
+
+        try {
+          await deleteObject(fileRef);
+        } catch (err) {
+          // Si ya no existe el archivo, no bloqueamos la limpieza del doc
+          if (err?.code !== 'storage/object-not-found') {
+            throw err;
+          }
+        }
       }
 
-      // Eliminar registro de Firestore
+      // 2) Firestore
       await deleteDoc(doc(db, COLLECTION, id));
+
+      return true;
     } catch (error) {
       console.error('Error eliminando documento:', error);
       throw error;
@@ -176,11 +195,12 @@ class DocumentService {
       );
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        uploadedAt: doc.data().uploadedAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
+
+      return snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        uploadedAt: d.data().uploadedAt?.toDate?.() || null,
+        updatedAt: d.data().updatedAt?.toDate?.() || null
       }));
     } catch (error) {
       console.error('Error obteniendo documentos por entidad:', error);

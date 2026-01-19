@@ -1,74 +1,183 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const cors = require('cors')({ origin: true }); // ← NUEVO: Habilitar CORS
+const cors = require('cors')({ origin: true });
 
 admin.initializeApp();
 
+/**
+ * Siempre setea CORS (también para errores)
+ */
+function setCorsHeaders(req, res) {
+  res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+/**
+ * Maneja preflight OPTIONS
+ */
+function handlePreflight(req, res) {
+  if (req.method === 'OPTIONS') {
+    setCorsHeaders(req, res);
+    return res.status(204).send('');
+  }
+  return null;
+}
+
+// Helper: validar admin (en tu app el doc de users está por EMAIL)
+async function assertAdminFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const err = new Error('No autenticado');
+    err.status = 401;
+    throw err;
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  const decodedToken = await admin.auth().verifyIdToken(token);
+
+  const callerEmail = decodedToken.email;
+  if (!callerEmail) {
+    const err = new Error('Token sin email');
+    err.status = 401;
+    throw err;
+  }
+
+  const callerDoc = await admin.firestore().collection('users').doc(callerEmail).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+    const err = new Error('Solo administradores');
+    err.status = 403;
+    throw err;
+  }
+
+  return { callerEmail };
+}
+
+/**
+ * ELIMINAR USUARIO COMPLETO (Auth + Firestore + RTDB)
+ * Espera: body = { data: { userId: "<email>" } }
+ */
 exports.deleteUserComplete = functions.https.onRequest((req, res) => {
-  // Habilitar CORS
   return cors(req, res, async () => {
     try {
-      // Verificar método HTTP
+      // Preflight
+      if (handlePreflight(req, res)) return;
+
+      // CORS en respuestas normales también
+      setCorsHeaders(req, res);
+
       if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método no permitido' });
       }
 
-      // Verificar autenticación
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'No autenticado' });
-      }
+      await assertAdminFromRequest(req);
 
-      const token = authHeader.split('Bearer ')[1];
-      const decodedToken = await admin.auth().verifyIdToken(token);
-      const callerEmail = decodedToken.email;
+      const userIdRaw = req.body?.data?.userId;
+      const userId = String(userIdRaw || '').trim().toLowerCase();
+      if (!userId) return res.status(400).json({ error: 'userId es requerido' });
 
-      // Verificar que es admin
-      const callerDoc = await admin.firestore().collection('users').doc(callerEmail).get();
-      
-      if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
-        return res.status(403).json({ error: 'Solo administradores pueden eliminar usuarios' });
-      }
-
-      const { userId } = req.body.data;
-
-      if (!userId) {
-        return res.status(400).json({ error: 'userId es requerido' });
-      }
-
-      console.log(`🗑️ Eliminando usuario: ${userId}`);
-
-      // Obtener UID del usuario
       const userDoc = await admin.firestore().collection('users').doc(userId).get();
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
+      if (!userDoc.exists) return res.status(404).json({ error: 'Usuario no encontrado' });
 
       const userUid = userDoc.data().uid;
+      if (userUid) {
+        await admin.auth().deleteUser(userUid);
+      }
 
-      // 1. Eliminar de Authentication
-      await admin.auth().deleteUser(userUid);
-      console.log(`✅ Eliminado de Authentication: ${userUid}`);
-
-      // 2. Eliminar de Firestore
       await admin.firestore().collection('users').doc(userId).delete();
-      console.log(`✅ Eliminado de Firestore: ${userId}`);
+      if (userUid) {
+        await admin.database().ref(`status/${userUid}`).remove();
+        await admin.database().ref(`presence/${userUid}`).remove();
+      }
 
-      // 3. Eliminar de Realtime Database
-      await admin.database().ref(`status/${userUid}`).remove();
-      await admin.database().ref(`presence/${userUid}`).remove();
-      console.log(`✅ Eliminado de Realtime Database: ${userUid}`);
-
-      return res.status(200).json({ 
+      return res.status(200).json({
         result: {
-          success: true, 
+          success: true,
           message: `Usuario ${userId} eliminado completamente`,
           deletedFrom: ['Authentication', 'Firestore', 'Realtime Database']
         }
       });
     } catch (error) {
-      console.error('Error:', error);
-      return res.status(500).json({ error: error.message });
+      setCorsHeaders(req, res);
+      console.error('deleteUserComplete Error:', error);
+      return res.status(error.status || 500).json({ error: error.message });
+    }
+  });
+});
+
+/**
+ * CREAR USUARIO DESDE ADMIN (NO CAMBIA SESIÓN DEL ADMIN)
+ * Espera: body = { data: { email, password, displayName, phone, role, status } }
+ */
+exports.createUserByAdmin = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    try {
+      // Preflight
+      if (handlePreflight(req, res)) return;
+
+      // CORS en respuestas normales también
+      setCorsHeaders(req, res);
+
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método no permitido' });
+      }
+
+      await assertAdminFromRequest(req);
+
+      const data = req.body?.data || {};
+      const email = String(data.email || '').trim().toLowerCase();
+      const password = String(data.password || '');
+      const displayName = String(data.displayName || '').trim();
+      const phone = String(data.phone || '').trim();
+      const role = String(data.role || 'member');
+      const status = String(data.status || 'active');
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'email y password son requeridos' });
+      }
+
+      let userRecord;
+
+      // 1) Crear usuario en Auth (Admin SDK)
+      try {
+        userRecord = await admin.auth().createUser({
+          email,
+          password,
+          displayName,
+          disabled: status === 'blocked'
+        });
+      } catch (e) {
+        // Si ya existe en Auth, obtenerlo y seguir (esto evita fallos innecesarios)
+        if (e?.code === 'auth/email-already-exists') {
+          userRecord = await admin.auth().getUserByEmail(email);
+        } else {
+          throw e;
+        }
+      }
+
+      // 2) Guardar/merge en Firestore (email como ID)
+      await admin.firestore().collection('users').doc(email).set(
+        {
+          uid: userRecord.uid,
+          email,
+          displayName,
+          phone,
+          role,
+          status,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return res.status(200).json({
+        result: { success: true, uid: userRecord.uid, email }
+      });
+    } catch (error) {
+      setCorsHeaders(req, res);
+      console.error('createUserByAdmin Error:', error);
+      return res.status(error.status || 500).json({ error: error.message });
     }
   });
 });

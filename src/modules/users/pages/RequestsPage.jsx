@@ -1,29 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
   FaEnvelope,
-  FaUser,
   FaClock,
   FaCheckCircle,
   FaTimesCircle,
   FaTrash,
   FaSpinner,
-  FaUserPlus,
   FaExclamationTriangle,
   FaPhone
 } from 'react-icons/fa';
+
 import { requestService } from '../services/request.service';
 import { userService } from '../services/user.service';
 import { USER_ROLES, USER_ROLE_LABELS } from '../types/user.types';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import { auth } from '../../../core/config/firebase.config';
+
+const CREATE_USER_FUNCTION_URL =
+  'https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net/createUserByAdmin';
 
 const RequestsPage = () => {
   const { currentUser } = useAuth();
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending');
   const [processingId, setProcessingId] = useState(null);
+
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.MEMBER);
@@ -32,13 +37,14 @@ const RequestsPage = () => {
 
   useEffect(() => {
     loadRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const data = await requestService.getAllRequests({ 
-        status: filter !== 'all' ? filter : null 
+      const data = await requestService.getAllRequests({
+        status: filter !== 'all' ? filter : null
       });
       setRequests(data);
     } catch (error) {
@@ -55,74 +61,93 @@ const RequestsPage = () => {
     setShowApproveModal(true);
   };
 
+  const createUserByAdmin = async (payload) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('No estás autenticado');
+
+    const token = await user.getIdToken();
+
+    const response = await fetch(CREATE_USER_FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ data: payload })
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(body.error || 'Error creando usuario');
+    }
+
+    return body;
+  };
+
   const handleApprove = async () => {
     if (!isAdmin) {
       toast.error('Solo administradores pueden aprobar solicitudes');
       return;
     }
 
-    if (!selectedRequest) return;
+    if (!selectedRequest?.id || !selectedRequest?.email) return;
 
     setProcessingId(selectedRequest.id);
+
     try {
-      // 1. Verificar si el usuario ya existe
+      // 1) Verificar si el usuario ya existe (en tu app: users/{email})
       let userExists = false;
       try {
         await userService.getUserById(selectedRequest.email);
         userExists = true;
-      } catch (error) {
+      } catch {
         userExists = false;
       }
 
       if (userExists) {
-        // Usuario ya existe, solo actualizar rol
+        // Usuario existe: solo actualizar rol/estado
         await userService.updateUser(selectedRequest.email, {
           role: selectedRole,
           status: 'active'
         });
-        console.log('✅ Usuario existente actualizado');
       } else {
-        // Usuario no existe, crearlo
+        // Usuario NO existe: crear por Cloud Function (Admin SDK)
         const defaultPassword = Math.random().toString(36).slice(-8) + 'Aa1!';
-        
-        await userService.createUser(
-          {
-            displayName: selectedRequest.name,
-            email: selectedRequest.email,
-            phone: selectedRequest.phone || '',
-            role: selectedRole,
-            status: 'active'
-          },
-          defaultPassword
-        );
-        
-        console.log('✅ Nuevo usuario creado');
+
+        await createUserByAdmin({
+          displayName: selectedRequest.name || '',
+          email: selectedRequest.email,
+          phone: selectedRequest.phone || '',
+          role: selectedRole,
+          status: 'active',
+          password: defaultPassword
+        });
 
         // Enviar email para resetear contraseña
         try {
           await userService.sendPasswordReset(selectedRequest.email);
-          console.log('✅ Email de reset enviado');
         } catch (emailError) {
-          console.warn('⚠️ No se pudo enviar email de reset:', emailError.message);
+          console.warn('⚠️ No se pudo enviar email de reset:', emailError?.message);
         }
       }
 
-      // 2. Aprobar la solicitud en Firestore
+      // 2) Aprobar solicitud
       await requestService.approveRequest(
-        selectedRequest.id, 
-        selectedRole, 
+        selectedRequest.id,
+        selectedRole,
         currentUser.email
       );
 
       toast.success(
-        userExists 
-          ? 'Usuario actualizado y solicitud aprobada' 
+        userExists
+          ? 'Usuario actualizado y solicitud aprobada'
           : 'Usuario creado y solicitud aprobada. Email enviado.'
       );
-      
+
       setShowApproveModal(false);
       setSelectedRequest(null);
-      loadRequests();
+      await loadRequests();
     } catch (error) {
       console.error('Error aprobando solicitud:', error);
       toast.error(error.message || 'Error al aprobar solicitud');
@@ -143,7 +168,7 @@ const RequestsPage = () => {
     try {
       await requestService.rejectRequest(request.id, currentUser.email);
       toast.success('Solicitud rechazada');
-      loadRequests();
+      await loadRequests();
     } catch (error) {
       console.error('Error rechazando solicitud:', error);
       toast.error('Error al rechazar solicitud');
@@ -163,7 +188,7 @@ const RequestsPage = () => {
     try {
       await requestService.deleteRequest(requestId);
       toast.success('Solicitud eliminada');
-      loadRequests();
+      await loadRequests();
     } catch (error) {
       console.error('Error eliminando solicitud:', error);
       toast.error('Error al eliminar solicitud');
@@ -190,18 +215,23 @@ const RequestsPage = () => {
     };
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${styles[status]}`}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${styles[status]}`}
+      >
         {icons[status]}
         {labels[status]}
       </span>
     );
   };
 
-  const stats = {
-    pending: requests.filter(r => r.status === 'pending').length,
-    approved: requests.filter(r => r.status === 'approved').length,
-    rejected: requests.filter(r => r.status === 'rejected').length
-  };
+  const stats = useMemo(
+    () => ({
+      pending: requests.filter((r) => r.status === 'pending').length,
+      approved: requests.filter((r) => r.status === 'approved').length,
+      rejected: requests.filter((r) => r.status === 'rejected').length
+    }),
+    [requests]
+  );
 
   return (
     <div className="px-4 py-6 space-y-6">
@@ -274,6 +304,7 @@ const RequestsPage = () => {
         >
           Pendientes
         </button>
+
         <button
           onClick={() => setFilter('approved')}
           className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
@@ -284,6 +315,7 @@ const RequestsPage = () => {
         >
           Aprobadas
         </button>
+
         <button
           onClick={() => setFilter('rejected')}
           className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
@@ -294,6 +326,7 @@ const RequestsPage = () => {
         >
           Rechazadas
         </button>
+
         <button
           onClick={() => setFilter('all')}
           className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
@@ -330,21 +363,21 @@ const RequestsPage = () => {
                 <div className="flex-1">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 text-xl font-bold text-primary">
-                      {request.name.charAt(0).toUpperCase()}
+                      {(request.name?.charAt?.(0) || 'U').toUpperCase()}
                     </div>
-                    
+
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-light font-bold text-lg">{request.name}</h3>
                         {getStatusBadge(request.status)}
                       </div>
-                      
+
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 text-sm text-slate-400">
                           <FaEnvelope className="flex-shrink-0" />
                           <span>{request.email}</span>
                         </div>
-                        
+
                         {request.phone && (
                           <div className="flex items-center gap-2 text-sm text-slate-400">
                             <FaPhone className="flex-shrink-0" />
@@ -360,8 +393,8 @@ const RequestsPage = () => {
                       )}
 
                       <p className="text-xs text-slate-500 mt-2">
-                        Solicitado el {request.createdAt?.toLocaleDateString()} a las{' '}
-                        {request.createdAt?.toLocaleTimeString()}
+                        Solicitado el {request.createdAt?.toLocaleDateString?.()} a las{' '}
+                        {request.createdAt?.toLocaleTimeString?.()}
                       </p>
                     </div>
                   </div>
@@ -415,28 +448,30 @@ const RequestsPage = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="card-soft max-w-md w-full p-6"
           >
-            <h2 className="text-2xl font-bold text-primary mb-4">
-              Aprobar solicitud
-            </h2>
+            <h2 className="text-2xl font-bold text-primary mb-4">Aprobar solicitud</h2>
 
             <div className="mb-6">
               <p className="text-slate-300 mb-2">
-                Usuario: <span className="font-bold text-light">{selectedRequest.name}</span>
+                Usuario:{' '}
+                <span className="font-bold text-light">{selectedRequest.name}</span>
               </p>
+
               <p className="text-slate-300 mb-4">
-                Email: <span className="font-bold text-light">{selectedRequest.email}</span>
+                Email:{' '}
+                <span className="font-bold text-light">{selectedRequest.email}</span>
               </p>
 
               <label className="block text-sm text-slate-300 mb-2">
                 Asignar rol <span className="text-red-500">*</span>
               </label>
+
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               >
-                {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>
+                {Object.entries(USER_ROLE_LABELS).map(([roleKey, label]) => (
+                  <option key={roleKey} value={roleKey}>
                     {label}
                   </option>
                 ))}
@@ -450,11 +485,12 @@ const RequestsPage = () => {
             <div className="flex gap-3">
               <button
                 onClick={handleApprove}
-                disabled={processingId}
+                disabled={!!processingId}
                 className="flex-1 button-gold disabled:opacity-50"
               >
                 {processingId ? 'Procesando...' : 'Confirmar aprobación'}
               </button>
+
               <button
                 onClick={() => {
                   setShowApproveModal(false);

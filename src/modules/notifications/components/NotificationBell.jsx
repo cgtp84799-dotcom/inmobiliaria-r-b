@@ -1,148 +1,174 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaBell } from 'react-icons/fa';
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  updateDoc,
+  doc,
+  orderBy,
+  limit
+} from 'firebase/firestore';
+import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
-import { notificationService } from '../services/notification.service';
+import { motion, AnimatePresence } from 'framer-motion';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const NotificationBell = () => {
   const { currentUser } = useAuth();
+
+  // Unificar: notificaciones por EMAIL (mismo criterio que users/{email})
+  const userId = currentUser?.email || null;
+
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  // Suscribirse a notificaciones en tiempo real
+  // Escuchar notificaciones en tiempo real
   useEffect(() => {
-    if (!currentUser) {
-      setNotifications([]);
-      setUnreadCount(0);
-      setLoading(false);
-      return;
-    }
+    if (!userId) return;
 
-    setLoading(true);
-    let unsubscribe;
+    const notificationsRef = collection(db, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }));
+
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter((n) => !n.read).length);
+    });
+
+    return () => unsubscribe();
+  }, [userId]);
+
+  // Marcar notificación como leída
+  const markAsRead = async (notificationId) => {
     try {
-      unsubscribe = notificationService.subscribeToNotifications(
-        currentUser.uid,
-        (notifs) => {
-          const list = Array.isArray(notifs) ? notifs : [];
-          setNotifications(list);
-          setUnreadCount(list.filter((n) => !n.read).length);
-          setError(null);
-          setLoading(false);
-        }
-      );
-    } catch (err) {
-      console.error('Error suscribiendo notificaciones:', err);
-      setError('No se pudieron cargar las notificaciones (revisa índices de Firestore).');
-      setLoading(false);
-    }
-
-    return () => {
-      try {
-        unsubscribe && unsubscribe();
-      } catch (err) {
-        console.error('Error al cancelar suscripción de notificaciones:', err);
-      }
-    };
-  }, [currentUser]);
-
-  // Marcar todas como leídas cuando abre el panel (opcional)
-  const handleToggle = async () => {
-    const next = !open;
-    setOpen(next);
-
-    if (next && unreadCount > 0) {
-      try {
-        await notificationService.markAllAsRead(currentUser.uid);
-      } catch (err) {
-        console.error('Error marcando notificaciones como leídas:', err);
-      }
+      const notifRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notifRef, { read: true });
+    } catch (error) {
+      console.error('Error al marcar como leída:', error);
     }
   };
 
-  if (!currentUser) return null;
+  // Marcar todas como leídas
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter((n) => !n.read);
+      await Promise.all(
+        unreadNotifications.map((n) => updateDoc(doc(db, 'notifications', n.id), { read: true }))
+      );
+    } catch (error) {
+      console.error('Error al marcar todas como leídas:', error);
+    }
+  };
+
+  if (!userId) return null;
 
   return (
     <div className="relative">
       {/* Botón de campana */}
       <button
-        onClick={handleToggle}
-        className="relative flex items-center justify-center w-10 h-10 rounded-full
-                   bg-slate-900 border border-slate-700 text-slate-100 hover:border-primary-400
-                   transition-colors"
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="relative p-2 rounded-lg hover:bg-slate-800 transition-colors"
       >
-        <FaBell className="text-primary-300" />
+        <FaBell className="text-xl text-slate-300" />
+
+        {/* Badge de contador */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs
-                           rounded-full px-1.5 py-0.5 leading-none">
-            {unreadCount}
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Panel flotante */}
-      {open && (
-        <div
-          className="absolute right-0 mt-2 z-50
-                     w-80 max-w-[calc(100vw-2rem)]
-                     max-h-[70vh] overflow-y-auto
-                     bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3
-                     text-sm text-slate-100"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-primary">Notificaciones</h4>
-            {loading && (
-              <span className="text-muted-soft text-[11px]">
-                Cargando...
-              </span>
-            )}
-          </div>
+      {/* Dropdown de notificaciones */}
+      <AnimatePresence>
+        {showDropdown && (
+          <>
+            {/* Overlay para cerrar al hacer clic afuera */}
+            <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
 
-          {error && (
-            <p className="text-xs text-red-400 mb-2">
-              {error}
-            </p>
-          )}
+            {/* Panel de notificaciones */}
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="absolute right-0 mt-2 w-80 md:w-96 bg-slate-900 rounded-xl shadow-2xl border border-slate-700 z-50 max-h-[500px] overflow-hidden flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                <h3 className="text-white font-bold">Notificaciones</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-primary hover:text-yellow-400 transition-colors"
+                  >
+                    Marcar todas como leídas
+                  </button>
+                )}
+              </div>
 
-          {!error && !loading && notifications.length === 0 && (
-            <p className="text-muted-soft text-xs">
-              No tienes notificaciones por ahora.
-            </p>
-          )}
+              {/* Lista de notificaciones */}
+              <div className="overflow-y-auto flex-1">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400">
+                    <FaBell className="text-4xl mx-auto mb-2 opacity-50" />
+                    <p>No tienes notificaciones</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-800">
+                    {notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          markAsRead(notif.id);
+                          if (notif.link) window.location.href = notif.link;
+                        }}
+                        className={`p-4 cursor-pointer transition-colors ${
+                          notif.read ? 'bg-slate-900 hover:bg-slate-800' : 'bg-slate-800 hover:bg-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Indicador de no leída */}
+                          {!notif.read && (
+                            <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
+                          )}
 
-          {notifications.length > 0 && (
-            <ul className="space-y-2">
-              {notifications.map((n) => (
-                <li
-                  key={n.id}
-                  className={`p-2 rounded-lg border text-xs break-words
-                              ${n.read
-                                ? 'border-slate-700 bg-slate-900'
-                                : 'border-primary-500 bg-slate-800'}`}
-                >
-                  <p className="font-semibold">
-                    {n.title || 'Notificación'}
-                  </p>
-                  {n.message && (
-                    <p className="text-muted-soft">
-                      {n.message}
-                    </p>
-                  )}
-                  {n.createdAt && (
-                    <p className="text-[10px] text-muted-soft mt-1">
-                      {new Date(n.createdAt.toDate ? n.createdAt.toDate() : n.createdAt)
-                        .toLocaleString('es-CO')}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm ${notif.read ? 'text-slate-300' : 'text-white font-semibold'}`}>
+                              {notif.title}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">{notif.body}</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {notif.createdAt &&
+                                formatDistanceToNow(notif.createdAt.toDate(), {
+                                  addSuffix: true,
+                                  locale: es
+                                })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

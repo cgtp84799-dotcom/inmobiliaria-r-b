@@ -1,13 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  FaBell,
-  FaTimes,
-  FaCheckDouble,
-  FaComments,
-  FaHome,
-  FaVideo
-} from 'react-icons/fa';
+import { FaBell, FaTimes, FaCheckDouble, FaComments, FaHome, FaVideo } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getUserNotifications,
@@ -22,50 +15,70 @@ import toast from 'react-hot-toast';
 
 const NotificationCenter = () => {
   const { currentUser } = useAuth();
+
+  // En tu app el ID “real” de usuario para Firestore es el email
+  const userId = currentUser?.email || null;
+
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Cargar notificaciones al montar
-  useEffect(() => {
-    if (currentUser) {
-      loadNotifications();
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio('/notification-sound.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(() => console.log('No se pudo reproducir sonido'));
+    } catch (e) {
+      console.log('Error reproduciendo sonido:', e);
     }
-  }, [currentUser]);
+  };
 
-  // Escuchar mensajes en foreground
-  useEffect(() => {
-    onMessageListener()
-      .then((payload) => {
-        console.log('📬 Nueva notificación:', payload);
-        
-        // Mostrar toast
-        toast.success(payload.notification?.title || 'Nueva notificación', {
-          duration: 5000
-        });
+  const loadNotifications = useCallback(async () => {
+    if (!userId) return;
 
-        // Recargar notificaciones
-        loadNotifications();
-
-        // Reproducir sonido
-        playNotificationSound();
-      })
-      .catch((err) => console.log('Error escuchando mensajes:', err));
-  }, []);
-
-  const loadNotifications = async () => {
     setLoading(true);
     try {
-      const data = await getUserNotifications(currentUser.uid);
+      const data = await getUserNotifications(userId);
       setNotifications(data);
-      setUnreadCount(data.filter(n => !n.read).length);
+      setUnreadCount(data.filter((n) => !n.read).length);
     } catch (error) {
       console.error('Error cargando notificaciones:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  // Cargar notificaciones al montar / cambiar usuario
+  useEffect(() => {
+    if (userId) loadNotifications();
+  }, [userId, loadNotifications]);
+
+  // Escuchar mensajes en foreground (solo cuando hay usuario)
+  useEffect(() => {
+    if (!userId) return;
+
+    let mounted = true;
+
+    onMessageListener()
+      .then((payload) => {
+        if (!mounted) return;
+
+        console.log('📬 Nueva notificación:', payload);
+
+        toast.success(payload.notification?.title || 'Nueva notificación', {
+          duration: 5000
+        });
+
+        loadNotifications();
+        playNotificationSound();
+      })
+      .catch((err) => console.log('Error escuchando mensajes:', err));
+
+    return () => {
+      mounted = false;
+    };
+  }, [userId, loadNotifications]);
 
   const handleMarkAsRead = async (notificationId) => {
     await markNotificationAsRead(notificationId);
@@ -73,42 +86,35 @@ const NotificationCenter = () => {
   };
 
   const handleMarkAllAsRead = async () => {
-    await markAllAsRead(currentUser.uid);
+    if (!userId) return;
+
+    await markAllAsRead(userId);
     loadNotifications();
     toast.success('Todas leídas');
   };
 
   const handleNotificationClick = (notification) => {
-    if (!notification.read) {
-      handleMarkAsRead(notification.id);
-    }
-    
-    if (notification.data?.url) {
-      window.location.href = notification.data.url;
-    }
-    
-    setIsOpen(false);
-  };
+    if (!notification.read) handleMarkAsRead(notification.id);
 
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio('/notification-sound.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(e => console.log('No se pudo reproducir sonido'));
-    } catch (e) {
-      console.log('Error reproduciendo sonido:', e);
-    }
+    // OJO: en tu NotificationList usas actionUrl, aquí usas data.url.
+    // Se deja como lo tenías para no romper nada.
+    if (notification.data?.url) window.location.href = notification.data.url;
+
+    setIsOpen(false);
   };
 
   const getNotificationIcon = (type) => {
     switch (type) {
       case NOTIFICATION_TYPES.CHAT_MESSAGE:
         return <FaComments className="text-blue-400" />;
+
       case NOTIFICATION_TYPES.PROPERTY_CREATED:
       case NOTIFICATION_TYPES.PROPERTY_UPDATED:
         return <FaHome className="text-green-400" />;
+
       case NOTIFICATION_TYPES.VIDEO_CALL:
         return <FaVideo className="text-yellow-400" />;
+
       default:
         return <FaBell className="text-slate-400" />;
     }
@@ -139,10 +145,8 @@ const NotificationCenter = () => {
       <AnimatePresence>
         {isOpen && (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
+            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -156,6 +160,7 @@ const NotificationCenter = () => {
                     <FaBell className="text-yellow-400" />
                     Notificaciones
                   </h3>
+
                   <button
                     onClick={() => setIsOpen(false)}
                     className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
@@ -163,7 +168,7 @@ const NotificationCenter = () => {
                     <FaTimes className="text-slate-400" />
                   </button>
                 </div>
-                
+
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllAsRead}
@@ -202,13 +207,14 @@ const NotificationCenter = () => {
                           <div className="flex-shrink-0 w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center">
                             {getNotificationIcon(notification.type)}
                           </div>
+
                           <div className="flex-1 min-w-0">
-                            <p className="text-white font-bold text-sm mb-1">
-                              {notification.title}
-                            </p>
+                            <p className="text-white font-bold text-sm mb-1">{notification.title}</p>
+
                             <p className="text-slate-300 text-xs mb-2 line-clamp-2">
                               {notification.body}
                             </p>
+
                             <p className="text-slate-500 text-xs">
                               {notification.createdAt
                                 ? formatDistanceToNow(notification.createdAt, {
@@ -218,9 +224,10 @@ const NotificationCenter = () => {
                                 : 'Ahora'}
                             </p>
                           </div>
+
                           {!notification.read && (
                             <div className="flex-shrink-0">
-                              <span className="w-2 h-2 bg-yellow-400 rounded-full inline-block"></span>
+                              <span className="w-2 h-2 bg-yellow-400 rounded-full inline-block" />
                             </div>
                           )}
                         </div>

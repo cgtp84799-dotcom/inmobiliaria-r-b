@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://inmobiliaria-ryb-y-asociados.web.app/sitemap.xml
