@@ -424,6 +424,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       address={property.address}
                       city={property.city}
                       department={property.department}
+                      neighborhood={property.neighborhood}
                       latitude={property.latitude}
                       longitude={property.longitude}
                     />

@@ -19,62 +19,11 @@ import {
   FaLayerGroup,
   FaCalendarAlt,
 } from "react-icons/fa";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import toast from "react-hot-toast";
 import propertyService from "../../properties/services/property.service";
 import ImageGallery from "../components/ImageGallery";
 import PropertyContactForm from "../components/PropertyContactForm";
-
-import L from "leaflet";
-import icon from "leaflet/dist/images/marker-icon.png";
-import iconShadow from "leaflet/dist/images/marker-shadow.png";
-
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// Ciudades conocidas de la región (evita CORS con Nominatim)
-const KNOWN_CITIES = {
-  'anserma':       [5.2383, -75.7850],
-  'dosquebradas':  [4.8379, -75.6742],
-  'pereira':       [4.8087, -75.6906],
-  'riosucio':      [5.4219, -75.7025],
-  'supia':         [5.4594, -75.6489],
-  'belalcazar':    [5.0167, -75.8167],
-  'filadelfia':    [5.2969, -75.5631],
-  'la merced':     [5.3667, -75.6167],
-  'marmato':       [5.4775, -75.5983],
-  'quinchia':      [5.3372, -75.7283],
-  'manizales':     [5.0689, -75.5174],
-  'chinchina':     [4.9833, -75.6000],
-  'villamaria':    [5.0500, -75.5167],
-  'neira':         [5.1667, -75.5167],
-  'salamina':      [5.4094, -75.4903],
-  'aranzazu':      [5.2667, -75.4833],
-  'pacora':        [5.5167, -75.4667],
-  'aguadas':       [5.6106, -75.4578],
-  'pensilvania':   [5.3833, -75.1667],
-  'la dorada':     [5.4500, -74.6667],
-  'santa rosa de cabal': [4.8717, -75.6217],
-  'marsella':      [4.9383, -75.7383],
-  'armenia':       [4.5339, -75.6811],
-};
-
-const MapUpdater = ({ position }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (position) {
-      map.setView(position, 16);
-    }
-  }, [position, map]);
-  return null;
-};
+import PropertyMap from "../../properties/components/PropertyMap";
 
 const PropertyDetailPage = () => {
   const { id } = useParams();
@@ -82,11 +31,6 @@ const PropertyDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
-
-  // ✅ NUEVO — estado para mapa con geocoding
-  const [mapPosition, setMapPosition] = useState(null);
-  const [mapLoading, setMapLoading] = useState(true);
-  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
     loadProperty();
@@ -104,45 +48,6 @@ const PropertyDetailPage = () => {
       setLoading(false);
     }
   };
-
-  // ✅ NUEVO — Resolver coordenadas del mapa cuando la propiedad carga
-  useEffect(() => {
-    if (!property) return;
-
-    const controller = new AbortController();
-
-    const resolveMapPosition = async () => {
-      setMapLoading(true);
-      setMapError(false);
-
-      // PRIORIDAD 1: coordenadas guardadas en Firestore
-      const lat = parseFloat(property.latitude);
-      const lng = parseFloat(property.longitude);
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        setMapPosition([lat, lng]);
-        setMapError(false);
-        setMapLoading(false);
-        return;
-      }
-
-      // PRIORIDAD 2: ciudad conocida del diccionario
-      const city = (property.city || "").toLowerCase().trim();
-      if (city && KNOWN_CITIES[city]) {
-        setMapPosition(KNOWN_CITIES[city]);
-        setMapError(true); // aproximada
-        setMapLoading(false);
-        return;
-      }
-
-      // PRIORIDAD 3: default Anserma
-      setMapPosition([5.2383, -75.7850]);
-      setMapError(true);
-      setMapLoading(false);
-    };
-
-    resolveMapPosition();
-    return () => controller.abort();
-  }, [property]);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat("es-CO", {
@@ -502,47 +407,15 @@ const PropertyDetailPage = () => {
                   Ubicación
                 </h3>
 
-                <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden relative">
-                  {mapLoading ? (
-                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                      <div className="text-center">
-                        <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-                        <p className="text-slate-400 text-sm">Buscando ubicación...</p>
-                      </div>
-                    </div>
-                  ) : mapPosition ? (
-                    <>
-                      <MapContainer
-                        center={mapPosition}
-                        zoom={16}
-                        scrollWheelZoom={false}
-                        className="w-full h-full"
-                      >
-                        <TileLayer
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        <Marker position={mapPosition}>
-                          <Popup>
-                            <strong>{property.title}</strong>
-                            <br />
-                            {property.address}
-                          </Popup>
-                        </Marker>
-                        <MapUpdater position={mapPosition} />
-                      </MapContainer>
-
-                      {mapError && (
-                        <div className="absolute top-2 left-2 bg-yellow-500/90 text-slate-900 text-xs px-2 py-1 rounded z-[1000]">
-                          Ubicación aproximada
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                      <p className="text-slate-500 text-sm">No se pudo cargar el mapa</p>
-                    </div>
-                  )}
+                <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden">
+                  <PropertyMap
+                    address={property.address}
+                    city={property.city}
+                    department={property.department}
+                    neighborhood={property.neighborhood}
+                    latitude={property.latitude}
+                    longitude={property.longitude}
+                  />
                 </div>
 
                 <p className="text-slate-400 text-xs sm:text-sm mt-3">
