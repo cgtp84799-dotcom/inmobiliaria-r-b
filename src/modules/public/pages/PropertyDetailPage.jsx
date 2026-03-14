@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+// SEO: usamos document.title + meta tags directos (sin react-helmet-async)
 import {
   FaBed,
   FaBath,
@@ -133,6 +133,42 @@ const PropertyDetailPage = () => {
   const seoImage = property?.images?.[0] || "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png";
   const seoUrl = `https://inmobiliaria-ryb-y-asociados.com/propiedades/${id}`;
 
+  // SEO: actualizar title y meta tags sin react-helmet-async
+  useEffect(() => {
+    if (!property) return;
+    document.title = seoTitle;
+    const setMeta = (attr, key, content) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    setMeta('name', 'description', seoDescription);
+    setMeta('property', 'og:title', seoTitle);
+    setMeta('property', 'og:description', seoDescription);
+    setMeta('property', 'og:image', seoImage);
+    setMeta('property', 'og:url', seoUrl);
+    setMeta('property', 'og:type', 'website');
+    setMeta('name', 'twitter:title', seoTitle);
+    setMeta('name', 'twitter:description', seoDescription);
+    setMeta('name', 'twitter:image', seoImage);
+
+    // JSON-LD structured data
+    let script = document.querySelector('script[data-seo="property"]');
+    if (!script) { script = document.createElement('script'); script.type = 'application/ld+json'; script.dataset.seo = 'property'; document.head.appendChild(script); }
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "RealEstateListing",
+      name: property.title,
+      description: seoDescription,
+      url: seoUrl,
+      image: property.images || [],
+      offers: { "@type": "Offer", price: property.price, priceCurrency: "COP", availability: "https://schema.org/InStock" },
+      address: { "@type": "PostalAddress", streetAddress: property.address || "", addressLocality: property.city || "Anserma", addressRegion: property.department || "Caldas", addressCountry: "CO" }
+    });
+
+    return () => { if (script) script.remove(); };
+  }, [property, seoTitle, seoDescription, seoImage, seoUrl]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark px-4">
@@ -159,42 +195,6 @@ const PropertyDetailPage = () => {
 
   return (
     <>
-      {/* ✅ SEO DINÁMICO POR PROPIEDAD */}
-      <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <link rel="canonical" href={seoUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:image" content={seoImage} />
-        <meta property="og:url" content={seoUrl} />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:description" content={seoDescription} />
-        <meta name="twitter:image" content={seoImage} />
-        <script type="application/ld+json">{JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "RealEstateListing",
-          "name": property.title,
-          "description": seoDescription,
-          "url": seoUrl,
-          "image": property.images || [],
-          "offers": {
-            "@type": "Offer",
-            "price": property.price,
-            "priceCurrency": "COP",
-            "availability": "https://schema.org/InStock"
-          },
-          "address": {
-            "@type": "PostalAddress",
-            "streetAddress": property.address || "",
-            "addressLocality": property.city || "Anserma",
-            "addressRegion": property.department || "Caldas",
-            "addressCountry": "CO"
-          }
-        })}</script>
-      </Helmet>
-
       <div className="min-h-screen bg-dark">
         <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
           {/* Header con botones */}
