@@ -2,12 +2,12 @@
  * PropertyMap — muestra la ubicación de una propiedad usando Google Maps Embed API.
  *
  * Google Maps Embed API es GRATIS e ILIMITADO.
- * Reconoce condominios, conjuntos, barrios, direcciones, etc.
  *
- * PRIORIDAD:
- *   1. latitude + longitude de Firestore → mapa centrado en coordenadas exactas
- *   2. address + city → búsqueda por nombre (Google lo resuelve)
- *   3. Solo city → búsqueda por ciudad
+ * PRIORIDAD de búsqueda:
+ *   1. latitude + longitude → coordenadas exactas (las más precisas)
+ *   2. neighborhood + city → barrio + ciudad (Google reconoce barrios colombianos)
+ *   3. address + city → dirección textual
+ *   4. city + department → fallback a la ciudad
  */
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDDln6zVboxk5TG6lDBE-oZaNqgRzMeQDE";
@@ -20,29 +20,39 @@ const PropertyMap = ({
   latitude,
   longitude,
 }) => {
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  const hasCoords = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+
   // Construir la query para Google Maps
   const buildQuery = () => {
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-
     // PRIORIDAD 1: coordenadas exactas
-    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    if (hasCoords) {
       return `${lat},${lng}`;
     }
 
-    // PRIORIDAD 2: dirección + ciudad (Google reconoce condominios, conjuntos, etc.)
-    const parts = [];
-    if (address) parts.push(address);
-    if (neighborhood) parts.push(neighborhood);
-    if (city) parts.push(city);
-    if (department) parts.push(department);
-    parts.push("Colombia");
-
-    if (parts.length > 1) {
-      return parts.join(", ");
+    // PRIORIDAD 2: barrio + ciudad (Google conoce barrios colombianos mejor que direcciones)
+    if (neighborhood && city) {
+      return `${neighborhood}, ${city}, ${department}, Colombia`;
     }
 
-    // PRIORIDAD 3: fallback genérico
+    // PRIORIDAD 3: dirección + ciudad
+    if (address && city) {
+      // Limpiar la dirección: quitar partes tipo "barrio X" que ya están en neighborhood
+      let cleanAddr = address;
+      // Si la dirección contiene "barri" extraemos eso como búsqueda principal
+      const barrioMatch = address.match(/barr(?:io)?\s+([^,]+)/i);
+      if (barrioMatch) {
+        return `${barrioMatch[1].trim()}, ${city}, ${department}, Colombia`;
+      }
+      return `${cleanAddr}, ${city}, ${department}, Colombia`;
+    }
+
+    // PRIORIDAD 4: solo ciudad
+    if (city) {
+      return `${city}, ${department}, Colombia`;
+    }
+
     return "Anserma, Caldas, Colombia";
   };
 
@@ -56,7 +66,7 @@ const PropertyMap = ({
       <div className="w-full h-full flex items-center justify-center bg-slate-900 rounded-lg">
         <div className="text-center p-4">
           <p className="text-slate-400 text-sm mb-3">
-            Mapa no disponible (falta API key)
+            Mapa no disponible
           </p>
           <a
             href={mapsUrl}
@@ -64,26 +74,6 @@ const PropertyMap = ({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 border border-primary/30 text-primary rounded-lg text-sm hover:bg-primary/30 transition-colors"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
             Ver en Google Maps
           </a>
         </div>
@@ -91,17 +81,18 @@ const PropertyMap = ({
     );
   }
 
-  // Construir URL de iframe — mode "place" con query
-  const lat = parseFloat(latitude);
-  const lng = parseFloat(longitude);
-  const hasCoords = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
-
+  // Construir URL del iframe
   let src = `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodedQuery}&language=es&region=CO`;
 
-  // Si hay coordenadas, agregar center y zoom alto para precisión
+  // Si hay coordenadas, centrar ahí con zoom alto
   if (hasCoords) {
     src += `&center=${lat},${lng}&zoom=17`;
   }
+
+  // Texto de dirección para mostrar debajo del mapa
+  const locationText = [address, neighborhood ? `${neighborhood}` : null, city, department]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <div className="w-full h-full relative">
@@ -113,7 +104,7 @@ const PropertyMap = ({
         allowFullScreen=""
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
-        title={`Ubicación: ${address || city || "Propiedad"}`}
+        title={`Ubicación: ${address || neighborhood || city || "Propiedad"}`}
       />
     </div>
   );
