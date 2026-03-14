@@ -425,7 +425,13 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                   </div>
 
                   <div className="mt-4 bg-slate-800 rounded-lg h-64 overflow-hidden">
-                    <PropertyMap address={property.address} city={property.city} />
+                    <PropertyMap
+                      address={property.address}
+                      city={property.city}
+                      department={property.department}
+                      latitude={property.latitude}
+                      longitude={property.longitude}
+                    />
                   </div>
                 </div>
 

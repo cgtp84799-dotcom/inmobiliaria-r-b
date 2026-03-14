@@ -1,187 +1,141 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../../config/firebase";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
+  FaMapMarkerAlt,
   FaBed,
   FaBath,
-  FaRuler,
   FaCar,
-  FaMapMarkerAlt,
-  FaArrowLeft,
-  FaCheckCircle,
-  FaWhatsapp,
-  FaShare,
-  FaHeart,
-  FaRegHeart,
-  FaSpinner,
+  FaRulerCombined,
+  FaChevronLeft,
+  FaChevronRight,
   FaHome,
-  FaLayerGroup,
-  FaCalendarAlt,
+  FaWhatsapp,
+  FaPhone,
+  FaCalendar,
+  FaCheckCircle,
+  FaArrowLeft,
 } from "react-icons/fa";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import toast from "react-hot-toast";
-import propertyService from "../../properties/services/property.service";
-import ImageGallery from "../components/ImageGallery";
-import PropertyContactForm from "../components/PropertyContactForm";
 
-// Fix para los iconos de Leaflet
-import L from "leaflet";
-import icon from "leaflet/dist/images/marker-icon.png";
-import iconShadow from "leaflet/dist/images/marker-shadow.png";
-
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+// Fix iconos Leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-L.Marker.prototype.options.icon = DefaultIcon;
+// Ciudades conocidas de la región (mismo diccionario que PropertyMap)
+const KNOWN_CITIES = {
+  'anserma':       [5.2383, -75.7850],
+  'dosquebradas':  [4.8379, -75.6742],
+  'pereira':       [4.8087, -75.6906],
+  'riosucio':      [5.4219, -75.7025],
+  'supia':         [5.4594, -75.6489],
+  'belalcazar':    [5.0167, -75.8167],
+  'filadelfia':    [5.2969, -75.5631],
+  'la merced':     [5.3667, -75.6167],
+  'marmato':       [5.4775, -75.5983],
+  'quinchia':      [5.3372, -75.7283],
+  'manizales':     [5.0689, -75.5174],
+  'chinchina':     [4.9833, -75.6000],
+  'villamaria':    [5.0500, -75.5167],
+  'neira':         [5.1667, -75.5167],
+  'salamina':      [5.4094, -75.4903],
+  'aranzazu':      [5.2667, -75.4833],
+  'pacora':        [5.5167, -75.4667],
+  'aguadas':       [5.6106, -75.4578],
+  'pensilvania':   [5.3833, -75.1667],
+  'la dorada':     [5.4500, -74.6667],
+  'santa rosa de cabal': [4.8717, -75.6217],
+  'marsella':      [4.9383, -75.7383],
+  'armenia':       [4.5339, -75.6811],
+};
 
-const PropertyDetailPage = () => {
+const formatPrice = (price) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+  }).format(price || 0);
+
+export default function PropertyDetailPage() {
   const { id } = useParams();
   const [property, setProperty] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isFavorite, setIsFavorite] = useState(false);
-
-  // ✅ “Ver más” para características/amenidades
-  const [featuresExpanded, setFeaturesExpanded] = useState(false);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [currentImage, setCurrentImage] = useState(0);
 
   useEffect(() => {
-    loadProperty();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const fetchProperty = async () => {
+      try {
+        const snap = await getDoc(doc(db, "properties", id));
+        if (!snap.exists()) { setError("Propiedad no encontrada"); return; }
+        setProperty({ id: snap.id, ...snap.data() });
+      } catch (e) {
+        setError("Error al cargar la propiedad");
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProperty();
   }, [id]);
 
-  const loadProperty = async () => {
-    setLoading(true);
-    try {
-      const data = await propertyService.getPublicPropertyById(id);
-      setProperty(data);
-    } catch (error) {
-      console.error("Error cargando propiedad:", error);
-    } finally {
-      setLoading(false);
+  /**
+   * Resolver coordenadas del mapa:
+   * 1. Coordenadas de Firestore (exactas)
+   * 2. Diccionario de ciudades conocidas
+   * 3. Fallback Anserma
+   */
+  const mapPosition = useMemo(() => {
+    if (!property) return null;
+
+    // PRIORIDAD 1: coordenadas guardadas en Firestore
+    if (property.latitude && property.longitude) {
+      const lat = parseFloat(property.latitude);
+      const lng = parseFloat(property.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        return { coords: [lat, lng], approximate: false };
+      }
     }
-  };
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-    }).format(price || 0);
-  };
-
-  const getPropertyType = (type) => {
-    const types = {
-      house: "Casa",
-      casa: "Casa",
-      apartment: "Apartamento",
-      apartamento: "Apartamento",
-      lot: "Lote",
-      lote: "Lote",
-      farm: "Finca",
-      finca: "Finca",
-      commercial: "Local Comercial",
-      office: "Oficina",
-      warehouse: "Bodega",
-    };
-    const lower = String(type || "").toLowerCase();
-    return types[lower] || type || "Propiedad";
-  };
-
-  const getTransactionType = (type) => {
-    if (!type) return "No especificado";
-    const lower = String(type).toLowerCase();
-
-    if (lower === "sale" || lower === "venta" || lower === "sell" || lower === "compra") {
-      return "Venta";
+    // PRIORIDAD 2: ciudad del diccionario
+    if (property.city) {
+      const key = property.city.toLowerCase().trim();
+      if (KNOWN_CITIES[key]) {
+        return { coords: KNOWN_CITIES[key], approximate: true };
+      }
     }
-    if (lower === "rent" || lower === "arriendo" || lower === "alquiler" || lower === "renta") {
-      return "Arriendo";
-    }
-    return type;
-  };
 
-  const handleShare = () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      navigator.share({
-        title: property?.title || "Propiedad",
-        text: `Mira esta propiedad: ${property?.title || ""}`,
-        url: url,
-      });
-    } else {
-      navigator.clipboard.writeText(url);
-      toast.success("¡Link copiado al portapapeles!");
-    }
-  };
+    // PRIORIDAD 3: fallback Anserma
+    return { coords: [5.2383, -75.7850], approximate: true };
+  }, [property]);
 
-  const handleFavorite = () => {
-    setIsFavorite((v) => !v);
-    toast.success(isFavorite ? "Eliminado de favoritos" : "¡Agregado a favoritos!");
-  };
-
-  const handleWhatsApp = () => {
-    const message = `Hola, estoy interesado en: ${property?.title || "una propiedad"} - ${window.location.href}`;
-    const phone = "573105968202";
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
-  };
-
-  // ✅ Hook SIEMPRE antes de returns (seguro con property = null)
-  const transType = useMemo(() => getTransactionType(property?.transactionType), [property?.transactionType]);
-  const isVenta = transType === "Venta";
-
-  // ✅ Unir amenities + customAmenities (lo que agregas en interno)
-  const amenities = useMemo(() => {
-    return [
-      ...(property?.amenities || []),
-      ...(property?.customAmenities || []),
-    ].filter(Boolean);
-  }, [property?.amenities, property?.customAmenities]);
-
-  // ✅ Bloques base (piso/estrato/año)
-  const baseFeatures = useMemo(() => {
-    const items = [];
-    if (property?.floors) items.push({ type: "base", icon: FaLayerGroup, label: `Piso ${property.floors}` });
-    if (property?.stratum) items.push({ type: "base", icon: FaCheckCircle, label: `Estrato ${property.stratum}` });
-    if (property?.yearBuilt) items.push({ type: "base", icon: FaCalendarAlt, label: `Año ${property.yearBuilt}` });
-    return items;
-  }, [property?.floors, property?.stratum, property?.yearBuilt]);
-
-  // ✅ Lista final (base + amenities)
-  const allFeatures = useMemo(() => {
-    return [
-      ...baseFeatures,
-      ...amenities.map((a) => ({ type: "amenity", icon: FaCheckCircle, label: a })),
-    ];
-  }, [baseFeatures, amenities]);
-
-  const COLLAPSE_COUNT = 10;
-  const visibleFeatures = featuresExpanded ? allFeatures : allFeatures.slice(0, COLLAPSE_COUNT);
-
-  // Coordenadas (si property null, da igual porque retornamos antes)
-  const latitude = property?.latitude || 4.8087;
-  const longitude = property?.longitude || -75.6906;
-
+  // ── Loading ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark px-4">
+      <div className="min-h-screen bg-dark flex items-center justify-center">
         <div className="text-center">
-          <FaSpinner className="animate-spin text-primary text-5xl mx-auto mb-4" />
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-400">Cargando propiedad...</p>
         </div>
       </div>
     );
   }
 
-  if (!property) {
+  // ── Error ──────────────────────────────────────────────────
+  if (error || !property) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark px-4">
+      <div className="min-h-screen bg-dark flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-400 text-lg mb-4">Propiedad no encontrada</p>
-          <Link to="/propiedades" className="button-gold inline-block">
+          <FaHome className="text-6xl text-slate-700 mx-auto mb-4" />
+          <p className="text-slate-400 text-xl">{error || "Propiedad no encontrada"}</p>
+          <Link to="/propiedades" className="mt-4 inline-block text-primary hover:underline">
             Ver todas las propiedades
           </Link>
         </div>
@@ -189,272 +143,278 @@ const PropertyDetailPage = () => {
     );
   }
 
+  const images    = property.images    || [];
+  const amenities = [...(property.amenities || []), ...(property.customAmenities || [])].filter(Boolean);
+
   return (
     <div className="min-h-screen bg-dark">
-      <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
-        {/* Header con botones */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-        >
-          <Link
-            to="/propiedades"
-            className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition font-semibold"
-          >
-            <FaArrowLeft />
-            <span className="hidden sm:inline">Volver al catálogo</span>
-            <span className="sm:hidden">Volver</span>
-          </Link>
+      {/* Hero con galería */}
+      <div className="relative bg-slate-950">
+        {images.length > 0 ? (
+          <div className="relative h-[50vh] sm:h-[60vh] lg:h-[70vh]">
+            <img
+              src={images[currentImage]}
+              alt={property.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-dark/90 via-dark/20 to-transparent" />
 
-          <div className="flex items-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleFavorite}
-              className="p-2.5 sm:p-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-primary/50 rounded-lg transition"
-              aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-            >
-              {isFavorite ? <FaHeart className="text-red-500" size={20} /> : <FaRegHeart className="text-slate-400" size={20} />}
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleShare}
-              className="p-2.5 sm:p-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-primary/50 rounded-lg transition"
-              aria-label="Compartir"
-            >
-              <FaShare className="text-slate-400" size={20} />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleWhatsApp}
-              className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-semibold flex items-center gap-2"
-              aria-label="Contactar por WhatsApp"
-            >
-              <FaWhatsapp size={20} />
-              <span className="hidden sm:inline">WhatsApp</span>
-            </motion.button>
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentImage((p) => (p - 1 + images.length) % images.length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center"
+                >
+                  <FaChevronLeft className="text-white" />
+                </button>
+                <button
+                  onClick={() => setCurrentImage((p) => (p + 1) % images.length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center"
+                >
+                  <FaChevronRight className="text-white" />
+                </button>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  {images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentImage(i)}
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        i === currentImage ? "bg-white scale-125" : "bg-white/50"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        </motion.div>
+        ) : (
+          <div className="h-64 flex items-center justify-center">
+            <FaHome className="text-8xl text-slate-700" />
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* COLUMNA PRINCIPAL */}
-          <div className="lg:col-span-2 space-y-5 sm:space-y-6">
-            {/* Galería */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <ImageGallery images={property.images || []} />
-            </motion.div>
+        {/* Botón volver */}
+        <Link
+          to="/propiedades"
+          className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 bg-black/60 hover:bg-black/80 text-white rounded-full text-sm transition-colors"
+        >
+          <FaArrowLeft /> Volver
+        </Link>
+      </div>
 
-            {/* Info principal */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6"
-            >
-              <div className="flex flex-col gap-4 mb-5 sm:mb-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1.5 bg-primary/10 text-primary text-xs sm:text-sm font-bold rounded-lg border border-primary/30">
-                    <FaHome className="inline mr-1" />
-                    {getPropertyType(property.type)}
-                  </span>
+      {/* Contenido */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-                  <span
-                    className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg border ${
-                      isVenta
-                        ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                        : "bg-green-500/10 text-green-400 border-green-500/30"
+          {/* Columna principal */}
+          <div className="lg:col-span-2 space-y-8">
+
+            {/* Título y estado */}
+            <div>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-light">{property.title}</h1>
+                <span className={`px-4 py-1.5 rounded-full text-sm font-semibold ${
+                  property.status === "disponible" ? "bg-green-500/20 text-green-400 border border-green-500/30" :
+                  property.status === "reservada"  ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
+                  "bg-slate-500/20 text-slate-400 border border-slate-500/30"
+                }`}>
+                  {property.status?.charAt(0).toUpperCase() + property.status?.slice(1)}
+                </span>
+              </div>
+              <p className="text-slate-400 mt-2 flex items-center gap-2">
+                <FaMapMarkerAlt className="text-primary" />
+                {property.address}, {property.city}, {property.department}
+              </p>
+            </div>
+
+            {/* Miniaturas */}
+            {images.length > 1 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {images.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentImage(i)}
+                    className={`rounded-lg overflow-hidden border-2 transition-all ${
+                      i === currentImage ? "border-primary" : "border-transparent hover:border-slate-600"
                     }`}
                   >
-                    {transType}
-                  </span>
-
-                  {property.status === "disponible" && (
-                    <span className="px-3 py-1.5 bg-green-500/10 text-green-400 text-xs sm:text-sm font-bold rounded-lg border border-green-500/30">
-                      ✓ DISPONIBLE
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-light mb-2 sm:mb-3">
-                      {property.title || "Propiedad sin título"}
-                    </h1>
-                    <div className="flex items-start gap-2 text-slate-400">
-                      <FaMapMarkerAlt className="mt-1 flex-shrink-0 text-primary" />
-                      <span className="text-sm sm:text-base">
-                        {property.address || "Dirección no disponible"}
-                        {property.city && `, ${property.city}`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-left md:text-right">
-                    <p className="text-primary font-bold text-2xl sm:text-3xl lg:text-4xl mb-1">
-                      {formatPrice(property.price)}
-                    </p>
-                    <p className="text-slate-400 text-xs sm:text-sm">
-                      Precio de {String(transType).toLowerCase()}
-                    </p>
-                  </div>
-                </div>
+                    <img src={img} alt={`img-${i}`} className="w-full h-16 object-cover" />
+                  </button>
+                ))}
               </div>
-
-              {/* Características principales */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 py-5 sm:py-6 border-y border-slate-800">
-                {property.area && (
-                  <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-xl">
-                    <FaRuler className="text-primary text-2xl sm:text-3xl mx-auto mb-2" />
-                    <p className="text-light font-bold text-lg sm:text-xl">{property.area} m²</p>
-                    <p className="text-slate-400 text-xs sm:text-sm mt-1">Área total</p>
-                  </div>
-                )}
-                {property.rooms && (
-                  <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-xl">
-                    <FaBed className="text-primary text-2xl sm:text-3xl mx-auto mb-2" />
-                    <p className="text-light font-bold text-lg sm:text-xl">{property.rooms}</p>
-                    <p className="text-slate-400 text-xs sm:text-sm mt-1">Habitaciones</p>
-                  </div>
-                )}
-                {property.bathrooms && (
-                  <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-xl">
-                    <FaBath className="text-primary text-2xl sm:text-3xl mx-auto mb-2" />
-                    <p className="text-light font-bold text-lg sm:text-xl">{property.bathrooms}</p>
-                    <p className="text-slate-400 text-xs sm:text-sm mt-1">Baños</p>
-                  </div>
-                )}
-                {property.parkingSpots && (
-                  <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-xl">
-                    <FaCar className="text-primary text-2xl sm:text-3xl mx-auto mb-2" />
-                    <p className="text-light font-bold text-lg sm:text-xl">{property.parkingSpots}</p>
-                    <p className="text-slate-400 text-xs sm:text-sm mt-1">Parqueaderos</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Descripción */}
-              {property.description && (
-                <div className="mt-5 sm:mt-6">
-                  <h3 className="text-xl sm:text-2xl font-bold text-primary mb-3 flex items-center gap-2">
-                    <FaHome />
-                    Descripción
-                  </h3>
-                  <p className="text-slate-300 text-sm sm:text-base leading-relaxed whitespace-pre-line">
-                    {property.description}
-                  </p>
-                </div>
-              )}
-            </motion.div>
-
-            {/* ✅ Características (incluye customAmenities) */}
-            {(property.stratum || property.floors || property.yearBuilt || amenities.length > 0) && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6"
-              >
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <h3 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
-                    <FaCheckCircle />
-                    Características
-                  </h3>
-
-                  {allFeatures.length > COLLAPSE_COUNT && (
-                    <button
-                      type="button"
-                      onClick={() => setFeaturesExpanded((v) => !v)}
-                      className="text-xs sm:text-sm px-3 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-semibold hover:bg-primary/15 transition"
-                    >
-                      {featuresExpanded ? "Ver menos" : `Ver todas (${allFeatures.length})`}
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {visibleFeatures.map((item, index) => {
-                    const Icon = item.icon || FaCheckCircle;
-                    return (
-                      <div
-                        key={`${item.type}-${item.label}-${index}`}
-                        className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg"
-                      >
-                        <Icon className="text-primary flex-shrink-0" size={20} />
-                        <span className="text-slate-300">{item.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {!featuresExpanded && allFeatures.length > COLLAPSE_COUNT && (
-                  <p className="text-slate-500 text-xs mt-3">
-                    Mostrando {COLLAPSE_COUNT} de {allFeatures.length}.
-                  </p>
-                )}
-              </motion.div>
             )}
 
-            {/* MAPA CON LEAFLET */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6"
-            >
-              <h3 className="text-xl sm:text-2xl font-bold text-primary mb-4 flex items-center gap-2">
-                <FaMapMarkerAlt />
-                Ubicación
-              </h3>
+            {/* Características rápidas */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {property.rooms && (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
+                  <FaBed className="text-2xl text-primary mx-auto mb-2" />
+                  <p className="text-light font-bold">{property.rooms}</p>
+                  <p className="text-slate-400 text-sm">Habitaciones</p>
+                </div>
+              )}
+              {property.bathrooms && (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
+                  <FaBath className="text-2xl text-primary mx-auto mb-2" />
+                  <p className="text-light font-bold">{property.bathrooms}</p>
+                  <p className="text-slate-400 text-sm">Baños</p>
+                </div>
+              )}
+              {property.area && (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
+                  <FaRulerCombined className="text-2xl text-primary mx-auto mb-2" />
+                  <p className="text-light font-bold">{property.area} m²</p>
+                  <p className="text-slate-400 text-sm">Área total</p>
+                </div>
+              )}
+              {property.parkingSpots && (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-center">
+                  <FaCar className="text-2xl text-primary mx-auto mb-2" />
+                  <p className="text-light font-bold">{property.parkingSpots}</p>
+                  <p className="text-slate-400 text-sm">Parqueaderos</p>
+                </div>
+              )}
+            </div>
 
-              <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden">
-                <MapContainer
-                  center={[latitude, longitude]}
-                  zoom={15}
-                  scrollWheelZoom={false}
-                  className="w-full h-full"
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <Marker position={[latitude, longitude]}>
-                    <Popup>
-                      <strong>{property.title}</strong>
-                      <br />
-                      {property.address}
-                    </Popup>
-                  </Marker>
-                </MapContainer>
+            {/* Descripción */}
+            {property.description && (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+                <h2 className="text-xl font-bold text-light mb-4">Descripción</h2>
+                <p className="text-slate-300 leading-relaxed whitespace-pre-line">{property.description}</p>
               </div>
+            )}
 
-              <p className="text-slate-400 text-xs sm:text-sm mt-3">
-                <FaMapMarkerAlt className="inline mr-1 text-primary" />
-                {property.address}
-                {property.city && `, ${property.city}`}
-              </p>
-            </motion.div>
+            {/* Amenidades */}
+            {amenities.length > 0 && (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+                <h2 className="text-xl font-bold text-light mb-4">Amenidades</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {amenities.map((a, i) => (
+                    <div key={i} className="flex items-center gap-2 text-slate-300 text-sm">
+                      <FaCheckCircle className="text-primary flex-shrink-0" />
+                      {a}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mapa */}
+            {mapPosition && (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+                <h2 className="text-xl font-bold text-light mb-2 flex items-center gap-2">
+                  <FaMapMarkerAlt className="text-primary" /> Ubicación
+                </h2>
+
+                {mapPosition.approximate && (
+                  <p className="text-yellow-400 text-xs mb-3">
+                    Ubicación aproximada — el propietario no ha fijado coordenadas exactas.
+                  </p>
+                )}
+
+                <div className="h-72 rounded-xl overflow-hidden">
+                  <MapContainer
+                    center={mapPosition.coords}
+                    zoom={mapPosition.approximate ? 14 : 16}
+                    scrollWheelZoom={false}
+                    style={{ height: "100%", width: "100%" }}
+                    className="z-0"
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={mapPosition.coords}>
+                      <Popup>
+                        <strong>{property.title}</strong><br />
+                        {property.address}, {property.city}
+                      </Popup>
+                    </Marker>
+                  </MapContainer>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* COLUMNA LATERAL */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-1"
-          >
-            <div className="lg:sticky lg:top-6">
-              <PropertyContactForm propertyTitle={property.title} propertyId={property.id} />
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Precio */}
+            <div className="bg-gradient-to-br from-primary/20 to-yellow-500/20 border border-primary/30 rounded-2xl p-6 sticky top-6">
+              <p className="text-slate-400 text-sm mb-1">
+                {property.transactionType === "venta" ? "Precio de venta" : "Canon de arriendo"}
+              </p>
+              <p className="text-4xl font-bold text-primary">{formatPrice(property.price)}</p>
+              {property.transactionType === "arriendo" && (
+                <p className="text-slate-400 text-sm mt-1">/mes</p>
+              )}
+
+              <div className="mt-6 space-y-3">
+                <a
+                  href={`https://wa.me/573185491352?text=${encodeURIComponent(
+                    `Hola, estoy interesado/a en la propiedad: ${property.title} - ${window.location.href}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-xl transition-colors"
+                >
+                  <FaWhatsapp className="text-xl" /> Contactar por WhatsApp
+                </a>
+                <a
+                  href="tel:+573185491352"
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-colors"
+                >
+                  <FaPhone /> Llamar ahora
+                </a>
+              </div>
             </div>
-          </motion.div>
+
+            {/* Detalles adicionales */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-3">
+              <h3 className="text-light font-bold mb-4">Detalles</h3>
+              {property.type && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Tipo</span>
+                  <span className="text-light capitalize">{property.type}</span>
+                </div>
+              )}
+              {property.stratum && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Estrato</span>
+                  <span className="text-light">{property.stratum}</span>
+                </div>
+              )}
+              {property.yearBuilt && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Año</span>
+                  <span className="text-light">{property.yearBuilt}</span>
+                </div>
+              )}
+              {property.builtArea && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Área construida</span>
+                  <span className="text-light">{property.builtArea} m²</span>
+                </div>
+              )}
+              {property.floors && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Pisos</span>
+                  <span className="text-light">{property.floors}</span>
+                </div>
+              )}
+              {property.createdAt && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 flex items-center gap-1"><FaCalendar className="text-xs" /> Publicado</span>
+                  <span className="text-light">
+                    {property.createdAt.toDate
+                      ? property.createdAt.toDate().toLocaleDateString("es-CO")
+                      : new Date(property.createdAt).toLocaleDateString("es-CO")}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default PropertyDetailPage;
+}

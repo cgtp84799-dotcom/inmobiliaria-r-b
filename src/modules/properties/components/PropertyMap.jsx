@@ -11,95 +11,96 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Componente para actualizar el centro del mapa
 const MapUpdater = ({ position }) => {
   const map = useMap();
-  
+
   useEffect(() => {
     if (position) {
       map.setView(position, 16);
     }
   }, [position, map]);
-  
+
   return null;
 };
 
-const PropertyMap = ({ address, city, department = 'Caldas' }) => {
+// Ciudades conocidas de la región (evita depender de Nominatim para el fallback)
+const KNOWN_CITIES = {
+  'anserma':       [5.2383, -75.7850],
+  'dosquebradas':  [4.8379, -75.6742],
+  'pereira':       [4.8087, -75.6906],
+  'riosucio':      [5.4219, -75.7025],
+  'supia':         [5.4594, -75.6489],
+  'belalcazar':    [5.0167, -75.8167],
+  'filadelfia':    [5.2969, -75.5631],
+  'la merced':     [5.3667, -75.6167],
+  'marmato':       [5.4775, -75.5983],
+  'quinchia':      [5.3372, -75.7283],
+  'manizales':     [5.0689, -75.5174],
+  'chinchina':     [4.9833, -75.6000],
+  'villamaria':    [5.0500, -75.5167],
+  'neira':         [5.1667, -75.5167],
+  'salamina':      [5.4094, -75.4903],
+  'aranzazu':      [5.2667, -75.4833],
+  'pacora':        [5.5167, -75.4667],
+  'aguadas':       [5.6106, -75.4578],
+  'pensilvania':   [5.3833, -75.1667],
+  'la dorada':     [5.4500, -74.6667],
+  'santa rosa de cabal': [4.8717, -75.6217],
+  'marsella':      [4.9383, -75.7383],
+  'armenia':       [4.5339, -75.6811],
+};
+
+/**
+ * PropertyMap — muestra la ubicación de una propiedad.
+ *
+ * PRIORIDAD:
+ *   1. latitude / longitude de Firestore → directo
+ *   2. Ciudad conocida del diccionario → sin red
+ *   3. Anserma, Caldas como último fallback
+ */
+const PropertyMap = ({ address, city, department = 'Caldas', latitude, longitude }) => {
   const [position, setPosition] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Coordenadas por defecto (Anserma centro)
-  const defaultPosition = [5.2383, -75.7850];
+  const defaultPosition = [5.2383, -75.7850]; // Anserma
 
   useEffect(() => {
-    const geocodeAddress = async () => {
-      if (!address || !city) {
-        setPosition(defaultPosition);
+    // PRIORIDAD 1: coordenadas guardadas
+    if (latitude && longitude) {
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        setPosition([lat, lng]);
+        setError(false);
         setLoading(false);
         return;
       }
+    }
 
-      setLoading(true);
-      setError(false);
-
-      try {
-        // Construir query de búsqueda
-        const searchQuery = `${address}, ${city}, ${department}, Colombia`;
-        
-        // Llamar a Nominatim (API gratuita de OpenStreetMap)
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(searchQuery)}&` +
-          `format=json&` +
-          `limit=1&` +
-          `countrycodes=co`
-        );
-
-        const data = await response.json();
-
-        if (data && data.length > 0) {
-          const { lat, lon } = data[0];
-          setPosition([parseFloat(lat), parseFloat(lon)]);
-        } else {
-          // Si no encuentra la dirección exacta, intenta solo con la ciudad
-          const cityResponse = await fetch(
-            `https://nominatim.openstreetmap.org/search?` +
-            `q=${encodeURIComponent(`${city}, ${department}, Colombia`)}&` +
-            `format=json&` +
-            `limit=1&` +
-            `countrycodes=co`
-          );
-
-          const cityData = await cityResponse.json();
-
-          if (cityData && cityData.length > 0) {
-            const { lat, lon } = cityData[0];
-            setPosition([parseFloat(lat), parseFloat(lon)]);
-          } else {
-            // Fallback a coordenadas por defecto
-            setPosition(defaultPosition);
-            setError(true);
-          }
-        }
-      } catch (err) {
-        console.error('Error en geocoding:', err);
-        setPosition(defaultPosition);
-        setError(true);
-      } finally {
+    // PRIORIDAD 2: ciudad conocida
+    if (city) {
+      const cityKey = city.toLowerCase().trim();
+      if (KNOWN_CITIES[cityKey]) {
+        setPosition(KNOWN_CITIES[cityKey]);
+        setError(true); // aproximada
         setLoading(false);
+        return;
       }
-    };
+    }
 
-    geocodeAddress();
-  }, [address, city, department]);
+    // PRIORIDAD 3: default Anserma
+    setPosition(defaultPosition);
+    setError(true);
+    setLoading(false);
+  }, [latitude, longitude, city, department]);
 
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-900">
         <div className="text-center">
           <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-          <p className="text-slate-400 text-sm">Buscando ubicación...</p>
+          <p className="text-slate-400 text-sm">Cargando mapa...</p>
         </div>
       </div>
     );
@@ -117,7 +118,7 @@ const PropertyMap = ({ address, city, department = 'Caldas' }) => {
     <div className="w-full h-full relative">
       <MapContainer
         center={position}
-        zoom={16}
+        zoom={error ? 14 : 16}
         scrollWheelZoom={false}
         style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
         className="z-0"
@@ -129,9 +130,9 @@ const PropertyMap = ({ address, city, department = 'Caldas' }) => {
         <Marker position={position}>
           <Popup>
             <div className="text-sm">
-              <strong>{address}</strong>
+              <strong>{address || 'Propiedad'}</strong>
               <br />
-              {city}, {department}
+              {city}{department ? `, ${department}` : ''}
             </div>
           </Popup>
         </Marker>
