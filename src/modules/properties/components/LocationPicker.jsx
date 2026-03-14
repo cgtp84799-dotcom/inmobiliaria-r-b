@@ -1,34 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { FaMapMarkerAlt, FaSearch, FaCrosshairs, FaSpinner, FaTimes, FaToggleOn, FaToggleOff, FaMousePointer } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
-// Fix para los iconos de Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
-
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDDln6zVboxk5TG6lDBE-oZaNqgRzMeQDE";
-
-/* ───────── Mapa: click handler ───────── */
-const ClickHandler = ({ onMapClick }) => {
-  useMapEvents({ click(e) { onMapClick(e.latlng); } });
-  return null;
-};
-
-/* ───────── Mapa: centrar vista ───────── */
-const MapCenter = ({ position, zoom }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (position) map.setView(position, zoom || 16, { animate: true });
-  }, [position, zoom, map]);
-  return null;
-};
 
 /* ═══════════════════════════════════════
    GEOCODIFICADORES
@@ -88,34 +62,20 @@ const geocodeMulti = async (query, limit = 5) => {
 /* ═══════════════════════════════════════
    BÚSQUEDA INTELIGENTE
    ═══════════════════════════════════════ */
-
-/**
- * Intentar múltiples variaciones de la dirección del formulario.
- * Si encuentra algo específico (barrio, condominio), retorna con isExact=true.
- * Si solo encuentra la ciudad, retorna con isExact=false para centrar sin pin.
- */
 const smartSearchAddress = async ({ address, neighborhood, city, department }) => {
-  // Extraer posible nombre de barrio de la dirección
   const barrioFromAddr = address?.match(/barr(?:io)?\s+([^,]+)/i)?.[1]?.trim();
 
   const searches = [];
 
-  // 1. Barrio/Sector (campo del formulario) + ciudad
   if (neighborhood && city) {
     searches.push({ q: `${neighborhood}, ${city}, ${department}, Colombia`, exact: true });
   }
-
-  // 2. Barrio extraído de la dirección + ciudad
   if (barrioFromAddr && city && barrioFromAddr !== neighborhood) {
     searches.push({ q: `${barrioFromAddr}, ${city}, ${department}, Colombia`, exact: true });
   }
-
-  // 3. Dirección completa
   if (address && city) {
     searches.push({ q: `${address}, ${city}, ${department}, Colombia`, exact: true });
   }
-
-  // 4. Ciudad + departamento (fallback — centrar mapa sin pin)
   if (city) {
     searches.push({ q: `${city}, ${department}, Colombia`, exact: false });
   }
@@ -131,27 +91,27 @@ const smartSearchAddress = async ({ address, neighborhood, city, department }) =
 };
 
 /* ═══════════════════════════════════════
-   GOOGLE MAPS PREVIEW (iframe embed gratis)
+   GOOGLE MAPS EMBED — mapa interactivo con iframe
    ═══════════════════════════════════════ */
-const GooglePreview = ({ lat, lng }) => (
-  <div className="mt-2">
-    <p className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
-      <img src="https://www.google.com/favicon.ico" alt="" className="w-3 h-3" />
-      Vista previa en Google Maps
-    </p>
-    <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700">
-      <iframe
-        title="Google Maps preview"
-        width="100%"
-        height="100%"
-        style={{ border: 0 }}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${lat},${lng}&zoom=17&language=es`}
-      />
-    </div>
-  </div>
-);
+const GoogleMapEmbed = ({ lat, lng, query, zoom = 17 }) => {
+  // Si hay coordenadas, mostrar coordenadas. Si no, mostrar query de búsqueda.
+  const q = (lat && lng) ? `${lat},${lng}` : (query || 'Anserma, Caldas, Colombia');
+  const z = (lat && lng) ? zoom : 14;
+
+  const src = `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(q)}&zoom=${z}&language=es&region=CO`;
+
+  return (
+    <iframe
+      title="Mapa de ubicación"
+      width="100%"
+      height="100%"
+      style={{ border: 0 }}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      src={src}
+    />
+  );
+};
 
 /* ═══════════════════════════════════════
    LOCATION PICKER — Componente principal
@@ -160,29 +120,33 @@ const LocationPicker = ({
   latitude, longitude, address, neighborhood, city, department = 'Caldas', onChange,
 }) => {
   const [position, setPosition] = useState(null);
-  const [mapCenter, setMapCenter] = useState(null);
+  const [mapQuery, setMapQuery] = useState(null);
   const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapEnabled, setMapEnabled] = useState(true);
+  const [manualCoords, setManualCoords] = useState(false);
   const suggestionsRef = useRef(null);
   const debounceRef = useRef(null);
 
-  const defaultCenter = [5.2383, -75.7850];
-
-  // Init
+  // Init — si ya hay coordenadas, usarlas
   useEffect(() => {
     if (latitude && longitude) {
       const lat = parseFloat(latitude);
       const lng = parseFloat(longitude);
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        setPosition([lat, lng]);
-        setMapCenter([lat, lng]);
+        setPosition({ lat, lng });
         return;
       }
     }
-    setMapCenter(defaultCenter);
+    // Construir query inicial basado en dirección
+    const parts = [neighborhood, city, department, 'Colombia'].filter(Boolean);
+    if (parts.length > 1) {
+      setMapQuery(parts.join(', '));
+    } else {
+      setMapQuery('Anserma, Caldas, Colombia');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -212,9 +176,8 @@ const LocationPicker = ({
 
   // ─── Seleccionar sugerencia ───
   const selectSuggestion = (s) => {
-    const p = [s.lat, s.lng];
-    setPosition(p);
-    setMapCenter(p);
+    setPosition({ lat: s.lat, lng: s.lng });
+    setMapQuery(null);
     onChange?.({ latitude: s.lat, longitude: s.lng });
     setSearchQuery(s.display || s.name);
     setShowSuggestions(false);
@@ -233,19 +196,19 @@ const LocationPicker = ({
     const { result, isExact } = await smartSearchAddress({ address, neighborhood, city, department });
 
     if (result) {
-      const p = [result.lat, result.lng];
       if (isExact) {
-        setPosition(p);
-        setMapCenter(p);
+        setPosition({ lat: result.lat, lng: result.lng });
+        setMapQuery(null);
         onChange?.({ latitude: result.lat, longitude: result.lng });
         toast.success(`Ubicación encontrada: ${result.name}`);
       } else {
-        // Solo ciudad — centrar sin pin
-        setMapCenter(p);
-        toast('📍 Zona encontrada. Haz clic en el mapa para ubicar el punto exacto.', { duration: 5000 });
+        // Solo encontró la ciudad — centrar mapa ahí
+        setMapQuery(`${city}, ${department}, Colombia`);
+        setPosition(null);
+        toast('📍 Zona encontrada. Usa las coordenadas manuales o busca por nombre para ubicar el punto exacto.', { duration: 5000 });
       }
     } else {
-      toast.error('No se encontró. Intenta buscar por nombre o haz clic en el mapa.');
+      toast.error('No se encontró. Intenta buscar por nombre o ingresa coordenadas.');
     }
     setSearching(false);
   };
@@ -268,11 +231,16 @@ const LocationPicker = ({
     setSearching(false);
   };
 
-  // ─── Click en el mapa ───
-  const handleMapClick = (latlng) => {
-    const p = [latlng.lat, latlng.lng];
-    setPosition(p);
-    onChange?.({ latitude: latlng.lat, longitude: latlng.lng });
+  // ─── Coordenadas manuales ───
+  const handleManualCoords = (field, value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return;
+    const newPos = { ...position, [field]: num };
+    if (newPos.lat && newPos.lng) {
+      setPosition(newPos);
+      setMapQuery(null);
+      onChange?.({ latitude: newPos.lat, longitude: newPos.lng });
+    }
   };
 
   return (
@@ -286,15 +254,9 @@ const LocationPicker = ({
           className="flex items-center gap-2 text-sm text-slate-400 hover:text-light transition-colors"
         >
           {mapEnabled ? (
-            <>
-              <FaToggleOn className="text-primary text-xl" />
-              <span>Activado</span>
-            </>
+            <><FaToggleOn className="text-primary text-xl" /><span>Activado</span></>
           ) : (
-            <>
-              <FaToggleOff className="text-slate-600 text-xl" />
-              <span>Desactivado</span>
-            </>
+            <><FaToggleOff className="text-slate-600 text-xl" /><span>Desactivado</span></>
           )}
         </button>
       </div>
@@ -367,56 +329,62 @@ const LocationPicker = ({
             </div>
           </div>
 
-          {/* Instrucciones */}
-          <p className="text-slate-500 text-xs flex items-center gap-1.5">
-            <FaMousePointer className="text-primary" />
-            Haz clic en el mapa para colocar o ajustar el pin de ubicación exacta
-          </p>
-
-          {/* Mapa Leaflet (interactivo para poner pin) */}
+          {/* Google Maps Embed — mapa real */}
           <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-slate-700">
-            <MapContainer
-              center={mapCenter || defaultCenter}
-              zoom={position ? 16 : 13}
-              scrollWheelZoom={true}
-              style={{ height: '100%', width: '100%' }}
-              className="z-0"
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <ClickHandler onMapClick={handleMapClick} />
-              {mapCenter && <MapCenter position={mapCenter} zoom={position ? 16 : 13} />}
-              {position && (
-                <Marker position={position}>
-                  <Popup>
-                    <div className="text-sm">
-                      <strong>Ubicación seleccionada</strong><br />
-                      <span className="text-gray-500 text-xs">
-                        {position[0].toFixed(6)}, {position[1].toFixed(6)}
-                      </span>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-            </MapContainer>
+            <GoogleMapEmbed
+              lat={position?.lat}
+              lng={position?.lng}
+              query={mapQuery}
+            />
           </div>
 
-          {/* Google Maps Preview — confirmar visualmente */}
-          {position && (
-            <GooglePreview lat={position[0]} lng={position[1]} />
-          )}
+          {/* Coordenadas manuales (toggle) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setManualCoords(!manualCoords)}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+            >
+              <FaMousePointer />
+              {manualCoords ? 'Ocultar coordenadas manuales' : 'Ingresar coordenadas manualmente'}
+            </button>
+            {manualCoords && (
+              <div className="flex gap-3 mt-2">
+                <div className="flex-1">
+                  <label className="text-xs text-slate-500 block mb-1">Latitud</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={position?.lat || ''}
+                    onChange={(e) => handleManualCoords('lat', e.target.value)}
+                    placeholder="ej: 4.8511"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-light text-sm focus:border-primary outline-none"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-slate-500 block mb-1">Longitud</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={position?.lng || ''}
+                    onChange={(e) => handleManualCoords('lng', e.target.value)}
+                    placeholder="ej: -75.6514"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-light text-sm focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {/* Estado de coordenadas */}
+      {/* Estado de coordenadas — siempre visible */}
       {position ? (
         <div className="flex items-center gap-3 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
           <FaMapMarkerAlt className="text-green-400 flex-shrink-0" />
           <div className="text-sm">
             <span className="text-green-400 font-semibold">Ubicación guardada: </span>
-            <span className="text-slate-300">{position[0].toFixed(6)}, {position[1].toFixed(6)}</span>
+            <span className="text-slate-300">{position.lat.toFixed(6)}, {position.lng.toFixed(6)}</span>
           </div>
         </div>
       ) : (
@@ -424,8 +392,8 @@ const LocationPicker = ({
           <FaMapMarkerAlt className="text-yellow-400 flex-shrink-0" />
           <span className="text-yellow-400 text-sm">
             {mapEnabled
-              ? 'Sin ubicación — busca la dirección o haz clic en el mapa'
-              : 'Mapa desactivado — actívalo para establecer ubicación'}
+              ? 'Sin ubicación — busca la dirección o ingresa coordenadas'
+              : 'Mapa desactivado — la propiedad se mostrará sin mapa a los clientes'}
           </span>
         </div>
       )}
