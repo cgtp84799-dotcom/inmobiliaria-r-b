@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { FaMapMarkerAlt, FaSearch, FaCrosshairs, FaSpinner, FaTimes } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaSearch, FaCrosshairs, FaSpinner, FaTimes, FaGoogle, FaMousePointer } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 // Fix para los iconos de Leaflet
@@ -12,6 +12,8 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDDln6zVboxk5TG6lDBE-oZaNqgRzMeQDE";
 
 /**
  * Componente hijo para manejar clicks en el mapa
@@ -45,7 +47,6 @@ const MapCenter = ({ position, zoom }) => {
 const geocodePhoton = async (query, limit = 5) => {
   if (!query?.trim()) return [];
   try {
-    // Añadir "Colombia" al query para mejorar resultados
     const q = query.toLowerCase().includes('colombia') ? query : `${query} Colombia`;
     const url = `https://photon.komoot.io/api?q=${encodeURIComponent(q)}&limit=${limit}`;
     const response = await fetch(url);
@@ -53,14 +54,10 @@ const geocodePhoton = async (query, limit = 5) => {
     const data = await response.json();
     if (data?.features?.length > 0) {
       return data.features
-        .filter(f => {
-          // Priorizar resultados de Colombia
-          const cc = f.properties?.countrycode;
-          return cc === 'CO';
-        })
+        .filter(f => f.properties?.countrycode === 'CO')
         .map(f => {
           const p = f.properties;
-          const coords = f.geometry.coordinates; // [lng, lat]
+          const coords = f.geometry.coordinates;
           const parts = [p.name, p.city, p.state, p.country].filter(Boolean);
           return {
             lat: coords[1],
@@ -107,35 +104,100 @@ const geocodeNominatim = async (query, limit = 5) => {
 };
 
 /**
- * Geocodificar con Photon primero, Nominatim como fallback.
- * Retorna array de sugerencias.
+ * Geocodificar con múltiples intentos inteligentes.
  */
 const geocodeMulti = async (query, limit = 5) => {
-  // Intentar con Photon primero (mejor para condominios/conjuntos colombianos)
   const photonResults = await geocodePhoton(query, limit);
   if (photonResults.length > 0) return photonResults;
-
-  // Fallback a Nominatim
   const nominatimResults = await geocodeNominatim(query, limit);
   return nominatimResults;
 };
 
 /**
+ * Buscar dirección de forma inteligente con múltiples variaciones.
+ * Las direcciones colombianas (Calle X #Y-Z) rara vez están en geocodificadores gratuitos,
+ * así que probamos varias combinaciones de menor a mayor especificidad.
+ */
+const smartSearchAddress = async ({ address, neighborhood, city, department }) => {
+  const variations = [];
+
+  // 1. Dirección completa + ciudad + departamento
+  if (address && city) {
+    variations.push(`${address}, ${city}, ${department || ''}, Colombia`);
+  }
+
+  // 2. Barrio + ciudad (si hay barrio)
+  if (neighborhood && city) {
+    variations.push(`${neighborhood}, ${city}, ${department || ''}, Colombia`);
+    // También solo el barrio con la ciudad
+    variations.push(`${neighborhood} ${city} Colombia`);
+  }
+
+  // 3. Extraer nombre de barrio/sector de la dirección si contiene "barr" o "sector"
+  if (address) {
+    const barrioMatch = address.match(/barr(?:io)?\s+([^,]+)/i);
+    if (barrioMatch && city) {
+      variations.push(`${barrioMatch[1].trim()}, ${city}, Colombia`);
+      variations.push(`barrio ${barrioMatch[1].trim()} ${city} Colombia`);
+    }
+  }
+
+  // 4. Solo ciudad + departamento (fallback seguro para centrar el mapa)
+  if (city) {
+    variations.push(`${city}, ${department || ''}, Colombia`);
+  }
+
+  // Intentar cada variación hasta encontrar resultado
+  for (const query of variations) {
+    const results = await geocodeMulti(query, 3);
+    if (results.length > 0) {
+      return { results, query, isExact: variations.indexOf(query) < 2 };
+    }
+  }
+
+  return { results: [], query: '', isExact: false };
+};
+
+/**
+ * Preview de Google Maps Embed — muestra la ubicación con el detalle de Google Maps.
+ */
+const GoogleMapsPreview = ({ lat, lng, address }) => {
+  const query = address
+    ? `${address}`
+    : `${lat},${lng}`;
+
+  return (
+    <div className="w-full h-48 rounded-lg overflow-hidden border border-slate-700 mt-2">
+      <iframe
+        title="Vista previa Google Maps"
+        width="100%"
+        height="100%"
+        style={{ border: 0 }}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(query)}&zoom=17&language=es`}
+      />
+    </div>
+  );
+};
+
+/**
  * LocationPicker — Selector interactivo de ubicación para el formulario de propiedades.
  *
- * Usa Leaflet para el mapa interactivo (puntero manual) y
- * Photon (komoot.io) + Nominatim para búsqueda de direcciones/condominios.
- *
- * Photon encuentra condominios, conjuntos residenciales, y barrios colombianos
- * que Nominatim solo no puede encontrar.
+ * Flujo:
+ * 1. Buscar por nombre de condominio/barrio → Photon encuentra y pone el pin
+ * 2. Buscar con dirección del formulario → intenta barrio → ciudad → pone pin o centra mapa
+ * 3. Clic en el mapa → pone/mueve pin manualmente
+ * 4. Preview de Google Maps → confirmar visualmente la ubicación
  */
-const LocationPicker = ({ latitude, longitude, address, city, department = 'Caldas', onChange }) => {
+const LocationPicker = ({ latitude, longitude, address, neighborhood, city, department = 'Caldas', onChange }) => {
   const [position, setPosition] = useState(null);
   const [mapCenter, setMapCenter] = useState(null);
   const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showGooglePreview, setShowGooglePreview] = useState(false);
   const suggestionsRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
@@ -149,6 +211,7 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
         setPosition([lat, lng]);
         setMapCenter([lat, lng]);
+        setShowGooglePreview(true);
         return;
       }
     }
@@ -194,60 +257,65 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
     setSearchQuery(suggestion.display || suggestion.name);
     setShowSuggestions(false);
     setSuggestions([]);
+    setShowGooglePreview(true);
     toast.success(`Ubicación: ${suggestion.name}`);
   };
 
-  // Buscar con la dirección del formulario
+  // Buscar con la dirección del formulario — búsqueda inteligente
   const handleSearchFromForm = async () => {
-    const parts = [address, city, department, 'Colombia'].filter(Boolean);
-    const query = parts.join(', ');
-    if (!address && !city) {
+    if (!address && !city && !neighborhood) {
       toast.error('Ingresa primero la dirección y ciudad');
       return;
     }
 
     setSearching(true);
 
-    // Intento 1: dirección completa
-    let results = await geocodeMulti(query, 5);
+    const { results, isExact } = await smartSearchAddress({
+      address,
+      neighborhood: neighborhood || '',
+      city,
+      department,
+    });
 
-    // Si hay varios resultados, mostrar como sugerencias
-    if (results.length > 1) {
+    if (results.length > 1 && isExact) {
+      // Múltiples resultados exactos — mostrar sugerencias
       setSuggestions(results);
       setShowSuggestions(true);
-      setSearching(false);
       toast('Selecciona la ubicación correcta de la lista', { icon: '📍' });
+      setSearching(false);
       return;
     }
 
-    // Si hay un resultado, usarlo directo
-    if (results.length === 1) {
+    if (results.length >= 1) {
       const result = results[0];
       const newPos = [result.lat, result.lng];
-      setPosition(newPos);
-      setMapCenter(newPos);
-      onChange?.({ latitude: result.lat, longitude: result.lng });
-      toast.success(`Ubicación encontrada: ${result.name || 'OK'}`);
+
+      if (isExact) {
+        // Resultado exacto — poner pin
+        setPosition(newPos);
+        setMapCenter(newPos);
+        onChange?.({ latitude: result.lat, longitude: result.lng });
+        setShowGooglePreview(true);
+        toast.success(`Ubicación encontrada: ${result.name}`);
+      } else {
+        // Solo encontró la ciudad/zona — centrar sin pin
+        setMapCenter(newPos);
+        setShowGooglePreview(false);
+        toast(
+          '📍 Zona encontrada. Haz clic en el mapa para colocar el pin en la ubicación exacta.',
+          { duration: 5000 }
+        );
+      }
+
       setSearching(false);
       return;
     }
 
-    // Intento 2: solo ciudad + departamento
-    if (city) {
-      results = await geocodeMulti(`${city}, ${department}, Colombia`, 3);
-      if (results.length > 0) {
-        setMapCenter([results[0].lat, results[0].lng]);
-        toast('Ciudad encontrada — haz clic en el mapa para ubicar el pin exacto', { icon: '📍' });
-        setSearching(false);
-        return;
-      }
-    }
-
-    toast.error('No se encontró la ubicación. Haz clic en el mapa manualmente.');
+    toast.error('No se encontró la ubicación. Intenta buscar por nombre de barrio o condominio.');
     setSearching(false);
   };
 
-  // Buscar con texto libre (Enter en el input)
+  // Buscar con texto libre (Enter)
   const handleFreeSearch = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -262,7 +330,7 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
     } else if (results.length === 1) {
       handleSelectSuggestion(results[0]);
     } else {
-      toast.error('No se encontró esa ubicación');
+      toast.error('No se encontró esa ubicación. Intenta con otro nombre o haz clic en el mapa.');
     }
     setSearching(false);
   };
@@ -272,6 +340,7 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
     const newPos = [latlng.lat, latlng.lng];
     setPosition(newPos);
     onChange?.({ latitude: latlng.lat, longitude: latlng.lng });
+    setShowGooglePreview(true);
   };
 
   return (
@@ -282,7 +351,7 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
           type="button"
           onClick={handleSearchFromForm}
           disabled={searching}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-semibold disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-semibold disabled:opacity-50 whitespace-nowrap"
         >
           {searching ? (
             <FaSpinner className="animate-spin" />
@@ -350,13 +419,19 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
         </div>
       </div>
 
-      {/* Instrucción */}
-      <p className="text-slate-500 text-xs flex items-center gap-1.5">
-        <FaMapMarkerAlt className="text-primary" />
-        Busca por nombre del condominio/conjunto o haz clic en el mapa para colocar el pin
-      </p>
+      {/* Instrucciones */}
+      <div className="flex flex-col gap-1">
+        <p className="text-slate-500 text-xs flex items-center gap-1.5">
+          <FaSearch className="text-primary" />
+          Busca por nombre de condominio, conjunto, o barrio para ubicación automática
+        </p>
+        <p className="text-slate-500 text-xs flex items-center gap-1.5">
+          <FaMousePointer className="text-primary" />
+          Haz clic en el mapa para colocar o ajustar el pin de ubicación exacta
+        </p>
+      </div>
 
-      {/* Mapa interactivo */}
+      {/* Mapa interactivo Leaflet (para poner pin) */}
       <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-slate-700">
         <MapContainer
           center={mapCenter || defaultCenter}
@@ -391,6 +466,21 @@ const LocationPicker = ({ latitude, longitude, address, city, department = 'Cald
           )}
         </MapContainer>
       </div>
+
+      {/* Preview de Google Maps — confirmar ubicación visualmente */}
+      {position && showGooglePreview && (
+        <div>
+          <p className="text-slate-400 text-xs flex items-center gap-1.5 mb-1">
+            <FaGoogle className="text-blue-400" />
+            Vista previa en Google Maps — confirma que la ubicación es correcta
+          </p>
+          <GoogleMapsPreview
+            lat={position[0]}
+            lng={position[1]}
+            address={`${position[0]},${position[1]}`}
+          />
+        </div>
+      )}
 
       {/* Coordenadas seleccionadas */}
       {position && (
