@@ -641,6 +641,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     latitude={formData.latitude}
                     longitude={formData.longitude}
                     address={formData.address}
+                    neighborhood={formData.neighborhood}
                     city={formData.city}
                     department={formData.department}
                     onChange={({ latitude, longitude }) => {
