@@ -19,10 +19,9 @@ const ImageGallery = ({ images }) => {
   // ✅ bloquear scroll del body cuando el lightbox está abierto
   useEffect(() => {
     if (!showLightbox) return;
-    const original = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = original;
+      document.body.style.overflow = "";
     };
   }, [showLightbox]);
 
