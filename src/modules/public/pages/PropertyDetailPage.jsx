@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-<<<<<<< Updated upstream
+
 // SEO: usamos document.title + meta tags directos (sin react-helmet-async)
-=======
-import { Helmet } from "react-helmet-async";
->>>>>>> Stashed changes
+
 import {
   FaBed,
   FaBath,
@@ -23,18 +21,14 @@ import {
   FaLayerGroup,
   FaCalendarAlt,
 } from "react-icons/fa";
-<<<<<<< Updated upstream
-=======
+
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
->>>>>>> Stashed changes
+
 import toast from "react-hot-toast";
 import propertyService from "../../properties/services/property.service";
 import ImageGallery from "../components/ImageGallery";
 import PropertyContactForm from "../components/PropertyContactForm";
-<<<<<<< Updated upstream
-import PropertyMap from "../../properties/components/PropertyMap";
-=======
 
 import L from "leaflet";
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -48,7 +42,6 @@ let DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
->>>>>>> Stashed changes
 
 // ✅ NUEVO — Componente para centrar el mapa cuando cambian las coordenadas
 const MapUpdater = ({ position }) => {
@@ -249,7 +242,7 @@ const PropertyDetailPage = () => {
 
   const seoImage = property?.images?.[0] || "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png";
   const seoUrl = `https://inmobiliaria-ryb-y-asociados.com/propiedades/${id}`;
-<<<<<<< Updated upstream
+
 
   // SEO: actualizar title y meta tags sin react-helmet-async
   useEffect(() => {
@@ -286,8 +279,8 @@ const PropertyDetailPage = () => {
 
     return () => { if (script) script.remove(); };
   }, [property, seoTitle, seoDescription, seoImage, seoUrl]);
-=======
->>>>>>> Stashed changes
+
+
 
   if (loading) {
     return (
@@ -315,45 +308,9 @@ const PropertyDetailPage = () => {
 
   return (
     <>
-<<<<<<< Updated upstream
-=======
-      {/* ✅ SEO DINÁMICO POR PROPIEDAD */}
-      <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <link rel="canonical" href={seoUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:image" content={seoImage} />
-        <meta property="og:url" content={seoUrl} />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:description" content={seoDescription} />
-        <meta name="twitter:image" content={seoImage} />
-        <script type="application/ld+json">{JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "RealEstateListing",
-          "name": property.title,
-          "description": seoDescription,
-          "url": seoUrl,
-          "image": property.images || [],
-          "offers": {
-            "@type": "Offer",
-            "price": property.price,
-            "priceCurrency": "COP",
-            "availability": "https://schema.org/InStock"
-          },
-          "address": {
-            "@type": "PostalAddress",
-            "streetAddress": property.address || "",
-            "addressLocality": property.city || "Anserma",
-            "addressRegion": property.department || "Caldas",
-            "addressCountry": "CO"
-          }
-        })}</script>
-      </Helmet>
 
->>>>>>> Stashed changes
+    
+
       <div className="min-h-screen bg-dark">
         <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
           {/* Header con botones */}
@@ -566,26 +523,16 @@ const PropertyDetailPage = () => {
                   Ubicación
                 </h3>
 
-<<<<<<< Updated upstream
-                <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden">
-                  <PropertyMap
-                    address={property.address}
-                    city={property.city}
-                    department={property.department}
-                    neighborhood={property.neighborhood}
-                    latitude={property.latitude}
-                    longitude={property.longitude}
-                  />
-=======
+
                 <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden relative">
-                  {mapLoading ? (
-                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                      <div className="text-center">
-                        <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-                        <p className="text-slate-400 text-sm">Buscando ubicación...</p>
-                      </div>
-                    </div>
-                  ) : mapPosition ? (
+  {mapLoading ? (
+    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+      <div className="text-center">
+        <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+        <p className="text-slate-400 text-sm">Buscando ubicación...</p>
+      </div>
+    </div>
+  ) : mapPosition ? (
                     <>
                       <MapContainer
                         center={mapPosition}
@@ -618,7 +565,7 @@ const PropertyDetailPage = () => {
                       <p className="text-slate-500 text-sm">No se pudo cargar el mapa</p>
                     </div>
                   )}
->>>>>>> Stashed changes
+
                 </div>
 
                 <p className="text-slate-400 text-xs sm:text-sm mt-3">

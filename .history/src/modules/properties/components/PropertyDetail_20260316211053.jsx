@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import PropertyMap from "../../properties/components/PropertyMap";
+import PropertyMap from "./PropertyMap";
 import { generatePropertyPDF } from "../services/pdf.service";
 import {
   FaTimes,
