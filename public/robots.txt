@@ -1,4 +1,14 @@
 User-agent: *
 Allow: /
+Disallow: /dashboard/
+Disallow: /auth/
+Disallow: /solicitar-acceso/
 
-Sitemap: https://inmobiliaria-ryb-y-asociados.web.app/sitemap.xml
+# Bloquear la URL .web.app para que Google no la indexe
+User-agent: *
+Disallow: /
+
+# Solo permitir al .com
+Host: inmobiliaria-ryb-y-asociados.com
+
+Sitemap: https://inmobiliaria-ryb-y-asociados.com/sitemap.xml

@@ -13,10 +13,8 @@ import {
 } from 'react-icons/fa';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
-import moment from 'moment';
-import 'moment/locale/es';
-
-moment.locale('es');
+import { parseISO, format } from "date-fns";
+import { es } from "date-fns/locale";
 
 const ClientActivityHistory = ({ clientId, clientName, onCreateEvent }) => {
   const [events, setEvents] = useState([]);
@@ -34,9 +32,9 @@ const ClientActivityHistory = ({ clientId, clientName, onCreateEvent }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventsData = snapshot.docs.map(doc => {
         const data = doc.data();
-        const dateStr = data.date || moment().format('YYYY-MM-DD');
+        const dateStr = data.date || new Date().toISOString().split("T")[0];
         const timeStr = data.time || '09:00';
-        const start = moment(`${dateStr}T${timeStr}`).toDate();
+        const start = parseISO(`${dateStr}T${timeStr}`);
         
         return {
           id: doc.id,
@@ -172,7 +170,7 @@ const ClientActivityHistory = ({ clientId, clientName, onCreateEvent }) => {
                       <div className="flex items-center gap-4 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <FaCalendarAlt size={10} />
-                          {moment(event.start).format('DD MMM YYYY, HH:mm')}
+                          {format(event.start, "dd MMM yyyy, HH:mm", { locale: es })}
                         </span>
                         <span className="capitalize">
                           {event.type}

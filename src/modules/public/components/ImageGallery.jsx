@@ -10,7 +10,8 @@ import "swiper/css/pagination";
 import "swiper/css/thumbs";
 import "swiper/css/zoom";
 
-const ImageGallery = ({ images }) => {
+// ✅ Recibe propertyTitle para mejorar SEO en alt
+const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
   const [thumbsSwiper, setThumbsSwiper] = useState(null);
   const [mainSwiper, setMainSwiper] = useState(null);
   const [showLightbox, setShowLightbox] = useState(false);
@@ -62,7 +63,8 @@ const ImageGallery = ({ images }) => {
               <SwiperSlide key={index}>
                 <img
                   src={img}
-                  alt={`Imagen ${index + 1}`}
+                  // ✅ Alt descriptivo para Google Imágenes
+                  alt={`${propertyTitle} - foto ${index + 1} de ${images.length}`}
                   className="w-full h-full object-cover cursor-pointer"
                   loading="lazy"
                   onClick={() => {
@@ -101,11 +103,12 @@ const ImageGallery = ({ images }) => {
                 type="button"
                 onClick={() => goTo(index)}
                 className="w-full h-full"
-                aria-label={`Ver miniatura ${index + 1}`}
+                aria-label={`Ver foto ${index + 1} de ${propertyTitle}`}
               >
                 <img
                   src={img}
-                  alt={`Miniatura ${index + 1}`}
+                  // ✅ Alt descriptivo en miniaturas
+                  alt={`${propertyTitle} - miniatura ${index + 1}`}
                   className={`w-full h-full object-cover rounded-lg cursor-pointer border-2 transition-all ${
                     index === activeIndex
                       ? "border-primary scale-[1.02]"
@@ -154,7 +157,7 @@ const ImageGallery = ({ images }) => {
                   <div className="swiper-zoom-container">
                     <img
                       src={img}
-                      alt={`Imagen ${index + 1}`}
+                      alt={`${propertyTitle} - foto ${index + 1} de ${images.length}`}
                       className="max-h-[90vh] max-w-[92vw] sm:max-w-[90vw] object-contain mx-auto"
                       loading="lazy"
                     />

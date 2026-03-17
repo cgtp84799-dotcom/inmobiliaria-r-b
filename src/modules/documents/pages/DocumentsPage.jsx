@@ -10,20 +10,31 @@ import {
   FaTimesCircle
 } from 'react-icons/fa';
 import { documentService } from '../services/document.service';
-import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS } from '../types/document.types';
+import { DOCUMENT_CATEGORY_LABELS } from '../types/document.types';
 import DocumentCard from '../components/DocumentCard';
+import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
+import { useAuth } from '../../../core/contexts/AuthContext'; // ✅
+import { hasPermission } from '../../users/types/user.types'; // ✅
 
 const DocumentsPage = () => {
+  const { currentUser } = useAuth(); // ✅
+
+  // ✅ Permisos granulares
+  const canCreate = hasPermission(currentUser?.role, 'documents', 'create');
+  const canDelete = hasPermission(currentUser?.role, 'documents', 'delete');
+
   const [documents, setDocuments] = useState([]);
   const [filteredDocuments, setFilteredDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
-  const [filters, setFilters] = useState({
-    searchTerm: '',
-    category: ''
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    document: null,
   });
+
+  const [filters, setFilters] = useState({ searchTerm: '', category: '' });
 
   const [uploadData, setUploadData] = useState({
     title: '',
@@ -32,9 +43,7 @@ const DocumentsPage = () => {
     file: null
   });
 
-  useEffect(() => {
-    loadDocuments();
-  }, []);
+  useEffect(() => { loadDocuments(); }, []);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -56,7 +65,6 @@ const DocumentsPage = () => {
 
   const applyFilters = () => {
     let filtered = [...documents];
-
     if (filters.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(doc =>
@@ -65,11 +73,9 @@ const DocumentsPage = () => {
         doc.fileName?.toLowerCase().includes(term)
       );
     }
-
     if (filters.category) {
       filtered = filtered.filter(doc => doc.category === filters.category);
     }
-
     setFilteredDocuments(filtered);
   };
 
@@ -98,14 +104,15 @@ const DocumentsPage = () => {
     }
   };
 
-  const handleDelete = async (document) => {
-    if (!window.confirm(`¿Eliminar "${document.title || document.fileName}"?`)) {
-      return;
-    }
+  const handleDelete = (document) => {
+    setConfirmModal({ isOpen: true, document });
+  };
 
+  const confirmDelete = async () => {
     try {
-      await documentService.deleteDocument(document.id);
+      await documentService.deleteDocument(confirmModal.document.id);
       toast.success('Documento eliminado');
+      setConfirmModal({ isOpen: false, document: null });
       loadDocuments();
     } catch (error) {
       console.error('Error eliminando documento:', error);
@@ -115,12 +122,10 @@ const DocumentsPage = () => {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-
     if (!uploadData.title || !uploadData.category || !uploadData.file) {
       toast.error('Completa todos los campos obligatorios');
       return;
     }
-
     try {
       await documentService.createDocument(
         {
@@ -132,7 +137,6 @@ const DocumentsPage = () => {
         },
         uploadData.file
       );
-
       toast.success('Documento subido exitosamente');
       setUploadModalOpen(false);
       setUploadData({ title: '', description: '', category: '', file: null });
@@ -145,6 +149,7 @@ const DocumentsPage = () => {
 
   return (
     <div className="px-4 py-6 space-y-6">
+
       {/* HEADER */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -161,13 +166,16 @@ const DocumentsPage = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setUploadModalOpen(true)}
-          className="button-gold inline-flex items-center gap-2 px-6 py-3"
-        >
-          <FaFileUpload />
-          Subir documento
-        </button>
+        {/* ✅ Solo visible si puede crear */}
+        {canCreate && (
+          <button
+            onClick={() => setUploadModalOpen(true)}
+            className="button-gold inline-flex items-center gap-2 px-6 py-3"
+          >
+            <FaFileUpload />
+            Subir documento
+          </button>
+        )}
       </motion.div>
 
       {/* FILTROS */}
@@ -184,12 +192,9 @@ const DocumentsPage = () => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-light">Filtros</h2>
-              <p className="text-xs text-slate-400">
-                Busca documentos específicos
-              </p>
+              <p className="text-xs text-slate-400">Busca documentos específicos</p>
             </div>
           </div>
-
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
             className="text-xs text-primary hover:underline"
@@ -205,9 +210,7 @@ const DocumentsPage = () => {
             className="grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">
-                Búsqueda
-              </label>
+              <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
                   <FaSearch />
@@ -223,9 +226,7 @@ const DocumentsPage = () => {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Categoría
-              </label>
+              <label className="block text-xs text-slate-400 mb-1">Categoría</label>
               <select
                 value={filters.category}
                 onChange={(e) => handleFilterChange('category', e.target.value)}
@@ -260,11 +261,7 @@ const DocumentsPage = () => {
 
       {/* CONTADOR */}
       {!loading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center justify-between"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <p className="text-slate-400 text-sm">
             <span className="text-primary font-bold">{filteredDocuments.length}</span>{' '}
             {filteredDocuments.length === 1 ? 'documento encontrado' : 'documentos encontrados'}
@@ -292,9 +289,7 @@ const DocumentsPage = () => {
             <FaFolder className="text-primary text-3xl" />
           </div>
           <h2 className="text-2xl font-bold text-light mb-2">
-            {documents.length === 0
-              ? 'Aún no hay documentos'
-              : 'No se encontraron documentos'}
+            {documents.length === 0 ? 'Aún no hay documentos' : 'No se encontraron documentos'}
           </h2>
           <p className="text-slate-400 max-w-md mx-auto mb-6">
             {documents.length === 0
@@ -315,22 +310,21 @@ const DocumentsPage = () => {
               onView={handleView}
               onDownload={handleDownload}
               onDelete={handleDelete}
+              canDelete={canDelete} // ✅ viewer recibe false, no ve el botón
             />
           ))}
         </motion.div>
       )}
 
-      {/* MODAL DE SUBIDA */}
-      {uploadModalOpen && (
+      {/* MODAL DE SUBIDA — solo accesible si canCreate */}
+      {uploadModalOpen && canCreate && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="card-soft max-w-lg w-full p-6"
           >
-            <h2 className="text-2xl font-bold text-primary mb-4">
-              Subir documento
-            </h2>
+            <h2 className="text-2xl font-bold text-primary mb-4">Subir documento</h2>
 
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
@@ -387,10 +381,7 @@ const DocumentsPage = () => {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 button-gold"
-                >
+                <button type="submit" className="flex-1 button-gold">
                   Subir documento
                 </button>
                 <button
@@ -405,6 +396,16 @@ const DocumentsPage = () => {
           </motion.div>
         </div>
       )}
+
+      {/* ConfirmModal eliminación */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title="Eliminar documento"
+        message={`¿Seguro que quieres eliminar "${confirmModal.document?.title || confirmModal.document?.fileName}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirmModal({ isOpen: false, document: null })}
+        confirmText="Sí, eliminar"
+      />
     </div>
   );
 };

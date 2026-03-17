@@ -61,10 +61,7 @@ async function assertAdminFromRequest(req) {
 exports.deleteUserComplete = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
-      // Preflight
       if (handlePreflight(req, res)) return;
-
-      // CORS en respuestas normales también
       setCorsHeaders(req, res);
 
       if (req.method !== 'POST') {
@@ -113,10 +110,7 @@ exports.deleteUserComplete = functions.https.onRequest((req, res) => {
 exports.createUserByAdmin = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
-      // Preflight
       if (handlePreflight(req, res)) return;
-
-      // CORS en respuestas normales también
       setCorsHeaders(req, res);
 
       if (req.method !== 'POST') {
@@ -139,7 +133,6 @@ exports.createUserByAdmin = functions.https.onRequest((req, res) => {
 
       let userRecord;
 
-      // 1) Crear usuario en Auth (Admin SDK)
       try {
         userRecord = await admin.auth().createUser({
           email,
@@ -148,7 +141,6 @@ exports.createUserByAdmin = functions.https.onRequest((req, res) => {
           disabled: status === 'blocked'
         });
       } catch (e) {
-        // Si ya existe en Auth, obtenerlo y seguir (esto evita fallos innecesarios)
         if (e?.code === 'auth/email-already-exists') {
           userRecord = await admin.auth().getUserByEmail(email);
         } else {
@@ -156,7 +148,6 @@ exports.createUserByAdmin = functions.https.onRequest((req, res) => {
         }
       }
 
-      // 2) Guardar/merge en Firestore (email como ID)
       await admin.firestore().collection('users').doc(email).set(
         {
           uid: userRecord.uid,
@@ -180,4 +171,17 @@ exports.createUserByAdmin = functions.https.onRequest((req, res) => {
       return res.status(error.status || 500).json({ error: error.message });
     }
   });
+});
+
+/**
+ * ✅ REDIRECCIÓN 301: .web.app y .firebaseapp.com → .com
+ * Esto le dice a Google que la URL oficial es el .com
+ */
+exports.redirectToCustomDomain = functions.https.onRequest((req, res) => {
+  const host = req.headers.host || '';
+  if (host.includes('web.app') || host.includes('firebaseapp.com')) {
+    const newUrl = `https://inmobiliaria-ryb-y-asociados.com${req.url}`;
+    return res.redirect(301, newUrl);
+  }
+  return res.status(200).send('OK');
 });

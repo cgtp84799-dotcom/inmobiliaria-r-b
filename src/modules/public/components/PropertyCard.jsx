@@ -39,14 +39,10 @@ const PropertyCard = ({ property, onFavorite }) => {
 
   const getPropertyType = (type) => {
     const types = {
-      house: "Casa",
-      casa: "Casa",
-      apartment: "Apartamento",
-      apartamento: "Apartamento",
-      lot: "Lote",
-      lote: "Lote",
-      farm: "Finca",
-      finca: "Finca",
+      house: "Casa", casa: "Casa",
+      apartment: "Apartamento", apartamento: "Apartamento",
+      lot: "Lote", lote: "Lote",
+      farm: "Finca", finca: "Finca",
       commercial: "Local Comercial",
       office: "Oficina",
       warehouse: "Bodega",
@@ -58,33 +54,19 @@ const PropertyCard = ({ property, onFavorite }) => {
   const getTransactionType = () => {
     const type = property.transactionType;
     if (!type) return { text: "N/A", isVenta: false };
-
     const lower = String(type).toLowerCase();
-
-    if (lower === "sale" || lower === "venta" || lower === "compra") {
-      return { text: "VENTA", isVenta: true };
-    }
-    if (
-      lower === "rent" ||
-      lower === "arriendo" ||
-      lower === "alquiler" ||
-      lower === "renta"
-    ) {
-      return { text: "ARRIENDO", isVenta: false };
-    }
-
+    if (lower === "sale" || lower === "venta" || lower === "compra") return { text: "VENTA", isVenta: true };
+    if (lower === "rent" || lower === "arriendo" || lower === "alquiler" || lower === "renta") return { text: "ARRIENDO", isVenta: false };
     return { text: String(type).toUpperCase(), isVenta: false };
   };
 
   const transactionInfo = getTransactionType();
 
-  const roomsValue =
-    property.rooms ?? property.features?.bedrooms ?? property.bedrooms ?? null;
+  const roomsValue = property.rooms ?? property.features?.bedrooms ?? property.bedrooms ?? null;
   const bathsValue = property.bathrooms ?? property.features?.bathrooms ?? null;
   const areaValue = property.area ?? property.features?.area ?? null;
 
-  const addressText =
-    property.address || property.location?.address || "Dirección no disponible";
+  const addressText = property.address || property.location?.address || "Dirección no disponible";
   const cityText = property.city || property.location?.city || "";
 
   return (
@@ -94,20 +76,18 @@ const PropertyCard = ({ property, onFavorite }) => {
       onClick={handleCardClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") handleCardClick();
-      }}
+      onKeyDown={(e) => { if (e.key === "Enter") handleCardClick(); }}
     >
-      {/* Imagen principal (más pequeña en móvil) */}
+      {/* Imagen principal */}
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
           src={mainImage}
-          alt={property.title || "Propiedad"}
+          // ✅ Alt descriptivo con título, tipo y ciudad para Google Imágenes
+          alt={`${getPropertyType(property.type)} en ${transactionInfo.text === "VENTA" ? "venta" : "arriendo"}${cityText ? " en " + cityText : ""} - ${property.title || "Propiedad"}`}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
           loading="lazy"
           onError={(e) => {
-            e.currentTarget.src =
-              "https://via.placeholder.com/800x600?text=Sin+Imagen";
+            e.currentTarget.src = "https://via.placeholder.com/800x600?text=Sin+Imagen";
           }}
         />
 
@@ -149,11 +129,7 @@ const PropertyCard = ({ property, onFavorite }) => {
           className="absolute top-3 right-3 w-10 h-10 bg-black/75 hover:bg-black/90 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all duration-200 shadow-xl border border-white/20 z-10"
           aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
         >
-          {isFavorite ? (
-            <FaHeart className="text-red-500" size={18} />
-          ) : (
-            <FaRegHeart size={18} />
-          )}
+          {isFavorite ? <FaHeart className="text-red-500" size={18} /> : <FaRegHeart size={18} />}
         </motion.button>
 
         {/* Precio */}
@@ -166,7 +142,6 @@ const PropertyCard = ({ property, onFavorite }) => {
                 </span>
               </span>
             </div>
-
             <div className="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center backdrop-blur-sm border border-primary/30 flex-shrink-0">
               <FaArrowRight className="text-primary" size={16} />
             </div>
@@ -174,22 +149,17 @@ const PropertyCard = ({ property, onFavorite }) => {
         </div>
       </div>
 
-      {/* Contenido (más compacto en móvil) */}
+      {/* Contenido */}
       <div className="p-3 sm:p-5">
-        {/* Tipo de propiedad */}
         <div className="flex items-center gap-2 text-primary text-[11px] sm:text-sm font-bold mb-2">
           <FaHome className="text-base sm:text-lg" />
-          <span className="uppercase tracking-wide">
-            {getPropertyType(property.type)}
-          </span>
+          <span className="uppercase tracking-wide">{getPropertyType(property.type)}</span>
         </div>
 
-        {/* Título (un poquito más pequeño en móvil) */}
         <h3 className="text-sm sm:text-lg font-bold text-white mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-snug">
           {property.title || "Propiedad sin título"}
         </h3>
 
-        {/* ✅ Ubicación: ciudad visible SIEMPRE primero */}
         <div className="flex items-start gap-2 text-slate-300 text-xs sm:text-sm mb-3 pb-3 border-b border-slate-800">
           <FaMapMarkerAlt className="mt-0.5 flex-shrink-0 text-primary" size={14} />
           <span className="min-w-0">
@@ -199,40 +169,28 @@ const PropertyCard = ({ property, onFavorite }) => {
             {property.neighborhood ? (
               <span className="text-slate-400">{" • "}{property.neighborhood}</span>
             ) : null}
-            <span className="block text-slate-500 line-clamp-1">
-              {addressText}
-            </span>
+            <span className="block text-slate-500 line-clamp-1">{addressText}</span>
           </span>
         </div>
 
-        {/* Características */}
         <div className="grid grid-cols-3 gap-2 mb-3 sm:mb-4">
           <div className="flex flex-col items-center p-2 bg-slate-800/40 rounded-lg hover:bg-slate-800 transition-colors">
             <FaRulerCombined className="text-primary mb-1.5" size={16} />
-            <span className="text-white font-black text-sm leading-none">
-              {areaValue ? String(areaValue) : "—"}
-            </span>
+            <span className="text-white font-black text-sm leading-none">{areaValue ? String(areaValue) : "—"}</span>
             <span className="text-slate-400 text-[10px] mt-0.5">m²</span>
           </div>
-
           <div className="flex flex-col items-center p-2 bg-slate-800/40 rounded-lg hover:bg-slate-800 transition-colors">
             <FaBed className="text-primary mb-1.5" size={16} />
-            <span className="text-white font-black text-sm leading-none">
-              {roomsValue !== null && roomsValue !== undefined ? String(roomsValue) : "—"}
-            </span>
+            <span className="text-white font-black text-sm leading-none">{roomsValue !== null && roomsValue !== undefined ? String(roomsValue) : "—"}</span>
             <span className="text-slate-400 text-[10px] mt-0.5">Hab.</span>
           </div>
-
           <div className="flex flex-col items-center p-2 bg-slate-800/40 rounded-lg hover:bg-slate-800 transition-colors">
             <FaBath className="text-primary mb-1.5" size={16} />
-            <span className="text-white font-black text-sm leading-none">
-              {bathsValue !== null && bathsValue !== undefined ? String(bathsValue) : "—"}
-            </span>
+            <span className="text-white font-black text-sm leading-none">{bathsValue !== null && bathsValue !== undefined ? String(bathsValue) : "—"}</span>
             <span className="text-slate-400 text-[10px] mt-0.5">Baños</span>
           </div>
         </div>
 
-        {/* CTA */}
         <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
           <div className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-primary via-yellow-500 to-primary text-slate-900 font-black text-center rounded-xl group-hover:shadow-lg group-hover:shadow-primary/40 transition-all duration-300 flex items-center justify-center gap-2 text-sm">
             Ver detalles

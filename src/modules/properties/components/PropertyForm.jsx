@@ -638,16 +638,16 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     <span className="text-light font-semibold">Ubicación en el mapa</span>
                   </div>
                   <LocationPicker
-                    latitude={formData.latitude}
-                    longitude={formData.longitude}
-                    address={formData.address}
-                    neighborhood={formData.neighborhood}
-                    city={formData.city}
-                    department={formData.department}
-                    onChange={({ latitude, longitude }) => {
-                      setFormData((prev) => ({ ...prev, latitude, longitude }));
-                    }}
-                  />
+  latitude={formData.latitude}
+  longitude={formData.longitude}
+  address={formData.address}
+  neighborhood={formData.neighborhood}
+  city={formData.city}
+  department={formData.department}
+  onChange={({ latitude, longitude }) => {
+    setFormData((prev) => ({ ...prev, latitude, longitude }));
+  }}
+/>
                 </div>
               </div>
             </div>

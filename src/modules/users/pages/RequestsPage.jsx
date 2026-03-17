@@ -11,18 +11,25 @@ import {
   FaExclamationTriangle,
   FaPhone
 } from 'react-icons/fa';
-
 import { requestService } from '../services/request.service';
 import { userService } from '../services/user.service';
-import { USER_ROLES, USER_ROLE_LABELS } from '../types/user.types';
+import {
+  USER_ROLES,
+  USER_ROLE_LABELS,
+  hasPermission // ✅
+} from '../types/user.types';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { auth } from '../../../core/config/firebase.config';
+import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
 
 const CREATE_USER_FUNCTION_URL =
   'https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net/createUserByAdmin';
 
 const RequestsPage = () => {
   const { currentUser } = useAuth();
+
+  // ✅ Reemplaza isAdmin — solo admin puede gestionar solicitudes
+  const canManage = hasPermission(currentUser?.role, 'users', 'create');
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +40,12 @@ const RequestsPage = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.MEMBER);
 
-  const isAdmin = currentUser?.role === USER_ROLES.ADMIN;
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   useEffect(() => {
     loadRequests();
@@ -64,9 +76,7 @@ const RequestsPage = () => {
   const createUserByAdmin = async (payload) => {
     const user = auth.currentUser;
     if (!user) throw new Error('No estás autenticado');
-
     const token = await user.getIdToken();
-
     const response = await fetch(CREATE_USER_FUNCTION_URL, {
       method: 'POST',
       headers: {
@@ -75,28 +85,20 @@ const RequestsPage = () => {
       },
       body: JSON.stringify({ data: payload })
     });
-
     const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(body.error || 'Error creando usuario');
-    }
-
+    if (!response.ok) throw new Error(body.error || 'Error creando usuario');
     return body;
   };
 
   const handleApprove = async () => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden aprobar solicitudes');
+    if (!canManage) {
+      toast.error('No tienes permisos para aprobar solicitudes');
       return;
     }
-
     if (!selectedRequest?.id || !selectedRequest?.email) return;
 
     setProcessingId(selectedRequest.id);
-
     try {
-      // 1) Verificar si el usuario ya existe (en tu app: users/{email})
       let userExists = false;
       try {
         await userService.getUserById(selectedRequest.email);
@@ -106,15 +108,12 @@ const RequestsPage = () => {
       }
 
       if (userExists) {
-        // Usuario existe: solo actualizar rol/estado
         await userService.updateUser(selectedRequest.email, {
           role: selectedRole,
           status: 'active'
         });
       } else {
-        // Usuario NO existe: crear por Cloud Function (Admin SDK)
         const defaultPassword = Math.random().toString(36).slice(-8) + 'Aa1!';
-
         await createUserByAdmin({
           displayName: selectedRequest.name || '',
           email: selectedRequest.email,
@@ -123,8 +122,6 @@ const RequestsPage = () => {
           status: 'active',
           password: defaultPassword
         });
-
-        // Enviar email para resetear contraseña
         try {
           await userService.sendPasswordReset(selectedRequest.email);
         } catch (emailError) {
@@ -132,7 +129,6 @@ const RequestsPage = () => {
         }
       }
 
-      // 2) Aprobar solicitud
       await requestService.approveRequest(
         selectedRequest.id,
         selectedRole,
@@ -156,85 +152,85 @@ const RequestsPage = () => {
     }
   };
 
-  const handleReject = async (request) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden rechazar solicitudes');
+  const handleReject = (request) => {
+    if (!canManage) {
+      toast.error('No tienes permisos para rechazar solicitudes');
       return;
     }
-
-    if (!window.confirm(`¿Rechazar solicitud de ${request.name}?`)) return;
-
-    setProcessingId(request.id);
-    try {
-      await requestService.rejectRequest(request.id, currentUser.email);
-      toast.success('Solicitud rechazada');
-      await loadRequests();
-    } catch (error) {
-      console.error('Error rechazando solicitud:', error);
-      toast.error('Error al rechazar solicitud');
-    } finally {
-      setProcessingId(null);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Rechazar solicitud',
+      message: `¿Seguro que quieres rechazar la solicitud de ${request.name}?`,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setProcessingId(request.id);
+        try {
+          await requestService.rejectRequest(request.id, currentUser.email);
+          toast.success('Solicitud rechazada');
+          await loadRequests();
+        } catch (error) {
+          console.error('Error rechazando solicitud:', error);
+          toast.error('Error al rechazar solicitud');
+        } finally {
+          setProcessingId(null);
+        }
+      },
+    });
   };
 
-  const handleDelete = async (requestId) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden eliminar solicitudes');
+  const handleDelete = (requestId) => {
+    if (!canManage) {
+      toast.error('No tienes permisos para eliminar solicitudes');
       return;
     }
-
-    if (!window.confirm('¿Eliminar esta solicitud?')) return;
-
-    try {
-      await requestService.deleteRequest(requestId);
-      toast.success('Solicitud eliminada');
-      await loadRequests();
-    } catch (error) {
-      console.error('Error eliminando solicitud:', error);
-      toast.error('Error al eliminar solicitud');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Eliminar solicitud',
+      message: '¿Seguro que quieres eliminar esta solicitud? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await requestService.deleteRequest(requestId);
+          toast.success('Solicitud eliminada');
+          await loadRequests();
+        } catch (error) {
+          console.error('Error eliminando solicitud:', error);
+          toast.error('Error al eliminar solicitud');
+        }
+      },
+    });
   };
 
   const getStatusBadge = (status) => {
     const styles = {
-      pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      approved: 'bg-green-500/10 text-green-500 border-green-500/30',
-      rejected: 'bg-red-500/10 text-red-500 border-red-500/30'
+      pending:  'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+      approved: 'bg-green-500/10  text-green-500  border-green-500/30',
+      rejected: 'bg-red-500/10    text-red-500    border-red-500/30'
     };
-
-    const labels = {
-      pending: 'Pendiente',
-      approved: 'Aprobada',
-      rejected: 'Rechazada'
-    };
-
-    const icons = {
-      pending: <FaClock />,
+    const labels = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
+    const icons  = {
+      pending:  <FaClock />,
       approved: <FaCheckCircle />,
       rejected: <FaTimesCircle />
     };
-
     return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${styles[status]}`}
-      >
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${styles[status]}`}>
         {icons[status]}
         {labels[status]}
       </span>
     );
   };
 
-  const stats = useMemo(
-    () => ({
-      pending: requests.filter((r) => r.status === 'pending').length,
-      approved: requests.filter((r) => r.status === 'approved').length,
-      rejected: requests.filter((r) => r.status === 'rejected').length
-    }),
-    [requests]
-  );
+  const stats = useMemo(() => ({
+    pending:  requests.filter((r) => r.status === 'pending').length,
+    approved: requests.filter((r) => r.status === 'approved').length,
+    rejected: requests.filter((r) => r.status === 'rejected').length
+  }), [requests]);
 
   return (
     <div className="px-4 py-6 space-y-6">
+
+      {/* ENCABEZADO */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -250,6 +246,7 @@ const RequestsPage = () => {
         </div>
       </motion.div>
 
+      {/* ESTADÍSTICAS */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -293,52 +290,29 @@ const RequestsPage = () => {
         </div>
       </motion.div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('pending')}
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-            filter === 'pending'
-              ? 'bg-primary text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
-        >
-          Pendientes
-        </button>
-
-        <button
-          onClick={() => setFilter('approved')}
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-            filter === 'approved'
-              ? 'bg-primary text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
-        >
-          Aprobadas
-        </button>
-
-        <button
-          onClick={() => setFilter('rejected')}
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-            filter === 'rejected'
-              ? 'bg-primary text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
-        >
-          Rechazadas
-        </button>
-
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-            filter === 'all'
-              ? 'bg-primary text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
-        >
-          Todas
-        </button>
+      {/* FILTROS DE ESTADO */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { value: 'pending',  label: 'Pendientes' },
+          { value: 'approved', label: 'Aprobadas'  },
+          { value: 'rejected', label: 'Rechazadas' },
+          { value: 'all',      label: 'Todas'      },
+        ].map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setFilter(value)}
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+              filter === value
+                ? 'bg-primary text-slate-900'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {/* LISTADO */}
       {loading ? (
         <div className="card-soft py-16 text-center">
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
@@ -377,7 +351,6 @@ const RequestsPage = () => {
                           <FaEnvelope className="flex-shrink-0" />
                           <span>{request.email}</span>
                         </div>
-
                         {request.phone && (
                           <div className="flex items-center gap-2 text-sm text-slate-400">
                             <FaPhone className="flex-shrink-0" />
@@ -400,7 +373,8 @@ const RequestsPage = () => {
                   </div>
                 </div>
 
-                {isAdmin && request.status === 'pending' && (
+                {/* ✅ Botones aprobar/rechazar — solo si canManage */}
+                {canManage && request.status === 'pending' && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleApproveClick(request)}
@@ -426,7 +400,8 @@ const RequestsPage = () => {
                   </div>
                 )}
 
-                {isAdmin && request.status !== 'pending' && (
+                {/* ✅ Botón eliminar — solo si canManage y no pendiente */}
+                {canManage && request.status !== 'pending' && (
                   <button
                     onClick={() => handleDelete(request.id)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold text-sm transition-all"
@@ -441,6 +416,7 @@ const RequestsPage = () => {
         </div>
       )}
 
+      {/* MODAL APROBAR */}
       {showApproveModal && selectedRequest && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div
@@ -452,28 +428,22 @@ const RequestsPage = () => {
 
             <div className="mb-6">
               <p className="text-slate-300 mb-2">
-                Usuario:{' '}
-                <span className="font-bold text-light">{selectedRequest.name}</span>
+                Usuario: <span className="font-bold text-light">{selectedRequest.name}</span>
               </p>
-
               <p className="text-slate-300 mb-4">
-                Email:{' '}
-                <span className="font-bold text-light">{selectedRequest.email}</span>
+                Email: <span className="font-bold text-light">{selectedRequest.email}</span>
               </p>
 
               <label className="block text-sm text-slate-300 mb-2">
                 Asignar rol <span className="text-red-500">*</span>
               </label>
-
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               >
                 {Object.entries(USER_ROLE_LABELS).map(([roleKey, label]) => (
-                  <option key={roleKey} value={roleKey}>
-                    {label}
-                  </option>
+                  <option key={roleKey} value={roleKey}>{label}</option>
                 ))}
               </select>
 
@@ -490,12 +460,8 @@ const RequestsPage = () => {
               >
                 {processingId ? 'Procesando...' : 'Confirmar aprobación'}
               </button>
-
               <button
-                onClick={() => {
-                  setShowApproveModal(false);
-                  setSelectedRequest(null);
-                }}
+                onClick={() => { setShowApproveModal(false); setSelectedRequest(null); }}
                 className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all"
               >
                 Cancelar
@@ -504,6 +470,16 @@ const RequestsPage = () => {
           </motion.div>
         </div>
       )}
+
+      {/* ConfirmModal rechazar / eliminar */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        confirmText="Sí, confirmar"
+      />
     </div>
   );
 };

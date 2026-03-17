@@ -29,10 +29,20 @@ import {
 import { db } from "../../../core/config/firebase.config";
 import PropertyForm from "../components/PropertyForm";
 import PropertyDetail from "../components/PropertyDetail";
+import ConfirmModal from "../../../shared/components/UI/ConfirmModal"; // ✅
+import { useAuth } from "../../../core/contexts/AuthContext"; // ✅
+import { hasPermission } from "../../users/types/user.types"; // ✅
 
 const PAGE_SIZE = 12;
 
 const PropertyManagement = () => {
+  const { currentUser } = useAuth(); // ✅
+
+  // ✅ Permisos granulares
+  const canCreate = hasPermission(currentUser?.role, "properties", "create");
+  const canUpdate = hasPermission(currentUser?.role, "properties", "update");
+  const canDelete = hasPermission(currentUser?.role, "properties", "delete");
+
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,6 +50,14 @@ const PropertyManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+
+  // ✅ ConfirmModal
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,7 +68,7 @@ const PropertyManagement = () => {
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalDocs, setTotalDocs] = useState(0);
-  const [pageCursors, setPageCursors] = useState({}); // { [pageNumber]: lastDocSnapshot }
+  const [pageCursors, setPageCursors] = useState({});
 
   const totalPages = useMemo(() => {
     const pages = Math.ceil((totalDocs || 0) / PAGE_SIZE);
@@ -97,15 +115,8 @@ const PropertyManagement = () => {
     transition: { delay },
   });
 
-  // Construye filtros "server-friendly" (sin searchTerm; el search lo hacemos en front dentro de la página)
   const buildBaseQuery = () => {
     const constraints = [orderBy("createdAt", "desc")];
-
-    // Estos where se podrían agregar después, pero OJO:
-    // Para no romper por índices/consultas compuestas, aquí de momento paginamos
-    // y filtramos en front dentro de la página (rápido porque son 12 docs).
-    // Si quieres filtros reales en Firestore, lo hacemos en el siguiente paso.
-
     return query(collection(db, "properties"), ...constraints);
   };
 
@@ -116,7 +127,6 @@ const PropertyManagement = () => {
       setTotalDocs(snap.data().count || 0);
     } catch (err) {
       console.error("Error contando propiedades:", err);
-      // Si falla el count, igual funciona la página; solo no sabremos totalPages exacto.
       setTotalDocs(0);
     }
   };
@@ -133,20 +143,18 @@ const PropertyManagement = () => {
       } else {
         const prevCursor = pageCursors[pageNumber - 1];
         if (!prevCursor) {
-          // Si intenta saltar a una página que no tiene cursor cacheado,
-          // primero cargamos secuencialmente hasta obtenerlo.
-          // (Esto pasa si alguien hace click directo a "3" sin haber pasado por "2".)
           await hydrateCursorsUpTo(pageNumber - 1);
         }
         const cursor = pageCursors[pageNumber - 1] || null;
-        qPage = cursor ? query(qBase, startAfter(cursor), limit(PAGE_SIZE)) : query(qBase, limit(PAGE_SIZE));
+        qPage = cursor
+          ? query(qBase, startAfter(cursor), limit(PAGE_SIZE))
+          : query(qBase, limit(PAGE_SIZE));
       }
 
       const snapshot = await getDocs(qPage);
       const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setProperties(data);
 
-      // Guardar cursor para esta página (el último doc)
       const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
       setPageCursors((prev) => ({ ...prev, [pageNumber]: lastDoc }));
 
@@ -159,7 +167,6 @@ const PropertyManagement = () => {
     }
   };
 
-  // Genera cursores hasta cierta página (secuencial)
   const hydrateCursorsUpTo = async (targetPage) => {
     for (let p = 1; p <= targetPage; p++) {
       if (pageCursors[p]) continue;
@@ -177,12 +184,10 @@ const PropertyManagement = () => {
 
       const snap = await getDocs(qPage);
       const last = snap.docs[snap.docs.length - 1] || null;
-
       setPageCursors((prev) => ({ ...prev, [p]: last }));
     }
   };
 
-  // Primera carga
   useEffect(() => {
     (async () => {
       await loadTotalCount();
@@ -191,7 +196,6 @@ const PropertyManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filtrado local (solo sobre la página actual, 12 items)
   const filteredProperties = useMemo(() => {
     let filtered = [...properties];
 
@@ -205,10 +209,10 @@ const PropertyManagement = () => {
       );
     }
 
-    if (filterType !== "all") filtered = filtered.filter((prop) => prop.type === filterType);
+    if (filterType !== "all") filtered = filtered.filter((p) => p.type === filterType);
     if (filterTransaction !== "all")
-      filtered = filtered.filter((prop) => prop.transactionType === filterTransaction);
-    if (filterStatus !== "all") filtered = filtered.filter((prop) => prop.status === filterStatus);
+      filtered = filtered.filter((p) => p.transactionType === filterTransaction);
+    if (filterStatus !== "all") filtered = filtered.filter((p) => p.status === filterStatus);
 
     return filtered;
   }, [properties, searchTerm, filterType, filterTransaction, filterStatus]);
@@ -228,11 +232,11 @@ const PropertyManagement = () => {
         toast.success("Propiedad creada correctamente");
       }
 
-      // Recargar count y página actual (por si cambió el total)
       await loadTotalCount();
-
-      // Si estaba en otra página, se mantiene; si quedó fuera de rango, ajusta.
-      const safePage = Math.min(currentPage, Math.max(1, Math.ceil(((totalDocs || 0) + 1) / PAGE_SIZE)));
+      const safePage = Math.min(
+        currentPage,
+        Math.max(1, Math.ceil(((totalDocs || 0) + 1) / PAGE_SIZE))
+      );
       await loadPage(safePage);
 
       setShowForm(false);
@@ -243,23 +247,30 @@ const PropertyManagement = () => {
     }
   };
 
-  const handleDeleteProperty = async (propertyId) => {
-    try {
-      await deleteDoc(doc(db, "properties", propertyId));
-      toast.success("Propiedad eliminada");
+  // ✅ CAMBIO — antes eliminaba directo sin confirmación
+  const handleDeleteProperty = (propertyId) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Eliminar propiedad",
+      message: "¿Seguro que quieres eliminar esta propiedad? Esta acción no se puede deshacer.",
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await deleteDoc(doc(db, "properties", propertyId));
+          toast.success("Propiedad eliminada");
 
-      await loadTotalCount();
-
-      // Si borras y la página actual quedó vacía, retrocede una.
-      if (properties.length === 1 && currentPage > 1) {
-        await loadPage(currentPage - 1);
-      } else {
-        await loadPage(currentPage);
-      }
-    } catch (error) {
-      console.error("Error eliminando propiedad:", error);
-      toast.error("Error al eliminar");
-    }
+          await loadTotalCount();
+          if (properties.length === 1 && currentPage > 1) {
+            await loadPage(currentPage - 1);
+          } else {
+            await loadPage(currentPage);
+          }
+        } catch (error) {
+          console.error("Error eliminando propiedad:", error);
+          toast.error("Error al eliminar");
+        }
+      },
+    });
   };
 
   const handleEditProperty = (property) => {
@@ -297,25 +308,17 @@ const PropertyManagement = () => {
     loadPage(p);
   };
 
-  // Mostrar máximo 3 botones (1 2 3) centrados alrededor de currentPage
   const pageButtons = useMemo(() => {
     const pages = totalPages;
     const c = currentPage;
 
     if (pages <= 3) return Array.from({ length: pages }, (_, i) => i + 1);
 
-    // Ventana de 3: [c-1, c, c+1] ajustada a límites
     let start = c - 1;
     let end = c + 1;
 
-    if (start < 1) {
-      start = 1;
-      end = 3;
-    }
-    if (end > pages) {
-      end = pages;
-      start = pages - 2;
-    }
+    if (start < 1) { start = 1; end = 3; }
+    if (end > pages) { end = pages; start = pages - 2; }
 
     return [start, start + 1, start + 2];
   }, [totalPages, currentPage]);
@@ -333,13 +336,16 @@ const PropertyManagement = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowForm(true)}
-          className="button-gold inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto"
-        >
-          <FaPlus />
-          Nueva Propiedad
-        </button>
+        {/* ✅ Solo visible si puede crear */}
+        {canCreate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="button-gold inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto"
+          >
+            <FaPlus />
+            Nueva Propiedad
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -422,13 +428,15 @@ const PropertyManagement = () => {
         <div className="text-center py-12 bg-slate-900/50 border border-slate-800 rounded-2xl">
           <FaHome className="text-6xl text-slate-700 mx-auto mb-4" />
           <p className="text-slate-400 text-lg">No se encontraron propiedades en esta página</p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="mt-4 button-gold inline-flex items-center gap-2"
-          >
-            <FaPlus />
-            Crear propiedad
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-4 button-gold inline-flex items-center gap-2"
+            >
+              <FaPlus />
+              Crear propiedad
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -509,6 +517,7 @@ const PropertyManagement = () => {
                   <StatusBadge status={property.status} />
                 </div>
 
+                {/* ✅ Botones controlados por permisos */}
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={(e) => {
@@ -522,27 +531,31 @@ const PropertyManagement = () => {
                     PDF
                   </button>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditProperty(property);
-                    }}
-                    className="flex-1 px-3 py-2 bg-primary/15 hover:bg-primary/25 text-primary rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border border-primary/25"
-                  >
-                    <FaEdit />
-                    Editar
-                  </button>
+                  {canUpdate && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditProperty(property);
+                      }}
+                      className="flex-1 px-3 py-2 bg-primary/15 hover:bg-primary/25 text-primary rounded-xl transition-colors flex items-center justify-center gap-2 text-sm border border-primary/25"
+                    >
+                      <FaEdit />
+                      Editar
+                    </button>
+                  )}
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteProperty(property.id);
-                    }}
-                    className="px-3 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-300 rounded-xl transition-colors flex items-center justify-center border border-red-500/25"
-                    title="Eliminar"
-                  >
-                    <FaTrash />
-                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProperty(property.id);
+                      }}
+                      className="px-3 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-300 rounded-xl transition-colors flex items-center justify-center border border-red-500/25"
+                      title="Eliminar"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -606,15 +619,21 @@ const PropertyManagement = () => {
               setShowDetail(false);
               setSelectedProperty(null);
             }}
-            onEdit={(prop) => {
-              setSelectedProperty(prop);
-              setShowForm(true);
-              setShowDetail(false);
-            }}
-            onDelete={handleDeleteProperty}
+            onEdit={canUpdate ? handleEditProperty : null}
+            onDelete={canDelete ? handleDeleteProperty : null}
           />
         )}
       </AnimatePresence>
+
+      {/* ✅ ConfirmModal eliminación */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText="Sí, eliminar"
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "inmobiliaria-ryb-y-asociados"
-  }
+  },
+  "targets": {
+    "inmobiliaria-ryb-y-asociados": {
+      "hosting": {
+        "production": [
+          "inmobiliaria-ryb-y-asociados"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

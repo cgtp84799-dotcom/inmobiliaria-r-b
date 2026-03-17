@@ -25,8 +25,8 @@ import {
   FaCheckCircle,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
+import ConfirmModal from "../../../shared/components/UI/ConfirmModal"; // ✅ NUEVO
 
-// Formatear precio
 const formatPrice = (price) => {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -35,7 +35,6 @@ const formatPrice = (price) => {
   }).format(price || 0);
 };
 
-// Formatear fecha
 const formatDate = (timestamp) => {
   if (!timestamp) return "N/A";
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -50,13 +49,20 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showImageModal, setShowImageModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // ✅ Amenidades: compactas y con "ver más"
   const [amenitiesExpanded, setAmenitiesExpanded] = useState(false);
 
-  // ✅ FIX: Bloquear scroll del fondo y conservar la posición
+  // ✅ NUEVO — estado del modal de confirmación
+  const [confirmModal, setConfirmModal] = useState(false);
+
   useEffect(() => {
     const scrollY = window.scrollY;
+<<<<<<< Updated upstream
+=======
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+>>>>>>> Stashed changes
 
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
@@ -64,16 +70,22 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
     document.body.style.width = "100%";
 
     return () => {
+<<<<<<< Updated upstream
       document.body.style.overflow = "";
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.width = "";
 
+=======
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+>>>>>>> Stashed changes
       window.scrollTo(0, scrollY);
     };
   }, []);
 
-  // ✅ Cerrar con ESC
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose?.();
@@ -91,7 +103,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
   const AMENITIES_COLLAPSED_COUNT = 10;
   const visibleAmenities = amenitiesExpanded ? amenities : amenities.slice(0, AMENITIES_COLLAPSED_COUNT);
 
-  // Navegación de imágenes (evitar modulo con 0)
   const nextImage = () => {
     if (!images.length) return;
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
@@ -101,14 +112,12 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  // Calcular comisión
   const calculateCommission = () => {
     const price = parseFloat(property.price) || 0;
     const percentage = parseFloat(property.commissionPercentage) || 0;
     return price * (percentage / 100);
   };
 
-  // Generar Ficha Técnica PDF
   const handleGeneratePDF = async () => {
     try {
       toast.loading("Generando ficha técnica...", { id: "pdf-generation" });
@@ -120,11 +129,14 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
     }
   };
 
-  // Eliminar propiedad
-  const handleDelete = async () => {
-    const confirmed = window.confirm("¿Estás seguro de eliminar esta propiedad? Esta acción no se puede deshacer.");
-    if (!confirmed) return;
+  
+  const handleDelete = () => {
+    setConfirmModal(true);
+  };
 
+ 
+  const confirmDelete = async () => {
+    setConfirmModal(false);
     setIsDeleting(true);
     try {
       await onDelete(property.id);
@@ -138,13 +150,11 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
     }
   };
 
-  // Descargar documento
   const handleDownloadDocument = (doc) => {
     window.open(doc.url, "_blank");
     toast.success(`Descargando ${doc.name}`);
   };
 
-  // Badge de estado
   const StatusBadge = ({ status }) => {
     const colors = {
       disponible: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -171,7 +181,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        // ✅ FIX: overlay SIN scroll (antes tenía overflow-y-auto)
         className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overscroll-contain"
         onClick={(e) => e.target === e.currentTarget && onClose?.()}
       >
@@ -301,7 +310,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.area} m²</p>
                       </div>
                     )}
-
                     {property.rooms && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaBed className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -309,7 +317,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.rooms}</p>
                       </div>
                     )}
-
                     {property.bathrooms && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaBath className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -317,7 +324,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.bathrooms}</p>
                       </div>
                     )}
-
                     {property.parkingSpots && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaCar className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -325,7 +331,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.parkingSpots}</p>
                       </div>
                     )}
-
                     {property.builtArea && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaHome className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -333,7 +338,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.builtArea} m²</p>
                       </div>
                     )}
-
                     {property.floors && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaHome className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -341,7 +345,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.floors}</p>
                       </div>
                     )}
-
                     {property.yearBuilt && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaCalendar className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -349,7 +352,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-light font-bold text-sm sm:text-base">{property.yearBuilt}</p>
                       </div>
                     )}
-
                     {property.stratum && (
                       <div className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center">
                         <FaCheckCircle className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
@@ -405,18 +407,10 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                   </h3>
 
                   <div className="space-y-2 text-slate-300 text-sm">
-                    <p>
-                      <span className="text-slate-500">Dirección:</span> {property.address}
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Barrio:</span> {property.neighborhood || "N/A"}
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Ciudad:</span> {property.city}
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Departamento:</span> {property.department}
-                    </p>
+                    <p><span className="text-slate-500">Dirección:</span> {property.address}</p>
+                    <p><span className="text-slate-500">Barrio:</span> {property.neighborhood || "N/A"}</p>
+                    <p><span className="text-slate-500">Ciudad:</span> {property.city}</p>
+                    <p><span className="text-slate-500">Departamento:</span> {property.department}</p>
                   </div>
 
                   <div className="mt-4 bg-slate-800 rounded-lg h-64 overflow-hidden">
@@ -424,7 +418,10 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       address={property.address}
                       city={property.city}
                       department={property.department}
+<<<<<<< Updated upstream
                       neighborhood={property.neighborhood}
+=======
+>>>>>>> Stashed changes
                       latitude={property.latitude}
                       longitude={property.longitude}
                     />
@@ -622,20 +619,14 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
             {images.length > 1 && (
               <>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    prevImage();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); prevImage(); }}
                   className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
                   aria-label="Anterior"
                 >
                   <FaChevronLeft className="text-white text-xl" />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    nextImage();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); nextImage(); }}
                   className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
                   aria-label="Siguiente"
                 >
@@ -646,6 +637,16 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ NUEVO — modal de confirmación de eliminación */}
+      <ConfirmModal
+        isOpen={confirmModal}
+        title="Eliminar propiedad"
+        message={`¿Seguro que quieres eliminar "${property.title}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirmModal(false)}
+        confirmText="Sí, eliminar"
+      />
     </>
   );
 };

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
+<<<<<<< Updated upstream
 // SEO: usamos document.title + meta tags directos (sin react-helmet-async)
+=======
+import { Helmet } from "react-helmet-async";
+>>>>>>> Stashed changes
 import {
   FaBed,
   FaBath,
@@ -19,11 +23,43 @@ import {
   FaLayerGroup,
   FaCalendarAlt,
 } from "react-icons/fa";
+<<<<<<< Updated upstream
+=======
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+>>>>>>> Stashed changes
 import toast from "react-hot-toast";
 import propertyService from "../../properties/services/property.service";
 import ImageGallery from "../components/ImageGallery";
 import PropertyContactForm from "../components/PropertyContactForm";
+<<<<<<< Updated upstream
 import PropertyMap from "../../properties/components/PropertyMap";
+=======
+
+import L from "leaflet";
+import icon from "leaflet/dist/images/marker-icon.png";
+import iconShadow from "leaflet/dist/images/marker-shadow.png";
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+>>>>>>> Stashed changes
+
+// ✅ NUEVO — Componente para centrar el mapa cuando cambian las coordenadas
+const MapUpdater = ({ position }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView(position, 16);
+    }
+  }, [position, map]);
+  return null;
+};
 
 const PropertyDetailPage = () => {
   const { id } = useParams();
@@ -31,6 +67,11 @@ const PropertyDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
+
+  // ✅ NUEVO — estado para mapa con geocoding
+  const [mapPosition, setMapPosition] = useState(null);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
     loadProperty();
@@ -48,6 +89,82 @@ const PropertyDetailPage = () => {
       setLoading(false);
     }
   };
+
+  // ✅ NUEVO — Resolver coordenadas del mapa cuando la propiedad carga
+  useEffect(() => {
+    if (!property) return;
+
+    const controller = new AbortController();
+
+    const resolveMapPosition = async () => {
+      setMapLoading(true);
+      setMapError(false);
+
+      // PRIORIDAD 1: coordenadas guardadas en Firestore
+      const lat = parseFloat(property.latitude);
+      const lng = parseFloat(property.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        setMapPosition([lat, lng]);
+        setMapLoading(false);
+        return;
+      }
+
+      // PRIORIDAD 2: geocoding con Nominatim
+      const address = property.address || "";
+      const city = property.city || "";
+      const department = property.department || "Caldas";
+
+      if (!address && !city) {
+        setMapPosition([5.2383, -75.7850]); // Anserma default
+        setMapError(true);
+        setMapLoading(false);
+        return;
+      }
+
+      try {
+        // Intento 1: dirección completa
+        const searchQuery = `${address}, ${city}, ${department}, Colombia`;
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(searchQuery)}&format=json&limit=1&countrycodes=co`,
+          { signal: controller.signal, headers: { "Accept-Language": "es" } }
+        );
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+          setMapPosition([parseFloat(data[0].lat), parseFloat(data[0].lon)]);
+          setMapLoading(false);
+          return;
+        }
+
+        // Intento 2: solo ciudad
+        const cityResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(`${city}, ${department}, Colombia`)}&format=json&limit=1&countrycodes=co`,
+          { signal: controller.signal, headers: { "Accept-Language": "es" } }
+        );
+        const cityData = await cityResponse.json();
+
+        if (cityData && cityData.length > 0) {
+          setMapPosition([parseFloat(cityData[0].lat), parseFloat(cityData[0].lon)]);
+          setMapError(true); // ubicación aproximada
+        } else {
+          setMapPosition([5.2383, -75.7850]);
+          setMapError(true);
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        console.error("Error geocoding:", err);
+        setMapPosition([5.2383, -75.7850]);
+        setMapError(true);
+      } finally {
+        setMapLoading(false);
+      }
+    };
+
+    resolveMapPosition();
+    return () => controller.abort();
+  }, [property]);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat("es-CO", {
@@ -132,6 +249,7 @@ const PropertyDetailPage = () => {
 
   const seoImage = property?.images?.[0] || "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png";
   const seoUrl = `https://inmobiliaria-ryb-y-asociados.com/propiedades/${id}`;
+<<<<<<< Updated upstream
 
   // SEO: actualizar title y meta tags sin react-helmet-async
   useEffect(() => {
@@ -168,6 +286,8 @@ const PropertyDetailPage = () => {
 
     return () => { if (script) script.remove(); };
   }, [property, seoTitle, seoDescription, seoImage, seoUrl]);
+=======
+>>>>>>> Stashed changes
 
   if (loading) {
     return (
@@ -195,6 +315,45 @@ const PropertyDetailPage = () => {
 
   return (
     <>
+<<<<<<< Updated upstream
+=======
+      {/* ✅ SEO DINÁMICO POR PROPIEDAD */}
+      <Helmet>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
+        <link rel="canonical" href={seoUrl} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:image" content={seoImage} />
+        <meta property="og:url" content={seoUrl} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDescription} />
+        <meta name="twitter:image" content={seoImage} />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "RealEstateListing",
+          "name": property.title,
+          "description": seoDescription,
+          "url": seoUrl,
+          "image": property.images || [],
+          "offers": {
+            "@type": "Offer",
+            "price": property.price,
+            "priceCurrency": "COP",
+            "availability": "https://schema.org/InStock"
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": property.address || "",
+            "addressLocality": property.city || "Anserma",
+            "addressRegion": property.department || "Caldas",
+            "addressCountry": "CO"
+          }
+        })}</script>
+      </Helmet>
+
+>>>>>>> Stashed changes
       <div className="min-h-screen bg-dark">
         <div className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
           {/* Header con botones */}
@@ -407,6 +566,7 @@ const PropertyDetailPage = () => {
                   Ubicación
                 </h3>
 
+<<<<<<< Updated upstream
                 <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden">
                   <PropertyMap
                     address={property.address}
@@ -416,6 +576,49 @@ const PropertyDetailPage = () => {
                     latitude={property.latitude}
                     longitude={property.longitude}
                   />
+=======
+                <div className="w-full h-64 sm:h-72 lg:h-80 rounded-xl overflow-hidden relative">
+                  {mapLoading ? (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                      <div className="text-center">
+                        <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                        <p className="text-slate-400 text-sm">Buscando ubicación...</p>
+                      </div>
+                    </div>
+                  ) : mapPosition ? (
+                    <>
+                      <MapContainer
+                        center={mapPosition}
+                        zoom={16}
+                        scrollWheelZoom={false}
+                        className="w-full h-full"
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <Marker position={mapPosition}>
+                          <Popup>
+                            <strong>{property.title}</strong>
+                            <br />
+                            {property.address}
+                          </Popup>
+                        </Marker>
+                        <MapUpdater position={mapPosition} />
+                      </MapContainer>
+
+                      {mapError && (
+                        <div className="absolute top-2 left-2 bg-yellow-500/90 text-slate-900 text-xs px-2 py-1 rounded z-[1000]">
+                          Ubicación aproximada
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                      <p className="text-slate-500 text-sm">No se pudo cargar el mapa</p>
+                    </div>
+                  )}
+>>>>>>> Stashed changes
                 </div>
 
                 <p className="text-slate-400 text-xs sm:text-sm mt-3">

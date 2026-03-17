@@ -45,14 +45,22 @@ import {
   getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
-import moment from 'moment';
-import 'moment/locale/es';
-
-moment.locale('es');
+import { parseISO, format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useAuth } from '../../../core/contexts/AuthContext'; // ✅
+import { hasPermission } from '../../users/types/user.types'; // ✅
+import ConfirmModal from '../../../shared/components/UI/ConfirmModal'; // ✅
 
 const PAGE_SIZE = 12;
 
 const ClientManagement = () => {
+  const { currentUser } = useAuth(); // ✅
+
+  // ✅ Permisos granulares
+  const canCreate = hasPermission(currentUser?.role, 'clients', 'create');
+  const canUpdate = hasPermission(currentUser?.role, 'clients', 'update');
+  const canDelete = hasPermission(currentUser?.role, 'clients', 'delete');
+
   const [clients, setClients] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +82,15 @@ const ClientManagement = () => {
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalDocs, setTotalDocs] = useState(0);
-  const [pageCursors, setPageCursors] = useState({}); // { [pageNumber]: lastDocSnapshot }
+  const [pageCursors, setPageCursors] = useState({});
+
+  // ✅ ConfirmModal
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -94,22 +110,15 @@ const ClientManagement = () => {
     return pages <= 0 ? 1 : pages;
   }, [totalDocs]);
 
-  // Base query (orden estable para cursores)
-  const buildClientsBaseQuery = () => {
-    // Importante: paginamos por createdAt (string ISO), que existe en los nuevos.
-    // Para docs viejos que solo tengan fechaRegistro, quedan "fuera" del orden consistente;
-    // como tú ya estás guardando createdAt en nuevas altas, no se rompe lo actual.
-    return query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
-  };
+  const buildClientsBaseQuery = () =>
+    query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
 
   const loadTotalClientsCount = async () => {
     try {
-      const qBase = buildClientsBaseQuery();
-      const snap = await getCountFromServer(qBase);
+      const snap = await getCountFromServer(buildClientsBaseQuery());
       setTotalDocs(snap.data().count || 0);
     } catch (err) {
-      console.error('❌ Error contando clientes:', err);
-      // Si falla, no rompemos la pantalla
+      console.error('Error contando clientes:', err);
       setTotalDocs(0);
     }
   };
@@ -146,9 +155,7 @@ const ClientManagement = () => {
         qPage = query(qBase, limit(PAGE_SIZE));
       } else {
         const prevCursor = pageCursors[pageNumber - 1];
-        if (!prevCursor) {
-          await hydrateCursorsUpTo(pageNumber - 1);
-        }
+        if (!prevCursor) await hydrateCursorsUpTo(pageNumber - 1);
         const cursor = pageCursors[pageNumber - 1] || null;
         qPage = cursor
           ? query(qBase, startAfter(cursor), limit(PAGE_SIZE))
@@ -171,7 +178,6 @@ const ClientManagement = () => {
           ubicacionInteres: docData.ubicacionInteres || docData.location || '',
           notas: docData.notas || docData.notes || '',
           propiedadVinculada: docData.propiedadVinculada || docData.linkedProperty || '',
-          // fallback por compatibilidad (no se usa para paginar, solo para mostrar)
           fechaRegistro: docData.fechaRegistro || docData.createdAt || new Date().toISOString(),
           ...docData
         };
@@ -179,18 +185,17 @@ const ClientManagement = () => {
 
       const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
       setPageCursors((prev) => ({ ...prev, [pageNumber]: lastDoc }));
-
       setClients(data);
       setCurrentPage(pageNumber);
     } catch (error) {
-      console.error('❌ Error cargando clientes:', error);
+      console.error('Error cargando clientes:', error);
       toast.error(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Primera carga: count + página 1
+  // Primera carga
   useEffect(() => {
     (async () => {
       await loadTotalClientsCount();
@@ -199,32 +204,27 @@ const ClientManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // CARGAR PROPIEDADES (solo cuando el formulario esté abierto)
+  // Cargar propiedades solo cuando el formulario está abierto
   useEffect(() => {
     let active = true;
 
     const loadPropsForSelect = async () => {
       if (!showForm) return;
-
       try {
         const q = query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(200));
         const snapshot = await getDocs(q);
         const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         if (active) setProperties(data);
       } catch (err) {
-        console.error('❌ Error cargando propiedades:', err);
-        // No bloquea el formulario
+        console.error('Error cargando propiedades:', err);
       }
     };
 
     loadPropsForSelect();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [showForm]);
 
-  // CARGAR EVENTOS CON ASESOR (igual que tu versión, solo cuando hay clientDetail)
+  // Cargar eventos del cliente en el modal de detalle
   useEffect(() => {
     if (!clientDetail?.id) {
       setClientEvents([]);
@@ -244,9 +244,9 @@ const ClientManagement = () => {
         const eventsData = await Promise.all(
           snapshot.docs.map(async (docSnap) => {
             const data = docSnap.data();
-            const dateStr = data.date || moment().format('YYYY-MM-DD');
+            const dateStr = data.date || new Date().toISOString().split('T')[0];
             const timeStr = data.time || '09:00';
-            const start = moment(`${dateStr}T${timeStr}`).toDate();
+            const start = parseISO(`${dateStr}T${timeStr}`);
 
             let agentName = data.agentName || '';
 
@@ -261,27 +261,23 @@ const ClientManagement = () => {
                   }
                 } catch (err) {
                   console.warn('No se pudo obtener usuario:', err);
-                  agentName = data.createdBy ? data.createdBy.substring(0, 8) + '...' : 'Sin asignar';
+                  agentName = data.createdBy
+                    ? data.createdBy.substring(0, 8) + '...'
+                    : 'Sin asignar';
                 }
               }
             }
 
-            return {
-              id: docSnap.id,
-              ...data,
-              start,
-              agentName
-            };
+            return { id: docSnap.id, ...data, start, agentName };
           })
         );
 
         eventsData.sort((a, b) => b.start - a.start);
-
         setClientEvents(eventsData);
         setLoadingEvents(false);
       },
       (error) => {
-        console.error('❌ Error cargando eventos:', error);
+        console.error('Error cargando eventos:', error);
         setClientEvents([]);
         setLoadingEvents(false);
       }
@@ -290,19 +286,17 @@ const ClientManagement = () => {
     return () => unsubscribe();
   }, [clientDetail?.id]);
 
-  // FILTRO (sobre la página actual)
+  // Filtro local sobre la página actual
   const clientesFiltrados = useMemo(() => {
     return clients.filter((cliente) => {
       const cumpleTipo = filtroTipo === 'Todos' || cliente.tipoCliente === filtroTipo;
       const cumpleEstado = filtroEstado === 'Todos' || cliente.estado === filtroEstado;
       const term = busqueda.trim().toLowerCase();
-
       const cumpleBusqueda =
         !term ||
         cliente.nombre?.toLowerCase().includes(term) ||
         cliente.email?.toLowerCase().includes(term) ||
         cliente.telefono?.includes(busqueda);
-
       return cumpleTipo && cumpleEstado && cumpleBusqueda;
     });
   }, [clients, filtroTipo, filtroEstado, busqueda]);
@@ -310,21 +304,11 @@ const ClientManagement = () => {
   const pageButtons = useMemo(() => {
     const pages = totalPages;
     const c = currentPage;
-
     if (pages <= 3) return Array.from({ length: pages }, (_, i) => i + 1);
-
     let start = c - 1;
     let end = c + 1;
-
-    if (start < 1) {
-      start = 1;
-      end = 3;
-    }
-    if (end > pages) {
-      end = pages;
-      start = pages - 2;
-    }
-
+    if (start < 1) { start = 1; end = 3; }
+    if (end > pages) { end = pages; start = pages - 2; }
     return [start, start + 1, start + 2];
   }, [totalPages, currentPage]);
 
@@ -332,24 +316,14 @@ const ClientManagement = () => {
   const handleSaveClient = async (e) => {
     e.preventDefault();
 
-    if (!formData.nombre.trim()) {
-      toast.error('El nombre es obligatorio');
-      return;
-    }
-    if (!formData.telefono.trim()) {
-      toast.error('El teléfono es obligatorio');
-      return;
-    }
+    if (!formData.nombre.trim()) { toast.error('El nombre es obligatorio'); return; }
+    if (!formData.telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
 
     setSubmitting(true);
-
     try {
       if (selectedClient) {
         const clientRef = doc(db, 'clients', selectedClient.id);
-        await updateDoc(clientRef, {
-          ...formData,
-          updatedAt: new Date().toISOString()
-        });
+        await updateDoc(clientRef, { ...formData, updatedAt: new Date().toISOString() });
         toast.success('Cliente actualizado correctamente');
       } else {
         await addDoc(collection(db, 'clients'), {
@@ -362,42 +336,41 @@ const ClientManagement = () => {
       }
 
       await loadTotalClientsCount();
-
-      // Si estabas en una página y cambió el total, recarga esa página (o la 1 si prefieres)
       await loadClientsPage(currentPage);
-
       handleCloseForm();
     } catch (error) {
-      console.error('❌ Error guardando cliente:', error);
+      console.error('Error guardando cliente:', error);
       toast.error(`Error: ${error.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ELIMINAR
-  const handleDeleteClient = async (clientId) => {
-    if (!confirm('¿Estás seguro de eliminar este cliente?')) return;
-
-    try {
-      await deleteDoc(doc(db, 'clients', clientId));
-      toast.success('Cliente eliminado');
-
-      await loadTotalClientsCount();
-
-      // Si borraste el último elemento visible y no estás en la primera, retrocede
-      if (clients.length === 1 && currentPage > 1) {
-        await loadClientsPage(currentPage - 1);
-      } else {
-        await loadClientsPage(currentPage);
-      }
-    } catch (error) {
-      console.error('❌ Error eliminando cliente:', error);
-      toast.error(`Error: ${error.message}`);
-    }
+  // ✅ CAMBIO — antes era confirm() nativo
+  const handleDeleteClient = (clientId) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Eliminar cliente',
+      message: '¿Seguro que quieres eliminar este cliente? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await deleteDoc(doc(db, 'clients', clientId));
+          toast.success('Cliente eliminado');
+          await loadTotalClientsCount();
+          if (clients.length === 1 && currentPage > 1) {
+            await loadClientsPage(currentPage - 1);
+          } else {
+            await loadClientsPage(currentPage);
+          }
+        } catch (error) {
+          console.error('Error eliminando cliente:', error);
+          toast.error(`Error: ${error.message}`);
+        }
+      },
+    });
   };
 
-  // EDITAR
   const handleEditClient = (client) => {
     setSelectedClient(client);
     setFormData({
@@ -415,13 +388,11 @@ const ClientManagement = () => {
     setShowForm(true);
   };
 
-  // VER DETALLE
   const handleViewDetail = (client) => {
     setClientDetail(client);
     setShowDetailModal(true);
   };
 
-  // CERRAR FORM
   const handleCloseForm = () => {
     setShowForm(false);
     setSelectedClient(null);
@@ -439,7 +410,7 @@ const ClientManagement = () => {
     });
   };
 
-  // ICONOS
+  // Helpers de íconos y colores para eventos
   const getTypeIcon = (type) => {
     const icons = {
       visita: FaEye,
@@ -482,7 +453,7 @@ const ClientManagement = () => {
     return colors[status] || 'text-yellow-400';
   };
 
-  // BADGES
+  // Badges
   const TipoBadge = ({ tipo }) => {
     const styles = {
       Lead: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -491,7 +462,6 @@ const ClientManagement = () => {
       Arrendatario: 'bg-green-500/20 text-green-400 border-green-500/30',
       Propietario: 'bg-purple-500/20 text-purple-400 border-purple-500/30'
     };
-
     return (
       <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[tipo] || styles.Lead}`}>
         {tipo}
@@ -506,7 +476,6 @@ const ClientManagement = () => {
       Inactivo: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
       Convertido: 'bg-primary/20 text-primary border-primary/30'
     };
-
     return (
       <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[estado] || styles.Activo}`}>
         {estado}
@@ -514,23 +483,13 @@ const ClientManagement = () => {
     );
   };
 
-  const goPrev = () => {
-    if (currentPage <= 1) return;
-    loadClientsPage(currentPage - 1);
-  };
-
-  const goNext = () => {
-    if (currentPage >= totalPages) return;
-    loadClientsPage(currentPage + 1);
-  };
-
-  const goToPage = (p) => {
-    if (p < 1 || p > totalPages) return;
-    loadClientsPage(p);
-  };
+  const goPrev = () => { if (currentPage <= 1) return; loadClientsPage(currentPage - 1); };
+  const goNext = () => { if (currentPage >= totalPages) return; loadClientsPage(currentPage + 1); };
+  const goToPage = (p) => { if (p < 1 || p > totalPages) return; loadClientsPage(p); };
 
   return (
     <div className="space-y-4 md:space-y-6 p-4 md:p-0">
+
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -540,13 +499,17 @@ const ClientManagement = () => {
             <span className="text-slate-200 font-bold">{totalPages}</span>
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="button-gold inline-flex items-center justify-center gap-2 px-4 md:px-6 py-3 w-full md:w-auto"
-        >
-          <FaPlus />
-          Nuevo Cliente
-        </button>
+
+        {/* ✅ Solo visible si puede crear */}
+        {canCreate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="button-gold inline-flex items-center justify-center gap-2 px-4 md:px-6 py-3 w-full md:w-auto"
+          >
+            <FaPlus />
+            Nuevo Cliente
+          </button>
+        )}
       </div>
 
       {/* FILTROS */}
@@ -589,11 +552,7 @@ const ClientManagement = () => {
           />
 
           <button
-            onClick={() => {
-              setFiltroTipo('Todos');
-              setFiltroEstado('Todos');
-              setBusqueda('');
-            }}
+            onClick={() => { setFiltroTipo('Todos'); setFiltroEstado('Todos'); setBusqueda(''); }}
             className="bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-lg px-4 py-3 transition-colors text-sm md:text-base"
           >
             Limpiar Filtros
@@ -601,7 +560,9 @@ const ClientManagement = () => {
         </div>
 
         <div className="mt-4 text-slate-400 text-xs md:text-sm">
-          Mostrando <span className="text-primary font-semibold">{clientesFiltrados.length}</span> de {clients.length} en esta página
+          Mostrando{' '}
+          <span className="text-primary font-semibold">{clientesFiltrados.length}</span> de{' '}
+          {clients.length} en esta página
         </div>
       </div>
 
@@ -665,7 +626,11 @@ const ClientManagement = () => {
                   <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm">
                     <FaDollarSign className="text-primary flex-shrink-0" />
                     <span className="truncate">
-                      {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(client.presupuesto)}
+                      {new Intl.NumberFormat('es-CO', {
+                        style: 'currency',
+                        currency: 'COP',
+                        minimumFractionDigits: 0
+                      }).format(client.presupuesto)}
                     </span>
                   </div>
                 )}
@@ -700,19 +665,25 @@ const ClientManagement = () => {
                   <FaWhatsapp /> <span className="hidden sm:inline">WhatsApp</span>
                 </a>
 
-                <button
-                  onClick={() => handleEditClient(client)}
-                  className="px-2 md:px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
-                >
-                  <FaEdit /> <span className="hidden sm:inline">Editar</span>
-                </button>
+                {/* ✅ Solo visible si puede editar */}
+                {canUpdate && (
+                  <button
+                    onClick={() => handleEditClient(client)}
+                    className="px-2 md:px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
+                  >
+                    <FaEdit /> <span className="hidden sm:inline">Editar</span>
+                  </button>
+                )}
 
-                <button
-                  onClick={() => handleDeleteClient(client.id)}
-                  className="px-2 md:px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
-                >
-                  <FaTrash /> <span className="hidden sm:inline">Eliminar</span>
-                </button>
+                {/* ✅ Solo visible si puede eliminar */}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDeleteClient(client.id)}
+                    className="px-2 md:px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-semibold"
+                  >
+                    <FaTrash /> <span className="hidden sm:inline">Eliminar</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           ))}
@@ -807,9 +778,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Email
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Email</label>
                     <input
                       type="email"
                       value={formData.email}
@@ -837,9 +806,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Estado
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Estado</label>
                     <select
                       value={formData.estado}
                       onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
@@ -852,9 +819,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Presupuesto (COP)
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Presupuesto (COP)</label>
                     <input
                       type="number"
                       value={formData.presupuesto}
@@ -865,9 +830,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Tipo de propiedad de interés
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Tipo de propiedad de interés</label>
                     <select
                       value={formData.tipoPropiedad}
                       onChange={(e) => setFormData({ ...formData, tipoPropiedad: e.target.value })}
@@ -883,9 +846,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Ubicación de interés
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Ubicación de interés</label>
                     <input
                       type="text"
                       value={formData.ubicacionInteres}
@@ -896,9 +857,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Propiedad vinculada
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Propiedad vinculada</label>
                     <select
                       value={formData.propiedadVinculada}
                       onChange={(e) => setFormData({ ...formData, propiedadVinculada: e.target.value })}
@@ -914,9 +873,7 @@ const ClientManagement = () => {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-slate-400 text-sm mb-2">
-                      Notas adicionales
-                    </label>
+                    <label className="block text-slate-400 text-sm mb-2">Notas adicionales</label>
                     <textarea
                       rows={4}
                       value={formData.notas}
@@ -942,10 +899,7 @@ const ClientManagement = () => {
                     className="flex-1 button-gold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 text-sm md:text-base"
                   >
                     {submitting ? (
-                      <>
-                        <FaSpinner className="animate-spin" />
-                        Guardando...
-                      </>
+                      <><FaSpinner className="animate-spin" /> Guardando...</>
                     ) : (
                       selectedClient ? 'Actualizar' : 'Crear Cliente'
                     )}
@@ -957,7 +911,7 @@ const ClientManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* MODAL DETALLE (tu mismo código; lo dejo igual para no romper nada) */}
+      {/* MODAL DETALLE */}
       <AnimatePresence mode="wait">
         {showDetailModal && clientDetail && (
           <motion.div
@@ -1065,6 +1019,7 @@ const ClientManagement = () => {
                   </div>
                 )}
 
+                {/* Historial de actividad */}
                 <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 md:p-6">
                   <div className="flex items-center justify-between mb-4 md:mb-6">
                     <div>
@@ -1109,10 +1064,7 @@ const ClientManagement = () => {
                           >
                             <div className="absolute left-0 top-0 -translate-x-[9px]">
                               <div
-                                className={`w-3 h-3 md:w-4 md:h-4 rounded-full bg-slate-900 border-2 ${typeColor.replace(
-                                  'text-',
-                                  'border-'
-                                )} flex items-center justify-center`}
+                                className={`w-3 h-3 md:w-4 md:h-4 rounded-full bg-slate-900 border-2 ${typeColor.replace('text-', 'border-')} flex items-center justify-center`}
                               >
                                 <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${typeColor.replace('text-', 'bg-')}`} />
                               </div>
@@ -1129,9 +1081,10 @@ const ClientManagement = () => {
                                   </div>
 
                                   <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs text-slate-400 mb-2">
+                                    {/* ✅ FIX: reemplazado moment por date-fns */}
                                     <span className="flex items-center gap-1">
                                       <FaCalendarAlt size={10} />
-                                      {moment(event.start).format('DD MMM YYYY, HH:mm')}
+                                      {format(event.start, "dd MMM yyyy, HH:mm", { locale: es })}
                                     </span>
                                     <span className="capitalize">{event.type}</span>
 
@@ -1171,6 +1124,7 @@ const ClientManagement = () => {
                   )}
                 </div>
 
+                {/* Acciones del detalle */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 pt-4 md:pt-6 border-t-2 border-slate-700">
                   <a
                     href={`https://wa.me/57${(clientDetail.telefono || '').replace(/\D/g, '')}?text=Hola ${clientDetail.nombre}`}
@@ -1182,23 +1136,36 @@ const ClientManagement = () => {
                     <span>Abrir WhatsApp</span>
                   </a>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDetailModal(false);
-                      setTimeout(() => handleEditClient(clientDetail), 100);
-                    }}
-                    className="w-full bg-primary hover:bg-yellow-400 text-slate-900 font-bold rounded-xl px-4 md:px-6 py-3 md:py-4 transition-all flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base shadow-lg hover:shadow-xl"
-                  >
-                    <FaEdit className="text-xl md:text-2xl" />
-                    <span>Editar cliente</span>
-                  </button>
+                  {/* ✅ Solo visible si puede editar */}
+                  {canUpdate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        setTimeout(() => handleEditClient(clientDetail), 100);
+                      }}
+                      className="w-full bg-primary hover:bg-yellow-400 text-slate-900 font-bold rounded-xl px-4 md:px-6 py-3 md:py-4 transition-all flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base shadow-lg hover:shadow-xl"
+                    >
+                      <FaEdit className="text-xl md:text-2xl" />
+                      <span>Editar cliente</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ ConfirmModal — eliminar cliente */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText="Sí, eliminar"
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

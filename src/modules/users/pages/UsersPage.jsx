@@ -17,24 +17,28 @@ import { userService } from '../services/user.service';
 import {
   USER_ROLES,
   USER_ROLE_LABELS,
-  USER_ROLE_DESCRIPTIONS
+  USER_ROLE_DESCRIPTIONS,
+  hasPermission // ✅
 } from '../types/user.types';
 import UserCard from '../components/UserCard';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
 
 const UsersPage = () => {
   const { currentUser } = useAuth();
+
+  // ✅ Reemplaza isAdmin por permisos granulares
+  const canCreate = hasPermission(currentUser?.role, 'users', 'create');
+  const canUpdate = hasPermission(currentUser?.role, 'users', 'update');
+  const canDelete = hasPermission(currentUser?.role, 'users', 'delete');
+
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const [filters, setFilters] = useState({
-    searchTerm: '',
-    role: '',
-    status: ''
-  });
+  const [filters, setFilters] = useState({ searchTerm: '', role: '', status: '' });
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -47,12 +51,15 @@ const UsersPage = () => {
 
   const [editingUser, setEditingUser] = useState(null);
 
-  // Solo admins pueden gestionar usuarios
-  const isAdmin = currentUser?.role === USER_ROLES.ADMIN;
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Sí, confirmar',
+    onConfirm: null,
+  });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  useEffect(() => { loadUsers(); }, []);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -74,7 +81,6 @@ const UsersPage = () => {
 
   const applyFilters = () => {
     let filtered = [...users];
-
     if (filters.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(user =>
@@ -83,15 +89,8 @@ const UsersPage = () => {
         user.phone?.includes(term)
       );
     }
-
-    if (filters.role) {
-      filtered = filtered.filter(user => user.role === filters.role);
-    }
-
-    if (filters.status) {
-      filtered = filtered.filter(user => user.status === filters.status);
-    }
-
+    if (filters.role) filtered = filtered.filter(user => user.role === filters.role);
+    if (filters.status) filtered = filtered.filter(user => user.status === filters.status);
     setFilteredUsers(filtered);
   };
 
@@ -101,8 +100,8 @@ const UsersPage = () => {
   };
 
   const handleEdit = (user) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden editar usuarios');
+    if (!canUpdate) {
+      toast.error('No tienes permisos para editar usuarios');
       return;
     }
     setEditingUser(user);
@@ -117,37 +116,40 @@ const UsersPage = () => {
     setModalOpen(true);
   };
 
-  const handleDelete = async (user) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden eliminar usuarios');
+  const handleDelete = (user) => {
+    if (!canDelete) {
+      toast.error('No tienes permisos para eliminar usuarios');
       return;
     }
-
     if (user.role === USER_ROLES.ADMIN) {
       toast.error('No se puede eliminar un administrador');
       return;
     }
-
-    if (!window.confirm(`¿Eliminar usuario ${user.displayName || user.email}?`)) return;
-
-    try {
-      await userService.deleteUser(user.id);
-      toast.success('Usuario eliminado');
-      loadUsers();
-    } catch (error) {
-      console.error('Error eliminando usuario:', error);
-      toast.error('Error al eliminar usuario');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Eliminar usuario',
+      message: `¿Seguro que quieres eliminar a ${user.displayName || user.email}? Esta acción no se puede deshacer.`,
+      confirmText: 'Sí, eliminar',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await userService.deleteUser(user.id);
+          toast.success('Usuario eliminado');
+          loadUsers();
+        } catch (error) {
+          console.error('Error eliminando usuario:', error);
+          toast.error('Error al eliminar usuario');
+        }
+      },
+    });
   };
 
   const handleChangeStatus = async (user) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden cambiar de estado');
+    if (!canUpdate) {
+      toast.error('No tienes permisos para cambiar el estado');
       return;
     }
-
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
-
     try {
       await userService.changeUserStatus(user.id, newStatus);
       toast.success(`Usuario ${newStatus === 'active' ? 'activado' : 'desactivado'}`);
@@ -158,39 +160,41 @@ const UsersPage = () => {
     }
   };
 
-  const handleResetPassword = async (user) => {
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden resetear contraseñas');
+  const handleResetPassword = (user) => {
+    if (!canUpdate) {
+      toast.error('No tienes permisos para resetear contraseñas');
       return;
     }
-
-    if (!window.confirm(`¿Enviar email de restablecimiento de contraseña a ${user.email}?`)) return;
-
-    try {
-      await userService.sendPasswordReset(user.email);
-      toast.success('Email de restablecimiento enviado');
-    } catch (error) {
-      console.error('Error al enviar reset:', error);
-      toast.error('Error al enviar email');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Restablecer contraseña',
+      message: `¿Enviar email de restablecimiento de contraseña a ${user.email}?`,
+      confirmText: 'Sí, enviar email',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await userService.sendPasswordReset(user.email);
+          toast.success('Email de restablecimiento enviado');
+        } catch (error) {
+          console.error('Error al enviar reset:', error);
+          toast.error('Error al enviar email');
+        }
+      },
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!isAdmin) {
-      toast.error('Solo administradores pueden crear/editar usuarios');
+    if (!canCreate && !canUpdate) {
+      toast.error('No tienes permisos para esta acción');
       return;
     }
-
     if (!formData.displayName || !formData.email || !formData.role) {
       toast.error('Completa los campos obligatorios');
       return;
     }
-
     try {
       if (editingUser) {
-        // Actualizar
         await userService.updateUser(editingUser.id, {
           displayName: formData.displayName,
           email: formData.email,
@@ -200,12 +204,10 @@ const UsersPage = () => {
         });
         toast.success('Usuario actualizado');
       } else {
-        // Crear
         if (!formData.password || formData.password.length < 6) {
           toast.error('La contraseña debe tener un mínimo de 6 caracteres');
           return;
         }
-
         await userService.createUser(
           {
             displayName: formData.displayName,
@@ -236,20 +238,19 @@ const UsersPage = () => {
     }
   };
 
-  const getUserStats = () => {
-    return {
-      total: users.length,
-      active: users.filter(u => u.status === 'active').length,
-      admins: users.filter(u => u.role === USER_ROLES.ADMIN).length,
-      members: users.filter(u => u.role === USER_ROLES.MEMBER).length,
-      viewers: users.filter(u => u.role === USER_ROLES.VIEWER).length
-    };
-  };
+  const getUserStats = () => ({
+    total: users.length,
+    active: users.filter(u => u.status === 'active').length,
+    admins: users.filter(u => u.role === USER_ROLES.ADMIN).length,
+    members: users.filter(u => u.role === USER_ROLES.MEMBER).length,
+    viewers: users.filter(u => u.role === USER_ROLES.VIEWER).length
+  });
 
   const stats = getUserStats();
 
   return (
     <div className="px-4 py-6 space-y-6">
+
       {/* ENCABEZADO */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -266,7 +267,8 @@ const UsersPage = () => {
           </p>
         </div>
 
-        {isAdmin && (
+        {/* ✅ Solo admin puede crear */}
+        {canCreate && (
           <button
             onClick={() => {
               setEditingUser(null);
@@ -416,7 +418,6 @@ const UsersPage = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            {/* Búsqueda general */}
             <div>
               <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
               <div className="relative">
@@ -434,7 +435,6 @@ const UsersPage = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Rol */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Rol</label>
                 <select
@@ -444,14 +444,11 @@ const UsersPage = () => {
                 >
                   <option value="">Todos los roles</option>
                   {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
+                    <option key={key} value={key}>{label}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Estado */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Estado</label>
                 <select
@@ -467,7 +464,6 @@ const UsersPage = () => {
                 </select>
               </div>
 
-              {/* Botones */}
               <div className="flex items-end gap-3 md:col-span-2">
                 <button
                   onClick={applyFilters}
@@ -491,11 +487,7 @@ const UsersPage = () => {
 
       {/* CONTADOR */}
       {!loading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center justify-between"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <p className="text-slate-400 text-sm">
             <span className="text-primary font-bold">{filteredUsers.length}</span>{' '}
             {filteredUsers.length === 1 ? 'usuario encontrado' : 'usuarios encontrados'}
@@ -541,23 +533,23 @@ const UsersPage = () => {
             <UserCard
               key={user.id}
               user={user}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onChangeStatus={handleChangeStatus}
-              onResetPassword={handleResetPassword}
+              onEdit={canUpdate ? handleEdit : null}           // ✅
+              onDelete={canDelete ? handleDelete : null}       // ✅
+              onChangeStatus={canUpdate ? handleChangeStatus : null} // ✅
+              onResetPassword={canUpdate ? handleResetPassword : null} // ✅
               currentUserRole={currentUser?.role}
             />
           ))}
         </motion.div>
       )}
 
-      {/* MODAL DE CREACIÓN/EDICIÓN */}
-      {modalOpen && (
+      {/* MODAL CREACIÓN/EDICIÓN */}
+      {modalOpen && (canCreate || canUpdate) && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="card-soft max-w-2xl w-full p-6 max-h-90vh overflow-y-auto"
+            className="card-soft max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-2xl font-bold text-primary mb-4">
               {editingUser ? 'Editar usuario' : 'Nuevo usuario'}
@@ -565,7 +557,6 @@ const UsersPage = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Nombre completo */}
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">
                     Nombre completo <span className="text-red-500">*</span>
@@ -579,7 +570,6 @@ const UsersPage = () => {
                   />
                 </div>
 
-                {/* Correo electrónico */}
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">
                     Correo electrónico <span className="text-red-500">*</span>
@@ -594,11 +584,8 @@ const UsersPage = () => {
                   />
                 </div>
 
-                {/* Teléfono */}
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">
-                    Teléfono
-                  </label>
+                  <label className="block text-sm text-slate-300 mb-1">Teléfono</label>
                   <input
                     type="tel"
                     value={formData.phone}
@@ -608,7 +595,6 @@ const UsersPage = () => {
                   />
                 </div>
 
-                {/* Rol */}
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">
                     Rol <span className="text-red-500">*</span>
@@ -620,18 +606,13 @@ const UsersPage = () => {
                   >
                     <option value="">Selecciona un rol</option>
                     {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Estado */}
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">
-                    Estado
-                  </label>
+                  <label className="block text-sm text-slate-300 mb-1">Estado</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
@@ -644,7 +625,6 @@ const UsersPage = () => {
                   </select>
                 </div>
 
-                {/* Contraseña - solo al crear */}
                 {!editingUser && (
                   <div>
                     <label className="block text-sm text-slate-300 mb-1">
@@ -662,10 +642,7 @@ const UsersPage = () => {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 button-gold"
-                >
+                <button type="submit" className="flex-1 button-gold">
                   {editingUser ? 'Actualizar usuario' : 'Crear usuario'}
                 </button>
                 <button
@@ -680,6 +657,16 @@ const UsersPage = () => {
           </motion.div>
         </div>
       )}
+
+      {/* ConfirmModal reutilizable */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

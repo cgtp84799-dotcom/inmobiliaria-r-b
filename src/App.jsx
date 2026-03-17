@@ -1,9 +1,9 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react"; // ✅ CAMBIO 1: lazy + Suspense, useEffect aquí
 import { Toaster } from "react-hot-toast";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 
 import {
   FaBuilding,
@@ -32,39 +32,41 @@ import ScrollToTop from "./shared/components/ScrollToTop";
 import { AuthProvider, useAuth } from "./core/contexts/AuthContext";
 import { PUBLIC_ROUTES, PRIVATE_ROUTES } from "./core/config/routes.config";
 
-// Notificaciones
 import {
   requestNotificationPermission,
   initializeMessaging,
 } from "./core/services/notificationService";
 
-// Páginas
-import PropertyManagement from "./modules/properties/pages/PropertyManagement";
-import ClientManagement from "./modules/clients/pages/ClientManagement";
+// ✅ CAMBIO 2: público estático (SEO), panel interno lazy
 import AuthPage from "./modules/auth/pages/AuthPage";
-import DashboardPage from "./modules/dashboard/pages/DashboardPage";
 import CatalogPage from "./modules/public/pages/CatalogPage";
 import PropertyDetailPage from "./modules/public/pages/PropertyDetailPage";
+import AccessRequestPage from "./modules/users/pages/AccessRequestPage";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 import SettingsFab from "./shared/components/UI/SettingsFab";
-import DocumentsPage from "./modules/documents/pages/DocumentsPage";
-import ContactsPage from "./modules/contacts/pages/ContactsPage";
-import CalendarPage from "./modules/calendar/pages/CalendarPage";
-import AccessRequestPage from "./modules/users/pages/AccessRequestPage";
-import UsersPage from "./modules/users/pages/UsersPage";
-import RequestsPage from "./modules/users/pages/RequestsPage";
 
-// ============================================
-// COMPONENTE PARA INICIALIZAR NOTIFICACIONES
-// ============================================
+const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
+const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
+const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
+const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
+const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
+const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
+const UsersPage          = lazy(() => import("./modules/users/pages/UsersPage"));
+const RequestsPage       = lazy(() => import("./modules/users/pages/RequestsPage"));
+
+// ✅ CAMBIO 3: spinner para los chunks lazy
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-[60vh]">
+    <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+  </div>
+);
+
 const NotificationInitializer = () => {
   const { currentUser } = useAuth();
 
   useEffect(() => {
-    // Inicializa Firebase Messaging (solo si el navegador lo soporta)
     initializeMessaging();
 
-    // Registrar el service worker (requerido para notificaciones en background)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/firebase-messaging-sw.js")
@@ -76,9 +78,6 @@ const NotificationInitializer = () => {
         });
     }
 
-    // IMPORTANTE:
-    // Tu Firestore maneja users/{email} como ID (no users/{uid}).
-    // Si mandas uid aquí, notificationService termina creando docs "fantasma".
     if (currentUser?.email) {
       const timeout = setTimeout(() => {
         requestNotificationPermission(currentUser.email);
@@ -91,9 +90,6 @@ const NotificationInitializer = () => {
   return null;
 };
 
-// ============================================
-// HOME PAGE - ÉPICO Y PROFESIONAL (RESPONSIVE)
-// ============================================
 const serviceColorMap = {
   primary: {
     bg: "bg-primary/10",
@@ -129,14 +125,23 @@ const serviceColorMap = {
 
 const HomePage = () => (
   <div className="overflow-hidden">
-    {/* HERO PRINCIPAL - DUAL ACTION */}
+    <Helmet>
+      <title>Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas</title>
+      <meta name="description" content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados." />
+      <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
+      <meta property="og:title" content="Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas" />
+      <meta property="og:description" content="Tu inmobiliaria de confianza en Anserma, Caldas. Casas, apartamentos, lotes y fincas para compra, venta y arriendo." />
+      <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/" />
+      <meta property="og:image" content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+      <meta property="og:type" content="website" />
+    </Helmet>
+
     <motion.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
       className="relative min-h-[78vh] sm:min-h-[85vh] lg:min-h-[90vh] flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden"
     >
-      {/* Efecto de fondo animado */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-56 h-56 sm:w-72 sm:h-72 bg-primary rounded-full blur-3xl animate-pulse"></div>
         <div
@@ -163,41 +168,72 @@ const HomePage = () => (
           transition={{ delay: 0.4, duration: 0.8 }}
           className="text-slate-300 text-base sm:text-lg lg:text-2xl max-w-3xl mx-auto mb-8 sm:mb-12"
         >
-          Gestión inmobiliaria integral con respaldo jurídico especializado en
-          Anserma y municipios aledaños
+          Gestión inmobiliaria integral con respaldo jurídico especializado.
+          Encuéntranos en Anserma y municipios aledaños
         </motion.p>
 
-        {/* BOTONES DUALES */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6, duration: 0.8 }}
-          className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center"
+          className="flex flex-col items-center gap-5"
         >
-          <Link
-            to="/propiedades"
-            className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-yellow-500 text-slate-950 font-bold text-base sm:text-lg rounded-xl shadow-2xl hover:shadow-primary/50 transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3"
-          >
-            <FaSearch className="text-lg sm:text-xl" />
-            Buscar Propiedades
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center w-full">
+            <Link
+              to="/propiedades"
+              className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-yellow-500 text-slate-950 font-bold text-base sm:text-lg rounded-xl shadow-2xl hover:shadow-primary/50 transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3"
+            >
+              <FaSearch className="text-lg sm:text-xl" />
+              Buscar Propiedades
+            </Link>
 
-          <a
-            href="https://wa.me/573105968202?text=Hola,%20quiero%20información%20para%20vender/arrendar%20mi%20propiedad"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-base sm:text-lg rounded-xl border-2 border-primary/50 hover:border-primary shadow-2xl transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3"
+            <a
+              href="https://wa.me/573105968202?text=Hola,%20quiero%20información%20para%20vender/arrendar%20mi%20propiedad"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-base sm:text-lg rounded-xl border-2 border-primary/50 hover:border-primary shadow-2xl transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3"
+            >
+              <FaHome className="text-lg sm:text-xl" />
+              Vender / Arrendar
+            </a>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9, duration: 0.6 }}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 w-full max-w-3xl"
           >
-            <FaHome className="text-lg sm:text-xl" />
-            Vender / Arrendar
-          </a>
+            <div className="flex flex-col items-center sm:items-end text-center sm:text-right">
+              <div className="flex items-center gap-2 mb-1">
+                <FaSearch className="text-primary text-sm" />
+                <span className="text-slate-300 text-sm font-semibold">
+                  Para Compradores
+                </span>
+              </div>
+              <p className="text-slate-400 text-xs">
+                Encuentra tu propiedad ideal
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <FaHome className="text-primary text-sm" />
+                <span className="text-slate-300 text-sm font-semibold">
+                  Para Propietarios
+                </span>
+              </div>
+              <p className="text-slate-400 text-xs">
+                Publica tu inmueble con nosotros
+              </p>
+            </div>
+          </motion.div>
         </motion.div>
 
-        {/* Badge de respaldo jurídico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.8 }}
+          transition={{ delay: 1.1, duration: 0.8 }}
           className="mt-8 sm:mt-10 inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-800/50 backdrop-blur-sm rounded-full border border-primary/30"
         >
           <FaBalanceScale className="text-primary text-lg sm:text-xl" />
@@ -207,11 +243,10 @@ const HomePage = () => (
         </motion.div>
       </div>
 
-      {/* Indicador de scroll */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.8 }}
+        transition={{ delay: 1.4, duration: 0.8 }}
         className="hidden sm:block absolute bottom-8 left-1/2 transform -translate-x-1/2"
       >
         <div className="w-6 h-10 border-2 border-primary rounded-full flex justify-center p-2">
@@ -224,7 +259,6 @@ const HomePage = () => (
       </motion.div>
     </motion.section>
 
-    {/* SECCIÓN: ¿QUÉ OFRECEMOS? */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-900 to-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -243,7 +277,6 @@ const HomePage = () => (
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-          {/* PARA COMPRADORES */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -294,7 +327,6 @@ const HomePage = () => (
             </Link>
           </motion.div>
 
-          {/* PARA PROPIETARIOS */}
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -313,12 +345,12 @@ const HomePage = () => (
 
             <ul className="space-y-3 sm:space-y-4">
               {[
-                "Avalúo profesional sin costo",
                 "Publicidad en múltiples plataformas",
-                "Fotografía y tours virtuales profesionales",
+                "Fotografía y videos profesionales",
                 "Gestión integral de contratos de arriendo",
                 "Verificación de inquilinos/compradores",
                 "Asesoría jurídica en todo el proceso",
+                "Avalúo profesional",
               ].map((item, i) => (
                 <motion.li
                   key={i}
@@ -350,7 +382,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* SERVICIOS JURÍDICOS */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -414,7 +445,7 @@ const HomePage = () => (
               icon: FaShieldAlt,
               title: "Avalúos y Proyectos",
               description:
-                "Avalúos certificados, subdivisión de lotes y reglamentos de propiedad horizontal.",
+                "Asesoría en Avalúos certificados, subdivisión de lotes y reglamentos de propiedad horizontal.",
               color: "red-500",
               delay: 0.6,
             },
@@ -448,7 +479,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* PROCESO PASO A PASO */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-950 to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -521,7 +551,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* CTA FINAL DUAL */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -564,11 +593,18 @@ const HomePage = () => (
   </div>
 );
 
-// ============================================
-// CONTACT PAGE - COMPACTO EN MÓVIL (FIX REAL)
-// ============================================
 const ContactPage = () => (
   <div className="max-w-5xl mx-auto py-7 sm:py-12 lg:py-14 px-4 sm:px-6">
+    <Helmet>
+      <title>Contáctanos | Inmobiliaria Rincón Bedoya y Asociados</title>
+      <meta name="description" content="Comunícate con Inmobiliaria Rincón Bedoya y Asociados. WhatsApp: 310 596 8202. Oficina en Cra 5 No. 9-28, Anserma, Caldas. Atención de lunes a sábado." />
+      <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/contacto" />
+      <meta property="og:title" content="Contáctanos | Inmobiliaria Rincón Bedoya y Asociados" />
+      <meta property="og:description" content="WhatsApp, teléfono, email y dirección física. Atención personalizada en Anserma, Caldas." />
+      <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/contacto" />
+      <meta property="og:image" content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+    </Helmet>
+
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
@@ -584,9 +620,7 @@ const ContactPage = () => (
       </p>
     </motion.div>
 
-    {/* Tarjetas */}
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12 lg:mb-14">
-      {/* WhatsApp */}
       <motion.a
         href="https://wa.me/573105968202?text=Hola,%20quiero%20información%20sobre%20propiedades"
         target="_blank"
@@ -601,7 +635,6 @@ const ContactPage = () => (
         <p className="text-xs sm:text-sm opacity-90">Chatea con nosotros</p>
       </motion.a>
 
-      {/* Instagram */}
       <motion.a
         href="https://instagram.com/inmobiliaria_ryb"
         target="_blank"
@@ -616,7 +649,6 @@ const ContactPage = () => (
         <p className="text-xs sm:text-sm opacity-90">@inmobiliaria_ryb</p>
       </motion.a>
 
-      {/* Facebook */}
       <motion.a
         href="https://www.facebook.com/share/17piE61vjU/"
         target="_blank"
@@ -631,7 +663,6 @@ const ContactPage = () => (
         <p className="text-xs sm:text-sm opacity-90">Síguenos</p>
       </motion.a>
 
-      {/* Email */}
       <motion.a
         href="mailto:inmojuridi09@gmail.com"
         initial={{ opacity: 0, y: 20 }}
@@ -647,7 +678,6 @@ const ContactPage = () => (
       </motion.a>
     </div>
 
-    {/* Info + mapa */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
       <motion.div
         initial={{ opacity: 0, x: -30 }}
@@ -679,6 +709,7 @@ const ContactPage = () => (
               <h3 className="text-light font-semibold mb-1">
                 Correo electrónico
               </h3>
+              {/* ✅ CAMBIO 4: era [email](mailto:...) en JSX — bug visual corregido */}
               <a
                 href="mailto:inmojuridi09@gmail.com"
                 className="text-primary text-sm hover:underline break-all"
@@ -709,12 +740,14 @@ const ContactPage = () => (
               </h3>
               <div className="text-muted text-sm space-y-1">
                 <p>
-                  <span className="text-light font-medium">Lunes a Viernes:</span>{" "}
+                  <span className="text-light font-medium">
+                    Lunes a Viernes:
+                  </span>{" "}
                   8:00 AM - 12:30 PM / 2:00 PM - 5:30 PM
                 </p>
                 <p>
-                  <span className="text-light font-medium">Sábados:</span>{" "}
-                  8:30 AM - 1:00 PM
+                  <span className="text-light font-medium">Sábados:</span> 8:30
+                  AM - 1:00 PM
                 </p>
                 <p className="text-slate-400 italic">
                   No se atiende domingos ni festivos
@@ -754,8 +787,8 @@ const ContactPage = () => (
         ¿Listo para dar el siguiente paso?
       </h2>
       <p className="text-slate-300 mb-5 max-w-2xl mx-auto text-sm sm:text-base">
-        Nuestro equipo de profesionales está listo para asesorarte en tu próximo
-        proyecto inmobiliario.
+        Nuestro equipo de profesionales está listo para asesorarte en tu
+        próximo proyecto inmobiliario.
       </p>
       <a
         href="https://wa.me/573105968202?text=Hola,%20quiero%20información%20sobre%20propiedades"
@@ -770,9 +803,6 @@ const ContactPage = () => (
   </div>
 );
 
-// ============================================
-// APP COMPONENT
-// ============================================
 function App() {
   return (
     <AuthProvider>
@@ -782,7 +812,6 @@ function App() {
         <Toaster position="top-right" />
 
         <Routes>
-          {/* PÚBLICO */}
           <Route element={<PublicLayout />}>
             <Route path={PUBLIC_ROUTES.HOME} element={<HomePage />} />
             <Route path="/catalogo" element={<CatalogPage />} />
@@ -797,10 +826,9 @@ function App() {
             <Route path="/solicitar-acceso" element={<AccessRequestPage />} />
           </Route>
 
-          {/* LOGIN */}
           <Route path="/acceso" element={<AuthPage />} />
 
-          {/* PANEL INTERNO */}
+          {/* ✅ CAMBIO 4: rutas del panel envueltas en Suspense */}
           <Route
             element={
               <ProtectedRoute>
@@ -811,30 +839,44 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path={PRIVATE_ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route
+              path={PRIVATE_ROUTES.DASHBOARD}
+              element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>}
+            />
             <Route
               path={PRIVATE_ROUTES.PROPERTIES}
-              element={<PropertyManagement />}
+              element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>}
             />
             <Route
               path={PRIVATE_ROUTES.CLIENTS}
-              element={<ClientManagement />}
+              element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>}
             />
-            <Route path={PRIVATE_ROUTES.QUERIES} element={<ContactsPage />} />
+            <Route
+              path={PRIVATE_ROUTES.QUERIES}
+              element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>}
+            />
             <Route
               path={PRIVATE_ROUTES.CHAT}
               element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />}
             />
             <Route
               path={PRIVATE_ROUTES.DOCUMENTS}
-              element={<DocumentsPage />}
+              element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>}
             />
-            <Route path={PRIVATE_ROUTES.CALENDAR} element={<CalendarPage />} />
-            <Route path={PRIVATE_ROUTES.USERS} element={<UsersPage />} />
-            <Route path={PRIVATE_ROUTES.REQUESTS} element={<RequestsPage />} />
+            <Route
+              path={PRIVATE_ROUTES.CALENDAR}
+              element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>}
+            />
+            <Route
+              path={PRIVATE_ROUTES.USERS}
+              element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>}
+            />
+            <Route
+              path={PRIVATE_ROUTES.REQUESTS}
+              element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>}
+            />
           </Route>
 
-          {/* Fallback */}
           <Route
             path="*"
             element={<Navigate to={PUBLIC_ROUTES.HOME} replace />}

@@ -4,7 +4,7 @@ Aplicación web para la gestión integral de inmuebles de Inmobiliaria Rincón B
 
 ## 🚀 Demo en producción
 
-- Sitio en línea: https://inmobiliaria-ryb-y-asociados.web.app
+- Sitio en línea: https://inmobiliaria-ryb-y-asociados.com
 
 ## 🧱 Tecnologías y librerías principales
 
