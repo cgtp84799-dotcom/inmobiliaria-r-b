@@ -24,31 +24,44 @@ const PropertyMap = ({
   const lng = parseFloat(longitude);
   const hasCoords = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
 
+  // Construir la query para Google Maps
   const buildQuery = () => {
+    // 1. Coordenadas exactas
     if (hasCoords) {
       return `${lat},${lng}`;
     }
+
+    // 2. Barrio + ciudad
     if (neighborhood && city) {
       return `${neighborhood}, ${city}, ${department}, Colombia`;
     }
+
+    // 3. Dirección + ciudad
     if (address && city) {
+      // Si en la dirección aparece algo tipo "barrio X", priorizamos ese barrio
       const barrioMatch = address.match(/barr(?:io)?\s+([^,]+)/i);
       if (barrioMatch) {
         return `${barrioMatch[1].trim()}, ${city}, ${department}, Colombia`;
       }
       return `${address}, ${city}, ${department}, Colombia`;
     }
+
+    // 4. Solo ciudad
     if (city) {
       return `${city}, ${department}, Colombia`;
     }
+
+    // Fallback total
     return "Anserma, Caldas, Colombia";
   };
 
   const query = buildQuery();
   const encodedQuery = encodeURIComponent(query);
 
+  // Si NO hay API key, mostramos un botón que abre Google Maps en otra pestaña
   if (!GOOGLE_MAPS_API_KEY) {
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
+
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-900 rounded-lg">
         <div className="text-center p-4">
@@ -66,7 +79,10 @@ const PropertyMap = ({
     );
   }
 
+  // URL del iframe de Google Maps Embed API
   let src = `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodedQuery}&language=es&region=CO`;
+
+  // Si hay coordenadas, centramos fuerte
   if (hasCoords) {
     src += `&center=${lat},${lng}&zoom=17`;
   }
@@ -89,7 +105,9 @@ const PropertyMap = ({
       />
 
       {locationText && (
-        <div className="mt-2 text-xs text-slate-400">{locationText}</div>
+        <div className="mt-2 text-xs text-slate-400">
+          {locationText}
+        </div>
       )}
     </div>
   );
