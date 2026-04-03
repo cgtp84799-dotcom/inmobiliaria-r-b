@@ -289,9 +289,10 @@ const PropertyManagement = () => {
     setSelectedProperty(null);
   };
 
-  const handleDownloadPDF = () => {
-    toast.info("Generando ficha técnica... (función próximamente)");
-  };
+const handleDownloadPDF = (property) => {
+  setSelectedProperty(property);
+  setShowDetail(true);
+};
 
   const goPrev = () => {
     if (currentPage <= 1) return;

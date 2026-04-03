@@ -1,33 +1,35 @@
-// ✅ RUTAS PÚBLICAS (CATÁLOGO)
 export const PUBLIC_ROUTES = {
-  HOME: '/',
-  CATALOG: '/propiedades',
-  PROPERTY_DETAIL: '/propiedad/:id',
-  ABOUT: '/nosotros',
-  CONTACT: '/contacto'
+  HOME: "/",
+
+  CATALOG: "/propiedades",
+
+  PROPERTY_DETAIL: "/propiedades/:slugId",
+
+  CITY_PROPERTIES: "/propiedades/ciudad/:citySlug",
+
+  TYPE_CITY_PROPERTIES: "/propiedades/zona/:typeCitySlug",
+
+  ABOUT: "/nosotros",
+  CONTACT: "/contacto",
 };
 
-
-// ✅ RUTAS PRIVADAS (PANEL INTERNO) - AHORA EN INGLÉS
 export const PRIVATE_ROUTES = {
-  DASHBOARD: '/dashboard',
-  PROPERTIES: '/dashboard/properties',          // ✅ CAMBIO: propiedades → properties
-  NEW_PROPERTY: '/dashboard/properties/new',    // ✅ CAMBIO
-  EDIT_PROPERTY: '/dashboard/properties/edit/:id', // ✅ CAMBIO
-  CLIENTS: '/dashboard/clients',                // ✅ CAMBIO: clientes → clients
-  CLIENT_DETAIL: '/dashboard/clients/:id',      // ✅ CAMBIO
-  CALENDAR: '/dashboard/calendar',              // ✅ CAMBIO: calendario → calendar
-  QUERIES: '/dashboard/contacts',               // ✅ CAMBIO: consultas → contacts
-  CONTRACTS: '/dashboard/legal/contracts',      // ✅ CAMBIO: contratos → contracts
-  DOCUMENTS: '/dashboard/documents',            // ✅ CAMBIO: documentos → documents
-  CHAT: '/dashboard/chat',
-  USERS: '/dashboard/users',                    // ✅ CAMBIO: usuarios → users
-  PROFILE: '/dashboard/profile',                // ✅ CAMBIO: perfil → profile
-  REQUESTS: '/dashboard/requests'               // ✅ CAMBIO: solicitudes → requests
+  DASHBOARD: "/dashboard",
+  PROPERTIES: "/dashboard/properties",
+  NEW_PROPERTY: "/dashboard/properties/new",
+  EDIT_PROPERTY: "/dashboard/properties/edit/:id",
+  CLIENTS: "/dashboard/clients",
+  CLIENT_DETAIL: "/dashboard/clients/:id",
+  CALENDAR: "/dashboard/calendar",
+  QUERIES: "/dashboard/contacts",
+  CONTRACTS: "/dashboard/legal/contracts",
+  DOCUMENTS: "/dashboard/documents",
+  CHAT: "/dashboard/chat",
+  USERS: "/dashboard/users",
+  PROFILE: "/dashboard/profile",
+  REQUESTS: "/dashboard/requests",
 };
 
-
-// ✅ RUTAS DE AUTENTICACIÓN
 export const AUTH_ROUTES = {
-  LOGIN: '/acceso',
+  LOGIN: "/acceso",
 };

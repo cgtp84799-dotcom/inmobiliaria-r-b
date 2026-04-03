@@ -1,126 +1,209 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  getDoc, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  orderBy,
-  Timestamp 
-} from 'firebase/firestore';
-import { 
-  getStorage, 
-  ref, 
-  uploadBytes, 
-  getDownloadURL 
-} from 'firebase/storage';
-import { db } from '../../../core/config/firebase.config';
+// src/modules/properties/services/property.service.js
 
-const COLLECTION = 'properties';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  getDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
+import { db } from "../../../core/config/firebase.config";
+import { optimizeImage } from "../../../shared/utils/imageOptimization";
+
+const COLLECTION = "properties";
+
+// ─── Helpers internos ────────────────────────────────────────────────────────
+
+/** Normaliza un string a slug (sin tildes, minúscula, sin caracteres raros) */
+const normalize = (str) =>
+  String(str ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/** Lee el precio de una propiedad sea cual sea su estructura */
+const resolvePrice = (p) =>
+  p.price?.sale ?? p.price?.rent ?? p.price ?? null;
+
+/** Lee la ciudad de una propiedad sea cual sea su estructura */
+const resolveCity = (p) =>
+  String(p.location?.city ?? p.city ?? "").trim();
+
+/** Lee las habitaciones de una propiedad sea cual sea su estructura */
+const resolveRooms = (p) =>
+  Number(p.features?.rooms ?? p.features?.bedrooms ?? p.rooms ?? 0);
+
+/** Lee los baños de una propiedad sea cual sea su estructura */
+const resolveBathrooms = (p) =>
+  Number(p.features?.bathrooms ?? p.bathrooms ?? 0);
+
+/**
+ * Statuses que se muestran públicamente.
+ * Acepta tanto el sistema viejo ("disponible") como el nuevo ("published", "active").
+ */
+const PUBLIC_STATUSES = new Set([
+  "disponible",
+  "reservada",
+  "published",
+  "active",
+  "available",
+]);
+
+const isPublicStatus = (p) =>
+  !p.status || PUBLIC_STATUSES.has(String(p.status).toLowerCase());
+
+// ─── Service ─────────────────────────────────────────────────────────────────
 
 class PropertyService {
-  
-  // Obtener propiedades PÚBLICAS (sin autenticación)
+  // ── Obtener propiedades PÚBLICAS ──────────────────────────────────────────
   async getPublicProperties(filters = {}) {
     try {
-      // ✅ Solo orderBy, sin where (evita necesidad de índice)
-      let q = query(
+      const q = query(
         collection(db, COLLECTION),
-        orderBy('createdAt', 'desc')
+        orderBy("createdAt", "desc")
       );
 
       const snapshot = await getDocs(q);
-      let properties = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      let properties = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       }));
 
-      // ✅ Filtrar por status en JavaScript
-      properties = properties.filter(p => 
-        !p.status || p.status === 'disponible' || p.status === 'reservada'
-      );
+      // 1. Filtrar por status público
+      properties = properties.filter(isPublicStatus);
 
-      // Aplicar filtros adicionales
+      // 2. transactionType
       if (filters.transactionType) {
-        properties = properties.filter(p => p.transactionType === filters.transactionType);
+        const ft = filters.transactionType.toLowerCase();
+        properties = properties.filter((p) => {
+          const t = String(p.transactionType ?? "").toLowerCase();
+          if (ft === "sale" || ft === "venta")
+            return ["sale", "venta", "compra"].includes(t);
+          if (ft === "rent" || ft === "arriendo")
+            return ["rent", "arriendo", "alquiler", "renta"].includes(t);
+          return t === ft;
+        });
       }
 
+      // 3. type
       if (filters.type) {
-        properties = properties.filter(p => p.type === filters.type);
-      }
-
-      if (filters.city) {
-        properties = properties.filter(p => 
-          p.city?.toLowerCase().includes(filters.city.toLowerCase())
+        const ft = filters.type.toLowerCase();
+        properties = properties.filter((p) =>
+          String(p.type ?? "").toLowerCase().includes(ft)
         );
       }
 
+      // 4. Ciudad — normalizada, soporta campo raíz y location.city
+      if (filters.city) {
+        const fc = normalize(filters.city);
+        properties = properties.filter((p) =>
+          normalize(resolveCity(p)).includes(fc)
+        );
+      }
+
+      // 5. Precio — soporta price plano y price.sale / price.rent
       if (filters.minPrice) {
-        properties = properties.filter(p => p.price >= filters.minPrice);
+        const min = Number(filters.minPrice);
+        properties = properties.filter((p) => {
+          const price = resolvePrice(p);
+          return price !== null && Number(price) >= min;
+        });
       }
 
       if (filters.maxPrice) {
-        properties = properties.filter(p => p.price <= filters.maxPrice);
+        const max = Number(filters.maxPrice);
+        properties = properties.filter((p) => {
+          const price = resolvePrice(p);
+          return price !== null && Number(price) <= max;
+        });
       }
 
+      // 6. Rooms — soporta campo raíz y features.rooms / features.bedrooms
       if (filters.rooms) {
-        properties = properties.filter(p => p.rooms >= filters.rooms);
+        const fr = Number(filters.rooms);
+        properties = properties.filter((p) => resolveRooms(p) >= fr);
       }
 
+      // 7. Bathrooms — soporta campo raíz y features.bathrooms
       if (filters.bathrooms) {
-        properties = properties.filter(p => p.bathrooms >= filters.bathrooms);
+        const fb = Number(filters.bathrooms);
+        properties = properties.filter((p) => resolveBathrooms(p) >= fb);
       }
 
       return properties;
     } catch (error) {
-      console.error('Error obteniendo propiedades públicas:', error);
+      console.error("Error obteniendo propiedades públicas:", error);
       throw error;
     }
   }
 
-  // Obtener UNA propiedad pública por ID
+  // ── Obtener UNA propiedad pública por ID ──────────────────────────────────
   async getPublicPropertyById(id) {
     try {
+      if (!id) throw new Error("ID de propiedad no válido");
+
       const docRef = doc(db, COLLECTION, id);
       const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
-      } else {
-        throw new Error('Propiedad no encontrada');
+
+      if (!docSnap.exists()) {
+        throw new Error("Propiedad no encontrada");
       }
+
+      const data = docSnap.data();
+
+      // No mostrar propiedades eliminadas/inactivas aunque se acceda por URL directa
+      const status = String(data.status ?? "").toLowerCase();
+      if (status === "eliminada" || status === "inactiva" || status === "draft") {
+        throw new Error("Propiedad no disponible");
+      }
+
+      return { id: docSnap.id, ...data };
     } catch (error) {
-      console.error('Error obteniendo propiedad:', error);
+      console.error("Error obteniendo propiedad:", error);
       throw error;
     }
   }
 
-  // Subir imágenes
+  // ── Subir imágenes (OPTIMIZADAS) ──────────────────────────────────────────
   async uploadImages(files, propertyId) {
     try {
       const storage = getStorage();
+
       const uploadPromises = files.map(async (file) => {
+        const optimized = await optimizeImage(file, 1600, 0.8);
         const timestamp = Date.now();
-        const fileName = `${propertyId}_${timestamp}_${file.name}`;
+        const fileName = `${propertyId}_${timestamp}_${optimized.name}`;
         const storageRef = ref(storage, `properties/${fileName}`);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        return downloadURL;
+        await uploadBytes(storageRef, optimized);
+        return getDownloadURL(storageRef);
       });
 
       return await Promise.all(uploadPromises);
     } catch (error) {
-      console.error('Error subiendo imágenes:', error);
+      console.error("Error subiendo imágenes:", error);
       throw error;
     }
   }
 
-  // Subir documentos
+  // ── Subir documentos ──────────────────────────────────────────────────────
   async uploadDocuments(files, propertyId) {
     try {
       const storage = getStorage();
+
       const uploadPromises = files.map(async (file) => {
         const timestamp = Date.now();
         const fileName = `${propertyId}_${timestamp}_${file.name}`;
@@ -130,22 +213,22 @@ class PropertyService {
         return {
           name: file.name,
           url: downloadURL,
-          uploadedAt: new Date()
+          uploadedAt: new Date(),
         };
       });
 
       return await Promise.all(uploadPromises);
     } catch (error) {
-      console.error('Error subiendo documentos:', error);
+      console.error("Error subiendo documentos:", error);
       throw error;
     }
   }
 
-  // Crear propiedad
+  // ── Crear propiedad ───────────────────────────────────────────────────────
   async createProperty(propertyData, imageFiles = [], documentFiles = []) {
     try {
       const tempId = `temp_${Date.now()}`;
-      
+
       let imageUrls = [];
       if (imageFiles.length > 0) {
         imageUrls = await this.uploadImages(imageFiles, tempId);
@@ -159,70 +242,75 @@ class PropertyService {
       const propertyToSave = {
         ...propertyData,
         images: imageUrls,
-        documents: documents,
+        documents,
         createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        updatedAt: Timestamp.now(),
       };
 
       const docRef = await addDoc(collection(db, COLLECTION), propertyToSave);
       return { id: docRef.id, ...propertyToSave };
     } catch (error) {
-      console.error('Error creando propiedad:', error);
+      console.error("Error creando propiedad:", error);
       throw error;
     }
   }
 
-  // Obtener todas (admin)
+  // ── Obtener todas las propiedades (admin) ─────────────────────────────────
   async getAllProperties() {
     try {
-      const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+      const q = query(
+        collection(db, COLLECTION),
+        orderBy("createdAt", "desc")
+      );
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      return snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       }));
     } catch (error) {
-      console.error('Error obteniendo propiedades:', error);
+      console.error("Error obteniendo propiedades:", error);
       throw error;
     }
   }
 
-  // Actualizar
+  // ── Actualizar propiedad ──────────────────────────────────────────────────
   async updateProperty(id, propertyData, newImageFiles = [], newDocumentFiles = []) {
     try {
       let updates = { ...propertyData, updatedAt: Timestamp.now() };
 
       if (newImageFiles.length > 0) {
         const newImageUrls = await this.uploadImages(newImageFiles, id);
-        updates.images = [...(propertyData.images || []), ...newImageUrls];
+        updates.images = [...(propertyData.images ?? []), ...newImageUrls];
       }
 
       if (newDocumentFiles.length > 0) {
         const newDocuments = await this.uploadDocuments(newDocumentFiles, id);
-        updates.documents = [...(propertyData.documents || []), ...newDocuments];
+        updates.documents = [
+          ...(propertyData.documents ?? []),
+          ...newDocuments,
+        ];
       }
 
       const docRef = doc(db, COLLECTION, id);
       await updateDoc(docRef, updates);
       return { id, ...updates };
     } catch (error) {
-      console.error('Error actualizando propiedad:', error);
+      console.error("Error actualizando propiedad:", error);
       throw error;
     }
   }
 
-  // Eliminar
+  // ── Eliminar propiedad ────────────────────────────────────────────────────
   async deleteProperty(id) {
     try {
       const docRef = doc(db, COLLECTION, id);
       await deleteDoc(docRef);
       return true;
     } catch (error) {
-      console.error('Error eliminando propiedad:', error);
+      console.error("Error eliminando propiedad:", error);
       throw error;
     }
   }
 }
 
-// ✅ EXPORTACIÓN CORRECTA
 export default new PropertyService();

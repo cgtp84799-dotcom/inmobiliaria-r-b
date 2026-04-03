@@ -1,8 +1,13 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react"; // ✅ CAMBIO 1: lazy + Suspense, useEffect aquí
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+} from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 
 import {
@@ -30,31 +35,44 @@ import PublicLayout from "./shared/components/Layout/PublicLayout";
 import AdminLayout from "./shared/components/Layout/AdminLayout";
 import ScrollToTop from "./shared/components/ScrollToTop";
 import { AuthProvider, useAuth } from "./core/contexts/AuthContext";
-import { PUBLIC_ROUTES, PRIVATE_ROUTES } from "./core/config/routes.config";
+import { PUBLIC_ROUTES, PRIVATE_ROUTES, AUTH_ROUTES } from "./core/config/routes.config";
 
 import {
   requestNotificationPermission,
   initializeMessaging,
 } from "./core/services/notificationService";
 
-// ✅ CAMBIO 2: público estático (SEO), panel interno lazy
 import AuthPage from "./modules/auth/pages/AuthPage";
 import CatalogPage from "./modules/public/pages/CatalogPage";
 import PropertyDetailPage from "./modules/public/pages/PropertyDetailPage";
 import AccessRequestPage from "./modules/users/pages/AccessRequestPage";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 import SettingsFab from "./shared/components/UI/SettingsFab";
+import LocationPage from "./modules/public/pages/LocationPage";
 
-const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
-const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
-const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
-const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
-const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
-const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
-const UsersPage          = lazy(() => import("./modules/users/pages/UsersPage"));
-const RequestsPage       = lazy(() => import("./modules/users/pages/RequestsPage"));
+const DashboardPage = lazy(() =>
+  import("./modules/dashboard/pages/DashboardPage")
+);
+const PropertyManagement = lazy(() =>
+  import("./modules/properties/pages/PropertyManagement")
+);
+const ClientManagement = lazy(() =>
+  import("./modules/clients/pages/ClientManagement")
+);
+const DocumentsPage = lazy(() =>
+  import("./modules/documents/pages/DocumentsPage")
+);
+const ContactsPage = lazy(() =>
+  import("./modules/contacts/pages/ContactsPage")
+);
+const CalendarPage = lazy(() =>
+  import("./modules/calendar/pages/CalendarPage")
+);
+const UsersPage = lazy(() => import("./modules/users/pages/UsersPage"));
+const RequestsPage = lazy(() =>
+  import("./modules/users/pages/RequestsPage")
+);
 
-// ✅ CAMBIO 3: spinner para los chunks lazy
 const PageLoader = () => (
   <div className="flex items-center justify-center h-[60vh]">
     <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -123,16 +141,32 @@ const serviceColorMap = {
   },
 };
 
+
 const HomePage = () => (
   <div className="overflow-hidden">
     <Helmet>
       <title>Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas</title>
-      <meta name="description" content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados." />
+      <meta
+        name="description"
+        content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados."
+      />
       <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
-      <meta property="og:title" content="Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas" />
-      <meta property="og:description" content="Tu inmobiliaria de confianza en Anserma, Caldas. Casas, apartamentos, lotes y fincas para compra, venta y arriendo." />
-      <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/" />
-      <meta property="og:image" content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+      <meta
+        property="og:title"
+        content="Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas"
+      />
+      <meta
+        property="og:description"
+        content="Tu inmobiliaria de confianza en Anserma, Caldas. Casas, apartamentos, lotes y fincas para compra, venta y arriendo."
+      />
+      <meta
+        property="og:url"
+        content="https://inmobiliaria-ryb-y-asociados.com/"
+      />
+      <meta
+        property="og:image"
+        content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
+      />
       <meta property="og:type" content="website" />
     </Helmet>
 
@@ -143,11 +177,11 @@ const HomePage = () => (
       className="relative min-h-[78vh] sm:min-h-[85vh] lg:min-h-[90vh] flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden"
     >
       <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-20 left-10 w-56 h-56 sm:w-72 sm:h-72 bg-primary rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-20 left-10 w-56 h-56 sm:w-72 sm:h-72 bg-primary rounded-full blur-3xl animate-pulse" />
         <div
           className="absolute bottom-20 right-10 w-72 h-72 sm:w-96 sm:h-96 bg-blue-500 rounded-full blur-3xl animate-pulse"
           style={{ animationDelay: "1s" }}
-        ></div>
+        />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 text-center">
@@ -180,7 +214,7 @@ const HomePage = () => (
         >
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center w-full">
             <Link
-              to="/propiedades"
+              to={PUBLIC_ROUTES.CATALOG}
               className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-yellow-500 text-slate-950 font-bold text-base sm:text-lg rounded-xl shadow-2xl hover:shadow-primary/50 transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3"
             >
               <FaSearch className="text-lg sm:text-xl" />
@@ -319,7 +353,7 @@ const HomePage = () => (
             </ul>
 
             <Link
-              to="/propiedades"
+              to={PUBLIC_ROUTES.CATALOG}
               className="mt-7 sm:mt-8 w-full button-gold inline-flex items-center justify-center gap-2"
             >
               Ver propiedades disponibles
@@ -451,6 +485,7 @@ const HomePage = () => (
             },
           ].map((service, index) => {
             const c = serviceColorMap[service.color] ?? serviceColorMap.primary;
+
             return (
               <motion.div
                 key={index}
@@ -543,7 +578,7 @@ const HomePage = () => (
               </div>
 
               {i < 3 && (
-                <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-0.5 bg-primary/30"></div>
+                <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-0.5 bg-primary/30" />
               )}
             </motion.div>
           ))}
@@ -580,7 +615,7 @@ const HomePage = () => (
             </a>
 
             <Link
-              to="/propiedades"
+              to={PUBLIC_ROUTES.CATALOG}
               className="inline-flex items-center justify-center gap-3 text-base sm:text-lg px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border-2 border-primary/50 hover:border-primary shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
             >
               Ver Catálogo Completo
@@ -597,12 +632,30 @@ const ContactPage = () => (
   <div className="max-w-5xl mx-auto py-7 sm:py-12 lg:py-14 px-4 sm:px-6">
     <Helmet>
       <title>Contáctanos | Inmobiliaria Rincón Bedoya y Asociados</title>
-      <meta name="description" content="Comunícate con Inmobiliaria Rincón Bedoya y Asociados. WhatsApp: 310 596 8202. Oficina en Cra 5 No. 9-28, Anserma, Caldas. Atención de lunes a sábado." />
-      <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/contacto" />
-      <meta property="og:title" content="Contáctanos | Inmobiliaria Rincón Bedoya y Asociados" />
-      <meta property="og:description" content="WhatsApp, teléfono, email y dirección física. Atención personalizada en Anserma, Caldas." />
-      <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/contacto" />
-      <meta property="og:image" content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+      <meta
+        name="description"
+        content="Comunícate con Inmobiliaria Rincón Bedoya y Asociados. WhatsApp: 310 596 8202. Oficina en Cra 5 No. 9-28, Anserma, Caldas. Atención de lunes a sábado."
+      />
+      <link
+        rel="canonical"
+        href="https://inmobiliaria-ryb-y-asociados.com/contacto"
+      />
+      <meta
+        property="og:title"
+        content="Contáctanos | Inmobiliaria Rincón Bedoya y Asociados"
+      />
+      <meta
+        property="og:description"
+        content="WhatsApp, teléfono, email y dirección física. Atención personalizada en Anserma, Caldas."
+      />
+      <meta
+        property="og:url"
+        content="https://inmobiliaria-ryb-y-asociados.com/contacto"
+      />
+      <meta
+        property="og:image"
+        content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
+      />
     </Helmet>
 
     <motion.div
@@ -709,9 +762,8 @@ const ContactPage = () => (
               <h3 className="text-light font-semibold mb-1">
                 Correo electrónico
               </h3>
-              {/* ✅ CAMBIO 4: era [email](mailto:...) en JSX — bug visual corregido */}
               <a
-                href="mailto:inmojuridi09@gmail.com"
+                 href="mailto:inmojuridi09@gmail.com"
                 className="text-primary text-sm hover:underline break-all"
               >
                 inmojuridi09@gmail.com
@@ -773,7 +825,7 @@ const ContactPage = () => (
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
           title="Ubicación Rincón Bedoya & Asociados"
-        ></iframe>
+        />
       </motion.div>
     </div>
 
@@ -814,21 +866,30 @@ function App() {
         <Routes>
           <Route element={<PublicLayout />}>
             <Route path={PUBLIC_ROUTES.HOME} element={<HomePage />} />
+
             <Route path="/catalogo" element={<CatalogPage />} />
-            <Route path="/propiedades" element={<CatalogPage />} />
             <Route path={PUBLIC_ROUTES.CATALOG} element={<CatalogPage />} />
-            <Route path="/propiedades/:id" element={<PropertyDetailPage />} />
+
+            <Route
+              path={PUBLIC_ROUTES.CITY_PROPERTIES}
+              element={<LocationPage />}
+            />
+            <Route
+              path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES}
+              element={<LocationPage />}
+            />
+
             <Route
               path={PUBLIC_ROUTES.PROPERTY_DETAIL}
               element={<PropertyDetailPage />}
             />
+
             <Route path={PUBLIC_ROUTES.CONTACT} element={<ContactPage />} />
             <Route path="/solicitar-acceso" element={<AccessRequestPage />} />
           </Route>
 
-          <Route path="/acceso" element={<AuthPage />} />
+          <Route path={AUTH_ROUTES.LOGIN} element={<AuthPage />} />
 
-          {/* ✅ CAMBIO 4: rutas del panel envueltas en Suspense */}
           <Route
             element={
               <ProtectedRoute>
@@ -841,19 +902,35 @@ function App() {
           >
             <Route
               path={PRIVATE_ROUTES.DASHBOARD}
-              element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <DashboardPage />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.PROPERTIES}
-              element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <PropertyManagement />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.CLIENTS}
-              element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <ClientManagement />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.QUERIES}
-              element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <ContactsPage />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.CHAT}
@@ -861,19 +938,35 @@ function App() {
             />
             <Route
               path={PRIVATE_ROUTES.DOCUMENTS}
-              element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <DocumentsPage />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.CALENDAR}
-              element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <CalendarPage />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.USERS}
-              element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <UsersPage />
+                </Suspense>
+              }
             />
             <Route
               path={PRIVATE_ROUTES.REQUESTS}
-              element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <RequestsPage />
+                </Suspense>
+              }
             />
           </Route>
 
