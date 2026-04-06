@@ -49,6 +49,9 @@ import AccessRequestPage from "./modules/users/pages/AccessRequestPage";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 import SettingsFab from "./shared/components/UI/SettingsFab";
 import LocationPage from "./modules/public/pages/LocationPage";
+// ── NUEVO: importación directa (no lazy) porque es una ruta personal
+// que se carga frecuentemente y su bundle es pequeño
+import ProfilePage from "./modules/profile/pages/ProfilePage";
 
 const DashboardPage = lazy(() =>
   import("./modules/dashboard/pages/DashboardPage")
@@ -73,12 +76,18 @@ const RequestsPage = lazy(() =>
   import("./modules/users/pages/RequestsPage")
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Loader genérico para Suspense
+// ─────────────────────────────────────────────────────────────────────────────
 const PageLoader = () => (
   <div className="flex items-center justify-center h-[60vh]">
     <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Inicializador de notificaciones push (se monta dentro de AuthProvider)
+// ─────────────────────────────────────────────────────────────────────────────
 const NotificationInitializer = () => {
   const { currentUser } = useAuth();
 
@@ -108,6 +117,9 @@ const NotificationInitializer = () => {
   return null;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapa de colores para las tarjetas de servicios
+// ─────────────────────────────────────────────────────────────────────────────
 const serviceColorMap = {
   primary: {
     bg: "bg-primary/10",
@@ -141,7 +153,9 @@ const serviceColorMap = {
   },
 };
 
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Página de inicio pública
+// ─────────────────────────────────────────────────────────────────────────────
 const HomePage = () => (
   <div className="overflow-hidden">
     <Helmet>
@@ -170,6 +184,7 @@ const HomePage = () => (
       <meta property="og:type" content="website" />
     </Helmet>
 
+    {/* ── Hero ── */}
     <motion.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -293,6 +308,7 @@ const HomePage = () => (
       </motion.div>
     </motion.section>
 
+    {/* ── Para compradores / propietarios ── */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-900 to-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -416,6 +432,7 @@ const HomePage = () => (
       </div>
     </section>
 
+    {/* ── Servicios especializados ── */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -485,7 +502,6 @@ const HomePage = () => (
             },
           ].map((service, index) => {
             const c = serviceColorMap[service.color] ?? serviceColorMap.primary;
-
             return (
               <motion.div
                 key={index}
@@ -514,6 +530,7 @@ const HomePage = () => (
       </div>
     </section>
 
+    {/* ── Cómo trabajamos ── */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-950 to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -586,6 +603,7 @@ const HomePage = () => (
       </div>
     </section>
 
+    {/* ── CTA final ── */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
@@ -628,6 +646,9 @@ const HomePage = () => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Página de contacto pública
+// ─────────────────────────────────────────────────────────────────────────────
 const ContactPage = () => (
   <div className="max-w-5xl mx-auto py-7 sm:py-12 lg:py-14 px-4 sm:px-6">
     <Helmet>
@@ -762,8 +783,9 @@ const ContactPage = () => (
               <h3 className="text-light font-semibold mb-1">
                 Correo electrónico
               </h3>
+              {/* Corregido: era markdown link dentro de JSX */}
               <a
-                 href="mailto:inmojuridi09@gmail.com"
+                href="mailto:inmojuridi09@gmail.com"
                 className="text-primary text-sm hover:underline break-all"
               >
                 inmojuridi09@gmail.com
@@ -855,6 +877,9 @@ const ContactPage = () => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Root
+// ─────────────────────────────────────────────────────────────────────────────
 function App() {
   return (
     <AuthProvider>
@@ -864,32 +889,25 @@ function App() {
         <Toaster position="top-right" />
 
         <Routes>
+          {/* ── Rutas públicas ── */}
           <Route element={<PublicLayout />}>
             <Route path={PUBLIC_ROUTES.HOME} element={<HomePage />} />
 
+            {/* Alias para /catalogo sin slug (compatibilidad con links existentes) */}
             <Route path="/catalogo" element={<CatalogPage />} />
             <Route path={PUBLIC_ROUTES.CATALOG} element={<CatalogPage />} />
 
-            <Route
-              path={PUBLIC_ROUTES.CITY_PROPERTIES}
-              element={<LocationPage />}
-            />
-            <Route
-              path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES}
-              element={<LocationPage />}
-            />
-
-            <Route
-              path={PUBLIC_ROUTES.PROPERTY_DETAIL}
-              element={<PropertyDetailPage />}
-            />
-
+            <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<LocationPage />} />
+            <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<LocationPage />} />
+            <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL} element={<PropertyDetailPage />} />
             <Route path={PUBLIC_ROUTES.CONTACT} element={<ContactPage />} />
             <Route path="/solicitar-acceso" element={<AccessRequestPage />} />
           </Route>
 
+          {/* ── Autenticación ── */}
           <Route path={AUTH_ROUTES.LOGIN} element={<AuthPage />} />
 
+          {/* ── Rutas privadas ── */}
           <Route
             element={
               <ProtectedRoute>
@@ -932,6 +950,7 @@ function App() {
                 </Suspense>
               }
             />
+            {/* CHAT: redirige al dashboard mientras no esté implementado */}
             <Route
               path={PRIVATE_ROUTES.CHAT}
               element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />}
@@ -968,12 +987,17 @@ function App() {
                 </Suspense>
               }
             />
+
+            {/* ── NUEVO: Panel de perfil del usuario logueado ── */}
+            {/* No se envuelve en Suspense porque ProfilePage es importación directa */}
+            <Route
+              path={PRIVATE_ROUTES.PROFILE}
+              element={<ProfilePage />}
+            />
           </Route>
 
-          <Route
-            path="*"
-            element={<Navigate to={PUBLIC_ROUTES.HOME} replace />}
-          />
+          {/* ── Fallback: cualquier ruta desconocida → inicio ── */}
+          <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

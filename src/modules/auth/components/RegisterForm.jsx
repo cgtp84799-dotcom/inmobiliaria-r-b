@@ -2,51 +2,40 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { FaEnvelope, FaLock, FaUser, FaEye, FaEyeSlash } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 
 const RegisterForm = () => {
   const [formData, setFormData] = useState({
     displayName: '',
     email: '',
     password: '',
-    confirmPassword: '',
-    role: 'agent'
+    confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
-  const navigate = useNavigate();
+  const [loading, setLoading]           = useState(false);
+  const { signUp }  = useAuth();
+  const navigate    = useNavigate();
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      alert('Las contraseñas no coinciden');
+      toast.error('Las contraseñas no coinciden'); // ← usa toast, no alert()
       return;
     }
 
     setLoading(true);
-
     try {
-      await signUp(formData.email, formData.password, {
-        displayName: formData.displayName,
-        role: formData.role,
-        permissions: {
-          properties: ['create', 'read', 'update'],
-          clients: ['read', 'update'],
-          documents: ['read'],
-          chat: ['access']
-        }
-      });
+      // signUp espera (email, password, displayName: string)
+      await signUp(formData.email, formData.password, formData.displayName);
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error en registro:', error);
+      // AuthContext ya lanza el mensaje localizado — solo mostrarlo
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
@@ -54,6 +43,7 @@ const RegisterForm = () => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+
       {/* Nombre */}
       <div>
         <label className="block text-light mb-2 text-sm font-semibold">
@@ -92,22 +82,8 @@ const RegisterForm = () => {
         </div>
       </div>
 
-      {/* Rol */}
-      <div>
-        <label className="block text-light mb-2 text-sm font-semibold">
-          Rol
-        </label>
-        <select
-          name="role"
-          value={formData.role}
-          onChange={handleChange}
-          className="w-full bg-dark border border-primary/30 rounded-lg px-4 py-3 text-light focus:border-primary outline-none"
-        >
-          <option value="agent">Agente</option>
-          <option value="lawyer">Abogado</option>
-          <option value="admin">Administrador</option>
-        </select>
-      </div>
+      {/* Rol eliminado — AuthContext siempre asigna 'viewer' en el registro.
+          El admin asigna el rol real desde UsersPage después de aprobar. */}
 
       {/* Password */}
       <div>
@@ -129,6 +105,7 @@ const RegisterForm = () => {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-4 top-3.5 text-primary/50 hover:text-primary"
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           >
             {showPassword ? <FaEyeSlash /> : <FaEye />}
           </button>
@@ -154,6 +131,11 @@ const RegisterForm = () => {
         </div>
       </div>
 
+      {/* Info — expectativa honesta para el usuario */}
+      <p className="text-xs text-light/50 text-center">
+        Tu cuenta quedará pendiente de aprobación por un administrador.
+      </p>
+
       {/* Botón */}
       <button
         type="submit"
@@ -162,6 +144,7 @@ const RegisterForm = () => {
       >
         {loading ? 'Creando cuenta...' : 'Crear cuenta'}
       </button>
+
     </form>
   );
 };

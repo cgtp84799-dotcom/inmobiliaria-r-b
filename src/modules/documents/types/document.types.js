@@ -35,3 +35,11 @@ export const CONTRACT_TYPE_LABELS = {
   [CONTRACT_TYPES.ADMINISTRATION]: 'Contrato de administración',
   [CONTRACT_TYPES.MANDATE]: 'Contrato de mandato'
 };
+
+export const REQUIRED_DOCUMENTS = [
+  { id: 'escritura',           name: 'Escritura pública',                   required: true },
+  { id: 'certificadoLibertad', name: 'Certificado de libertad y tradición', required: true },
+  { id: 'impuestoPredial',     name: 'Paz y salvo de impuesto predial',      required: true },
+  { id: 'serviciosPublicos',   name: 'Paz y salvo de servicios públicos',    required: true },
+  { id: 'cedulaCatastral',     name: 'Cédula catastral',                     required: true },
+];

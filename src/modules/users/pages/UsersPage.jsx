@@ -1,128 +1,161 @@
-import { useEffect, useState } from 'react';
+// src/modules/users/pages/UsersPage.jsx
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  FaUserPlus,
-  FaFilter,
-  FaSearch,
-  FaUsers,
-  FaSpinner,
-  FaTimesCircle,
-  FaUserShield,
-  FaShieldAlt,
-  FaEye,
-  FaInfoCircle
+  FaUserPlus, FaFilter, FaSearch, FaUsers, FaSpinner,
+  FaTimesCircle, FaUserShield, FaShieldAlt, FaEye, FaInfoCircle,
 } from 'react-icons/fa';
 import { userService } from '../services/user.service';
 import {
   USER_ROLES,
   USER_ROLE_LABELS,
   USER_ROLE_DESCRIPTIONS,
-  hasPermission // ✅
+  hasPermission,
 } from '../types/user.types';
-import UserCard from '../components/UserCard';
-import { useAuth } from '../../../core/contexts/AuthContext';
-import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
+import UserCard      from '../components/UserCard';
+import UserEditModal from '../components/UserEditModal';
+import { useAuth }   from '../../../core/contexts/AuthContext';
+import ConfirmModal  from '../../../shared/components/UI/ConfirmModal';
+
 
 const UsersPage = () => {
-  const { currentUser } = useAuth();
+  // ✅ role viene de userData (Firestore), no de currentUser (FirebaseAuth)
+  const { currentUser, userData } = useAuth();
 
-  // ✅ Reemplaza isAdmin por permisos granulares
-  const canCreate = hasPermission(currentUser?.role, 'users', 'create');
-  const canUpdate = hasPermission(currentUser?.role, 'users', 'update');
-  const canDelete = hasPermission(currentUser?.role, 'users', 'delete');
+  const canCreate = hasPermission(userData?.role, 'users', 'create');
+  const canUpdate = hasPermission(userData?.role, 'users', 'update');
+  const canDelete = hasPermission(userData?.role, 'users', 'delete');
 
-  const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const [filters, setFilters] = useState({ searchTerm: '', role: '', status: '' });
-
-  const [formData, setFormData] = useState({
-    displayName: '',
-    email: '',
-    phone: '',
-    role: USER_ROLES.MEMBER,
-    status: 'active',
-    password: ''
-  });
-
-  const [editingUser, setEditingUser] = useState(null);
-
+  const [users, setUsers]               = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [filtersOpen, setFiltersOpen]   = useState(true);
+  const [modalOpen, setModalOpen]       = useState(false);
+  const [editingUser, setEditingUser]   = useState(null);   // null → crear, objeto → editar
+  const [filters, setFilters]           = useState({ searchTerm: '', role: '', status: '' });
   const [confirmModal, setConfirmModal] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    confirmText: 'Sí, confirmar',
-    onConfirm: null,
+    isOpen: false, title: '', message: '', confirmText: 'Sí, confirmar', onConfirm: null,
   });
 
-  useEffect(() => { loadUsers(); }, []);
 
-  const loadUsers = async () => {
+  // ── Datos derivados ────────────────────────────────────────────────────────
+
+  // Filtrado reactivo — sin estado duplicado ni stale closure
+  const filteredUsers = useMemo(() => {
+    let result = [...users];
+    if (filters.searchTerm) {
+      const term = filters.searchTerm.toLowerCase();
+      result = result.filter(u =>
+        u.displayName?.toLowerCase().includes(term) ||
+        u.email?.toLowerCase().includes(term)       ||
+        u.phone?.includes(filters.searchTerm)
+      );
+    }
+    if (filters.role)   result = result.filter(u => u.role   === filters.role);
+    if (filters.status) result = result.filter(u => u.status === filters.status);
+    return result;
+  }, [users, filters]);
+
+  // Stats memoizados — no se recalculan en cada render
+  const stats = useMemo(() => ({
+    total:   users.length,
+    active:  users.filter(u => u.status === 'active').length,
+    admins:  users.filter(u => u.role   === USER_ROLES.ADMIN).length,
+    members: users.filter(u => u.role   === USER_ROLES.MEMBER).length,
+    viewers: users.filter(u => u.role   === USER_ROLES.VIEWER).length,
+  }), [users]);
+
+
+  // ── Carga de datos ─────────────────────────────────────────────────────────
+
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await userService.getAllUsers();
       setUsers(data);
-      setFilteredUsers(data);
-    } catch (error) {
-      console.error('Error al cargar usuarios:', error);
+    } catch {
       toast.error('Error al cargar usuarios');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleFilterChange = (field, value) => {
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+
+  // ── Filtros ────────────────────────────────────────────────────────────────
+
+  const handleFilterChange = (field, value) =>
     setFilters(prev => ({ ...prev, [field]: value }));
-  };
 
-  const applyFilters = () => {
-    let filtered = [...users];
-    if (filters.searchTerm) {
-      const term = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(user =>
-        user.displayName?.toLowerCase().includes(term) ||
-        user.email?.toLowerCase().includes(term) ||
-        user.phone?.includes(term)
-      );
-    }
-    if (filters.role) filtered = filtered.filter(user => user.role === filters.role);
-    if (filters.status) filtered = filtered.filter(user => user.status === filters.status);
-    setFilteredUsers(filtered);
-  };
-
-  const clearFilters = () => {
+  const clearFilters = () =>
     setFilters({ searchTerm: '', role: '', status: '' });
-    setFilteredUsers(users);
-  };
 
-  const handleEdit = (user) => {
-    if (!canUpdate) {
-      toast.error('No tienes permisos para editar usuarios');
-      return;
-    }
-    setEditingUser(user);
-    setFormData({
-      displayName: user.displayName || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      role: user.role || USER_ROLES.MEMBER,
-      status: user.status || 'active',
-      password: ''
-    });
+
+  // ── Modal crear / editar ───────────────────────────────────────────────────
+
+  const openCreateModal = () => {
+    if (!canCreate) { toast.error('No tienes permisos para crear usuarios'); return; }
+    setEditingUser(null);
     setModalOpen(true);
   };
 
-  const handleDelete = (user) => {
-    if (!canDelete) {
-      toast.error('No tienes permisos para eliminar usuarios');
-      return;
+  const handleEdit = (user) => {
+    if (!canUpdate) { toast.error('No tienes permisos para editar usuarios'); return; }
+    setEditingUser(user);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingUser(null);
+  };
+
+  /**
+   * handleSave recibe (formData, editingUser) desde UserEditModal.
+   * No llama a closeModal() — el modal se cierra solo si onSave resuelve sin error.
+   */
+  const handleSave = async (formData, editingUser) => {
+    // Doble-check de permisos (defensa en profundidad)
+    if (editingUser && !canUpdate) throw new Error('Sin permisos para editar usuarios');
+    if (!editingUser && !canCreate) throw new Error('Sin permisos para crear usuarios');
+
+    if (editingUser) {
+      await userService.updateUser(editingUser.id, {
+        displayName: formData.displayName,
+        email:       formData.email,
+        phone:       formData.phone,
+        role:        formData.role,
+        status:      formData.status,
+      });
+      toast.success('Usuario actualizado');
+    } else {
+      await userService.createUser(
+        {
+          displayName: formData.displayName,
+          email:       formData.email,
+          phone:       formData.phone,
+          role:        formData.role,
+          status:      formData.status,
+        },
+        formData.password
+      );
+      toast.success('Usuario creado exitosamente');
     }
-    if (user.role === USER_ROLES.ADMIN) {
-      toast.error('No se puede eliminar un administrador');
+
+    loadUsers();
+    // ⚠️ No cerrar aquí — UserEditModal llama onClose() tras onSave exitoso
+  };
+
+
+  // ── Acciones de tarjeta ────────────────────────────────────────────────────
+
+  const handleDelete = (user) => {
+    if (!canDelete) { toast.error('No tienes permisos para eliminar usuarios'); return; }
+    // Solo bloquea auto-eliminación, no a todos los admins
+    if (user.email === currentUser?.email) {
+      toast.error('No puedes eliminar tu propia cuenta');
       return;
     }
     setConfirmModal({
@@ -131,13 +164,12 @@ const UsersPage = () => {
       message: `¿Seguro que quieres eliminar a ${user.displayName || user.email}? Esta acción no se puede deshacer.`,
       confirmText: 'Sí, eliminar',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
         try {
           await userService.deleteUser(user.id);
           toast.success('Usuario eliminado');
           loadUsers();
-        } catch (error) {
-          console.error('Error eliminando usuario:', error);
+        } catch {
           toast.error('Error al eliminar usuario');
         }
       },
@@ -145,113 +177,43 @@ const UsersPage = () => {
   };
 
   const handleChangeStatus = async (user) => {
-    if (!canUpdate) {
-      toast.error('No tienes permisos para cambiar el estado');
-      return;
-    }
+    if (!canUpdate) { toast.error('No tienes permisos para cambiar el estado'); return; }
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
     try {
       await userService.changeUserStatus(user.id, newStatus);
       toast.success(`Usuario ${newStatus === 'active' ? 'activado' : 'desactivado'}`);
       loadUsers();
-    } catch (error) {
-      console.error('Error al cambiar de estado:', error);
-      toast.error('Error al cambiar de estado');
+    } catch {
+      toast.error('Error al cambiar el estado');
     }
   };
 
   const handleResetPassword = (user) => {
-    if (!canUpdate) {
-      toast.error('No tienes permisos para resetear contraseñas');
-      return;
-    }
+    if (!canUpdate) { toast.error('No tienes permisos para resetear contraseñas'); return; }
     setConfirmModal({
       isOpen: true,
       title: 'Restablecer contraseña',
       message: `¿Enviar email de restablecimiento de contraseña a ${user.email}?`,
       confirmText: 'Sí, enviar email',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
         try {
           await userService.sendPasswordReset(user.email);
           toast.success('Email de restablecimiento enviado');
-        } catch (error) {
-          console.error('Error al enviar reset:', error);
+        } catch {
           toast.error('Error al enviar email');
         }
       },
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!canCreate && !canUpdate) {
-      toast.error('No tienes permisos para esta acción');
-      return;
-    }
-    if (!formData.displayName || !formData.email || !formData.role) {
-      toast.error('Completa los campos obligatorios');
-      return;
-    }
-    try {
-      if (editingUser) {
-        await userService.updateUser(editingUser.id, {
-          displayName: formData.displayName,
-          email: formData.email,
-          phone: formData.phone,
-          role: formData.role,
-          status: formData.status
-        });
-        toast.success('Usuario actualizado');
-      } else {
-        if (!formData.password || formData.password.length < 6) {
-          toast.error('La contraseña debe tener un mínimo de 6 caracteres');
-          return;
-        }
-        await userService.createUser(
-          {
-            displayName: formData.displayName,
-            email: formData.email,
-            phone: formData.phone,
-            role: formData.role,
-            status: formData.status
-          },
-          formData.password
-        );
-        toast.success('Usuario creado exitosamente');
-      }
 
-      setModalOpen(false);
-      setEditingUser(null);
-      setFormData({
-        displayName: '',
-        email: '',
-        phone: '',
-        role: USER_ROLES.MEMBER,
-        status: 'active',
-        password: ''
-      });
-      loadUsers();
-    } catch (error) {
-      console.error('Error guardando usuario:', error);
-      toast.error(error.message || 'Error al guardar usuario');
-    }
-  };
-
-  const getUserStats = () => ({
-    total: users.length,
-    active: users.filter(u => u.status === 'active').length,
-    admins: users.filter(u => u.role === USER_ROLES.ADMIN).length,
-    members: users.filter(u => u.role === USER_ROLES.MEMBER).length,
-    viewers: users.filter(u => u.role === USER_ROLES.VIEWER).length
-  });
-
-  const stats = getUserStats();
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="px-4 py-6 space-y-6">
 
-      {/* ENCABEZADO */}
+      {/* ── Encabezado ── */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -266,22 +228,9 @@ const UsersPage = () => {
             Administra el equipo de trabajo y controla los accesos al sistema.
           </p>
         </div>
-
-        {/* ✅ Solo admin puede crear */}
         {canCreate && (
           <button
-            onClick={() => {
-              setEditingUser(null);
-              setFormData({
-                displayName: '',
-                email: '',
-                phone: '',
-                role: USER_ROLES.MEMBER,
-                status: 'active',
-                password: ''
-              });
-              setModalOpen(true);
-            }}
+            onClick={openCreateModal}
             className="button-gold inline-flex items-center gap-2 px-6 py-3"
           >
             <FaUserPlus />
@@ -290,104 +239,62 @@ const UsersPage = () => {
         )}
       </motion.div>
 
-      {/* ESTADÍSTICAS */}
+      {/* ── Estadísticas ── */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 md:grid-cols-5 gap-4"
       >
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FaUsers className="text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Total</p>
-              <p className="text-2xl font-bold text-light">{stats.total}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-              <FaUserShield className="text-green-500" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Activos</p>
-              <p className="text-2xl font-bold text-green-400">{stats.active}</p>
+        {[
+          { label: 'Total',           value: stats.total,   color: 'primary',   Icon: FaUsers      },
+          { label: 'Activos',         value: stats.active,  color: 'green-400', Icon: FaUserShield },
+          { label: 'Administradores', value: stats.admins,  color: 'red-400',   Icon: FaShieldAlt  },
+          { label: 'Equipo',          value: stats.members, color: 'primary',   Icon: FaUsers      },
+          { label: 'Lectura',         value: stats.viewers, color: 'slate-400', Icon: FaEye        },
+        ].map(({ label, value, color, Icon }) => (
+          <div key={label} className="card-soft p-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg bg-${color}/10 flex items-center justify-center`}>
+                <Icon className={`text-${color}`} />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">{label}</p>
+                <p className={`text-2xl font-bold text-${color} tabular-nums`}>{value}</p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <FaShieldAlt className="text-red-500" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Administradores</p>
-              <p className="text-2xl font-bold text-red-400">{stats.admins}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FaUsers className="text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Equipo</p>
-              <p className="text-2xl font-bold text-primary">{stats.members}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-500/10 flex items-center justify-center">
-              <FaEye className="text-slate-400" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Lectura</p>
-              <p className="text-2xl font-bold text-slate-400">{stats.viewers}</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </motion.div>
 
-      {/* INFO DE ROLES */}
+      {/* ── Info de roles ── */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="card-soft p-4 border-blue-500/20"
+        className="card-soft p-4 border border-blue-500/20"
       >
         <div className="flex items-start gap-3">
           <FaInfoCircle className="text-blue-400 mt-1 flex-shrink-0" />
           <div>
             <h3 className="text-blue-400 font-semibold mb-2">Roles del sistema</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-light font-semibold mb-1">✨ Administrador</p>
-                <p className="text-slate-400 text-xs">{USER_ROLE_DESCRIPTIONS[USER_ROLES.ADMIN]}</p>
-              </div>
-              <div>
-                <p className="text-light font-semibold mb-1">👥 Miembro del equipo</p>
-                <p className="text-slate-400 text-xs">{USER_ROLE_DESCRIPTIONS[USER_ROLES.MEMBER]}</p>
-              </div>
-              <div>
-                <p className="text-light font-semibold mb-1">👁️ Solo lectura</p>
-                <p className="text-slate-400 text-xs">{USER_ROLE_DESCRIPTIONS[USER_ROLES.VIEWER]}</p>
-              </div>
+              {[
+                { emoji: '✨', label: 'Administrador',      role: USER_ROLES.ADMIN  },
+                { emoji: '👥', label: 'Miembro del equipo', role: USER_ROLES.MEMBER },
+                { emoji: '👁️', label: 'Solo lectura',        role: USER_ROLES.VIEWER },
+              ].map(({ emoji, label, role }) => (
+                <div key={role}>
+                  <p className="text-light font-semibold mb-1">{emoji} {label}</p>
+                  <p className="text-slate-400 text-xs">{USER_ROLE_DESCRIPTIONS[role]}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* FILTROS */}
+      {/* ── Filtros ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -405,7 +312,7 @@ const UsersPage = () => {
             </div>
           </div>
           <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
+            onClick={() => setFiltersOpen(v => !v)}
             className="text-xs text-primary hover:underline"
           >
             {filtersOpen ? 'Ocultar' : 'Mostrar'}
@@ -418,10 +325,11 @@ const UsersPage = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
+            {/* Búsqueda por texto */}
             <div>
               <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">
                   <FaSearch />
                 </span>
                 <input
@@ -429,18 +337,21 @@ const UsersPage = () => {
                   placeholder="Nombre, correo electrónico, teléfono..."
                   value={filters.searchTerm}
                   onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light
+                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Filtro por rol */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Rol</label>
                 <select
                   value={filters.role}
                   onChange={(e) => handleFilterChange('role', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light
+                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Todos los roles</option>
                   {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
@@ -449,12 +360,14 @@ const UsersPage = () => {
                 </select>
               </div>
 
+              {/* Filtro por estado */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Estado</label>
                 <select
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light
+                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Todos</option>
                   <option value="active">Activos</option>
@@ -464,20 +377,16 @@ const UsersPage = () => {
                 </select>
               </div>
 
+              {/* Limpiar — el filtro ya es reactivo, el botón es UX explícita */}
               <div className="flex items-end gap-3 md:col-span-2">
                 <button
-                  onClick={applyFilters}
-                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-primary text-slate-950 font-semibold text-sm py-2.5 px-6 rounded-xl hover:bg-yellow-500 transition-all"
-                >
-                  <FaSearch />
-                  Buscar
-                </button>
-                <button
                   onClick={clearFilters}
-                  className="inline-flex items-center justify-center gap-1 px-4 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl py-2.5 hover:border-slate-600 transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs
+                    text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600
+                    rounded-xl transition-all"
                 >
                   <FaTimesCircle />
-                  Limpiar
+                  Limpiar filtros
                 </button>
               </div>
             </div>
@@ -485,17 +394,17 @@ const UsersPage = () => {
         )}
       </motion.div>
 
-      {/* CONTADOR */}
+      {/* ── Contador de resultados ── */}
       {!loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <p className="text-slate-400 text-sm">
-            <span className="text-primary font-bold">{filteredUsers.length}</span>{' '}
+            <span className="text-primary font-bold tabular-nums">{filteredUsers.length}</span>{' '}
             {filteredUsers.length === 1 ? 'usuario encontrado' : 'usuarios encontrados'}
           </p>
         </motion.div>
       )}
 
-      {/* LISTADO */}
+      {/* ── Listado ── */}
       {loading ? (
         <motion.div
           initial={{ opacity: 0 }}
@@ -505,6 +414,7 @@ const UsersPage = () => {
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
           <p className="text-slate-400">Cargando usuarios...</p>
         </motion.div>
+
       ) : filteredUsers.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -522,7 +432,14 @@ const UsersPage = () => {
               ? 'Crea el primer usuario usando el botón de arriba.'
               : 'Intenta ajustar los filtros de búsqueda.'}
           </p>
+          {users.length === 0 && canCreate && (
+            <button onClick={openCreateModal} className="button-gold inline-flex items-center gap-2 px-6 py-3">
+              <FaUserPlus />
+              Crear primer usuario
+            </button>
+          )}
         </motion.div>
+
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -533,140 +450,35 @@ const UsersPage = () => {
             <UserCard
               key={user.id}
               user={user}
-              onEdit={canUpdate ? handleEdit : null}           // ✅
-              onDelete={canDelete ? handleDelete : null}       // ✅
-              onChangeStatus={canUpdate ? handleChangeStatus : null} // ✅
-              onResetPassword={canUpdate ? handleResetPassword : null} // ✅
-              currentUserRole={currentUser?.role}
+              onEdit={canUpdate            ? handleEdit         : null}
+              onDelete={canDelete          ? handleDelete        : null}
+              onChangeStatus={canUpdate   ? handleChangeStatus  : null}
+              onResetPassword={canUpdate  ? handleResetPassword : null}
+              currentUserRole={userData?.role}
             />
           ))}
         </motion.div>
       )}
 
-      {/* MODAL CREACIÓN/EDICIÓN */}
-      {modalOpen && (canCreate || canUpdate) && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="card-soft max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="text-2xl font-bold text-primary mb-4">
-              {editingUser ? 'Editar usuario' : 'Nuevo usuario'}
-            </h2>
+      {/* ── Modal crear / editar (UserEditModal) ── */}
+      <UserEditModal
+        editingUser={editingUser}
+        isOpen={modalOpen}
+        onClose={closeModal}
+        onSave={handleSave}
+        currentUserRole={userData?.role}
+      />
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">
-                    Nombre completo <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.displayName}
-                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="Juan Pérez"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">
-                    Correo electrónico <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="usuario@ejemplo.com"
-                    disabled={!!editingUser}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">Teléfono</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                    placeholder="310 123 4567"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">
-                    Rol <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">Selecciona un rol</option>
-                    {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-300 mb-1">Estado</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="active">Activo</option>
-                    <option value="inactive">Inactivo</option>
-                    <option value="pending">Pendiente</option>
-                    <option value="blocked">Bloqueado</option>
-                  </select>
-                </div>
-
-                {!editingUser && (
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-1">
-                      Contraseña <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button type="submit" className="flex-1 button-gold">
-                  {editingUser ? 'Actualizar usuario' : 'Crear usuario'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* ConfirmModal reutilizable */}
+      {/* ── Modal de confirmación ── */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         confirmText={confirmModal.confirmText}
         onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
+
     </div>
   );
 };
