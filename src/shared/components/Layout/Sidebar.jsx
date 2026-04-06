@@ -14,6 +14,7 @@ import {
   FaChevronRight,
   FaShieldAlt,
   FaEye,
+  FaUser,
 } from "react-icons/fa";
 import { useAuth } from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
@@ -90,6 +91,13 @@ const Sidebar = ({
       label: "Solicitudes",
       path: PRIVATE_ROUTES.REQUESTS,
       visible: hasPermission(role, "users", "create"), // solo admin
+    },
+    // ✅ Perfil propio — visible para todos los roles
+    {
+      icon: FaUser,
+      label: "Mi Perfil",
+      path: PRIVATE_ROUTES.PROFILE,
+      visible: true,
     },
   ];
 
