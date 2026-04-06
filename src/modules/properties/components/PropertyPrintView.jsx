@@ -1,36 +1,104 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import './PropertyPrintView.css';
-import { imgToBase64, fmt, fmtDate, safeFilename, generatePDF } from '../utils/pdfUtils';
+import { fmt, fmtDate, safeFilename, downloadPDFExactVisual } from '../utils/pdfUtils';
 
-const TX = { venta: 'EN VENTA', arriendo: 'EN ARRIENDO', both: 'VENTA / ARRIENDO' };
-const TX_CLS = { venta: 'chip-venta', arriendo: 'chip-arriendo', both: 'chip-both' };
-const ST = { disponible: 'DISPONIBLE', reservada: 'RESERVADA', vendida: 'VENDIDA', arrendada: 'ARRENDADA' };
-const ST_CLS = { disponible: 'chip-disponible', reservada: 'chip-reservada', vendida: 'chip-vendida', arrendada: 'chip-arrendada' };
+const TX = {
+  venta: 'EN VENTA',
+  arriendo: 'EN ARRIENDO',
+  both: 'VENTA / ARRIENDO',
+};
+
+const TX_CLS = {
+  venta: 'chip-venta',
+  arriendo: 'chip-arriendo',
+  both: 'chip-both',
+};
+
+const ST = {
+  disponible: 'DISPONIBLE',
+  reservada: 'RESERVADA',
+  vendida: 'VENDIDA',
+  arrendada: 'ARRENDADA',
+};
+
+const ST_CLS = {
+  disponible: 'chip-disponible',
+  reservada: 'chip-reservada',
+  vendida: 'chip-vendida',
+  arrendada: 'chip-arrendada',
+};
+
+function chunk(arr = [], size = 4) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function compactText(text = '', max = 420) {
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, max).trim()}…` : text;
+}
+
+function normalizeList(list = []) {
+  return list.filter(Boolean).map((v) => String(v).trim()).filter(Boolean);
+}
+
+function cleanImages(list = []) {
+  return (list || [])
+    .filter((img) => typeof img === 'string')
+    .map((img) => img.trim())
+    .filter(Boolean);
+}
+
+function fillGallerySlots(list = [], count = 4) {
+  const valid = cleanImages(list);
+  if (!valid.length) return [];
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    out.push(valid[i % valid.length]);
+  }
+  return out;
+}
+
+function getOptionalGalleryGroups(list = [], startIndex = 0, minRequired = 2, size = 4) {
+  const valid = cleanImages(list).slice(startIndex);
+  if (valid.length < minRequired) return [];
+  return chunk(valid, size);
+}
 
 export default function PropertyPrintView({ property, onClose }) {
   const docRef = useRef(null);
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [imgs, setImgs] = useState({ logo: '', hero: '', gallery: [] });
 
-  useEffect(() => {
-    if (!property) return;
-    const urls = property.images || [];
-    Promise.all([
-      imgToBase64('/favicon.ico'),
-      ...urls.map(imgToBase64),
-    ]).then(([logo, ...converted]) => {
-      setImgs({ logo, hero: converted[0] || '', gallery: converted.slice(1, 7) });
-      setReady(true);
-    });
-  }, [property]);
+  if (!property) return null;
+
+  const logoUrl = '/favicon.ico';
+
+  const allImages = cleanImages(property.images || []);
+  const heroUrl = allImages[0] || '';
+  const afterHero = allImages.slice(1);
+  const basePool = afterHero.length ? afterHero : allImages;
+
+  const galleryMain = fillGallerySlots(basePool, 4);
+  const galleryTechnical = fillGallerySlots(
+    afterHero.slice(4).length ? afterHero.slice(4) : basePool,
+    4
+  );
+
+  const extraGalleryGroups = useMemo(
+    () => getOptionalGalleryGroups(afterHero, 8, 2, 4).slice(0, 1),
+    [afterHero]
+  );
 
   const handleDownload = async () => {
-    if (!ready) return;
     setLoading(true);
     try {
-      const safe = safeFilename(property.title);
-      await generatePDF(docRef.current, `FichaAdmin-${safe}.pdf`);
+      const safeTitle = safeFilename(property.title || 'propiedad');
+      await downloadPDFExactVisual(
+        docRef,
+        `FichaAdmin-${safeTitle}.pdf`,
+        '.ppv-page'
+      );
     } catch (e) {
       console.error('PDF error', e);
       alert(`Error al generar PDF: ${e.message}`);
@@ -39,30 +107,125 @@ export default function PropertyPrintView({ property, onClose }) {
     }
   };
 
-  if (!property) return null;
-
   const isArriendo = property.transactionType === 'arriendo';
   const txLabel = TX[property.transactionType] ?? 'PROPIEDAD';
   const txCls = TX_CLS[property.transactionType] ?? 'chip-type';
   const stLabel = ST[property.status] ?? (property.status || '').toUpperCase();
   const stCls = ST_CLS[property.status] ?? 'chip-type';
-  const refId = property.id ? property.id.substring(0, 8).toUpperCase() : null;
-  const loc = [property.address, property.neighborhood, property.city, property.department].filter(Boolean).join(', ');
-  const amenities = [...(property.amenities ?? []), ...(property.customAmenities ?? [])].filter(Boolean);
-  const commission = property.commissionPercentage
-    ? Number(property.price) * Number(property.commissionPercentage) / 100
-    : null;
+  const refId = property.id ? property.id.substring(0, 8).toUpperCase() : 'SIN-REF';
 
-  const hasLegal = property.cadastralReference || property.registrationNumber
-    || property.legalStatus || property.publicDeedNumber || property.registeredOwner
-    || property.cadastralAppraisal || property.liensAndLimitations || property.horizontalProperty;
-  const hasOwner = property.ownerName || property.ownerPhone || property.ownerEmail;
-  const hasNotes = property.propertyObservations || property.ownerRecommendations;
-  const hasCosts = property.propertyTax || property.administrationFee || property.rentalDeposit
-    || property.minimumRentalPeriod || property.commissionPercentage;
+  const loc = [
+    property.address,
+    property.neighborhood,
+    property.city,
+    property.department,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const amenities = normalizeList([
+    ...(property.amenities ?? []),
+    ...(property.customAmenities ?? []),
+  ]);
+
   const documents = property.documents || [];
 
-  // ── Componentes reutilizables ──
+  const commission =
+    property.commissionPercentage && property.price
+      ? (Number(property.price) * Number(property.commissionPercentage)) / 100
+      : null;
+
+  const summaryStats = [
+    property.area
+      ? { label: 'Área total', value: `${Number(property.area).toLocaleString('es-CO')} m²` }
+      : null,
+    property.builtArea
+      ? { label: 'Área const.', value: `${Number(property.builtArea).toLocaleString('es-CO')} m²` }
+      : null,
+    property.rooms ? { label: 'Habitaciones', value: property.rooms } : null,
+    property.bathrooms ? { label: 'Baños', value: property.bathrooms } : null,
+    property.parkingSpots ? { label: 'Parqueaderos', value: property.parkingSpots } : null,
+    property.floors ? { label: 'Pisos', value: property.floors } : null,
+    property.yearBuilt ? { label: 'Año const.', value: property.yearBuilt } : null,
+    property.stratum ? { label: 'Estrato', value: property.stratum } : null,
+  ].filter(Boolean);
+
+  const featuresLeft = [
+    ['Tipo de inmueble', property.type],
+    ['Área total', property.area ? `${Number(property.area).toLocaleString('es-CO')} m²` : null],
+    ['Área construida', property.builtArea ? `${Number(property.builtArea).toLocaleString('es-CO')} m²` : null],
+    ['Habitaciones', property.rooms],
+    ['Baños', property.bathrooms],
+    ['Parqueaderos', property.parkingSpots],
+    ['Pisos / niveles', property.floors],
+    ['Año de construcción', property.yearBuilt],
+    ['Estrato', property.stratum],
+  ].filter(([, value]) => value || value === 0);
+
+  const locationRows = [
+    ['Dirección', property.address],
+    ['Barrio / Vereda', property.neighborhood],
+    ['Ciudad', property.city],
+    ['Departamento', property.department],
+    [
+      'Coordenadas',
+      property.latitude && property.longitude
+        ? `${property.latitude}, ${property.longitude}`
+        : null,
+      true,
+    ],
+  ].filter(([, value]) => value || value === 0);
+
+  const costRows = [
+    ['Tipo de transacción', txLabel],
+    [isArriendo ? 'Canon de arriendo' : 'Precio de venta', property.price ? fmt(property.price) : null],
+    ['Comisión', property.commissionPercentage ? `${property.commissionPercentage}%` : null],
+    ['Valor comisión', commission ? fmt(commission) : null],
+    ['Predial anual', property.propertyTax ? fmt(property.propertyTax) : null],
+    ['Administración / mes', property.administrationFee ? fmt(property.administrationFee) : null],
+    ['Depósito', property.rentalDeposit ? `${property.rentalDeposit} meses` : null],
+    ['Período mínimo', property.minimumRentalPeriod ? `${property.minimumRentalPeriod} meses` : null],
+  ].filter(([, value]) => value || value === 0);
+
+  const ownerRows = [
+    ['Nombre', property.ownerName],
+    ['Teléfono', property.ownerPhone],
+    ['Correo', property.ownerEmail],
+  ].filter(([, value]) => value || value === 0);
+
+  const adminRows = [
+    ['Estado actual', stLabel],
+    ['Tipo transacción', txLabel],
+    ['ID referencia', refId, true],
+    ['Publicado', fmtDate(property.createdAt)],
+    ['Actualizado', fmtDate(property.updatedAt)],
+  ].filter(([, value]) => value || value === 0);
+
+  const legalRows = [
+    ['Matrícula inmobiliaria', property.registrationNumber, true],
+    ['Ficha catastral', property.cadastralReference, true],
+    ['Escritura pública', property.publicDeedNumber],
+    ['Propietario registrado', property.registeredOwner],
+    ['Estado jurídico', property.legalStatus],
+    ['Avalúo catastral', property.cadastralAppraisal ? fmt(property.cadastralAppraisal) : null],
+    ['Propiedad horizontal', property.horizontalProperty ? 'Sí' : null],
+    ['Régimen PH', property.horizontalPropertyRegime],
+  ].filter(([, value]) => value || value === 0);
+
+  const amenityGroups = useMemo(() => chunk(amenities, 12), [amenities]);
+
+  const hasOwner = ownerRows.length > 0;
+  const hasCosts = costRows.length > 1;
+  const hasLegal = legalRows.length > 0 || property.liensAndLimitations;
+  const hasNotes = property.propertyObservations || property.ownerRecommendations;
+  const hasExtraGallery = extraGalleryGroups.length > 0;
+  const hasDocuments = documents.length > 0;
+
+  const pageCount =
+    2 +
+    (hasLegal || amenityGroups.length > 0 || hasDocuments ? 1 : 0) +
+    (hasNotes || hasExtraGallery ? 1 : 0);
+
   const Row = ({ label, value, mono = false, confidential = false }) => {
     if (!value && value !== 0) return null;
     return (
@@ -73,386 +236,541 @@ export default function PropertyPrintView({ property, onClose }) {
     );
   };
 
-  const SecLabel = ({ children, mt = false }) => (
-    <span className={`ppv-sec-label${mt ? ' mt' : ''}`}>{children}</span>
+  const SectionTitle = ({ children }) => (
+    <div className="ppv-sec-label">{children}</div>
   );
 
   const Header = ({ subtitle }) => (
-    <header className="ppv-header">
+    <header className="ppv-header avoid-break">
       <div className="ppv-brand">
         <div className="ppv-logo-wrap">
-          {imgs.logo
-            ? <img src={imgs.logo} alt="Logo" className="ppv-logo" />
-            : <span style={{ fontFamily: 'serif', fontSize: 14, fontWeight: 700, color: '#0B1929' }}>RB</span>
-          }
+          <img src={logoUrl} alt="Logo" className="ppv-logo" />
         </div>
         <div className="ppv-brand-text">
           <div className="ppv-brand-name">INMOBILIARIA RINCÓN BEDOYA Y ASOCIADOS</div>
-          <div className="ppv-brand-sub">{subtitle ?? 'Venta · Arriendo · Finca Raíz — Anserma, Caldas'}</div>
+          <div className="ppv-brand-sub">
+            {subtitle ?? 'Ficha Interna · Venta · Arriendo · Gestión Inmobiliaria'}
+          </div>
         </div>
       </div>
       <div className="ppv-header-right">
         <span className="ppv-header-contact">310 596 8202 · 320 673 6391</span>
         <span className="ppv-header-web">inmobiliaria-ryb-y-asociados.com</span>
-        {refId && <span className="ppv-header-ref">REF {refId}</span>}
+        <span className="ppv-header-ref">REF {refId}</span>
       </div>
     </header>
   );
 
-  const IntFooter = ({ page, total }) => (
+  const Footer = ({ page }) => (
     <div className="ppv-int-footer">
       <span className="ppv-int-footer-left">
-        Inmobiliaria Rincón Bedoya y Asociados · Cra 5 #9-28, Anserma, Caldas
+        Cra 5 #9-28, Anserma, Caldas · Documento interno de trabajo
       </span>
-      <span className="ppv-int-footer-right">Pág. {page}/{total} · {new Date().getFullYear()}</span>
+      <span className="ppv-int-footer-right">
+        Pág. {page}/{pageCount} · {new Date().getFullYear()}
+      </span>
     </div>
   );
 
-  // Total de páginas
-  const totalPages = (hasLegal || amenities.length > 0 || hasNotes || documents.length > 0) ? 3 : 2;
+  const AdaptiveGallery = ({ images = [], compact = false }) => {
+    const normalized = fillGallerySlots(images, 4);
+
+    if (!normalized.length) {
+      return (
+        <div className={`ppv-gallery-empty${compact ? ' compact' : ''}`}>
+          Sin material fotográfico adicional
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={`ppv-gallery-mosaic${compact ? ' compact' : ''}`}
+        data-count={Math.min(normalized.length, 4)}
+      >
+        {normalized.slice(0, 4).map((img, i) => (
+          <div key={`${img}-${i}`} className="ppv-gallery-tile">
+            <img
+              src={img}
+              alt={`Imagen ${i + 1}`}
+              className="ppv-gallery-img"
+              loading="eager"
+              decoding="sync"
+              crossOrigin="anonymous"
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const LinedNotes = ({ title, text, tone = 'default', lines = 10 }) => (
+    <div className={`ppv-lined-card ${tone}`}>
+      <div className="ppv-lined-head">
+        <span>{title}</span>
+        <small>{lines} líneas de seguimiento</small>
+      </div>
+      <div className="ppv-lined-sheet" style={{ '--ppv-lines': lines }}>
+        <div className="ppv-lined-text">{text || ' '}</div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="ppv-backdrop" onClick={onClose}>
-      {/* TOOLBAR */}
       <div className="ppv-toolbar no-print" onClick={(e) => e.stopPropagation()}>
-        <button onClick={handleDownload} disabled={loading || !ready} className="ppv-btn-dl">
-          {loading ? '⏳ Generando PDF…' : !ready ? '🔄 Cargando imágenes…' : '⬇ Descargar Ficha Admin'}
+        <button onClick={handleDownload} disabled={loading} className="ppv-btn-dl">
+          {loading ? '⏳ Generando PDF Alta Calidad…' : '⬇ Descargar Ficha Admin'}
         </button>
-        <button onClick={() => window.print()} className="ppv-btn-pr">🖨 Imprimir</button>
         <button onClick={onClose} className="ppv-btn-cl">✕ Cerrar</button>
       </div>
 
-      {/* DOCUMENTO */}
       <div ref={docRef} className="ppv-root" onClick={(e) => e.stopPropagation()}>
+        <section className="ppv-page">
+          <Header subtitle="Ficha Técnica · Uso Interno Premium" />
 
-        {/* ══════════════════════════════
-            PÁGINA 1 — PORTADA
-        ══════════════════════════════ */}
-        <Header subtitle="Ficha Técnica · Uso Interno" />
-
-        {/* HERO */}
-        {imgs.hero ? (
-          <div className="ppv-hero" style={{ backgroundImage: `url(${imgs.hero})` }}>
-            <div className="ppv-hero-overlay">
-              <div className="ppv-hero-chips">
-                <span className={`ppv-chip ${txCls}`}>{txLabel}</span>
-                <span className={`ppv-chip ${stCls}`}>{stLabel}</span>
-                <span className="ppv-chip chip-type">{(property.type || 'Inmueble').toUpperCase()}</span>
-              </div>
-              <h1 className="ppv-hero-title">{property.title || 'Sin título'}</h1>
-              <p className="ppv-hero-loc">{loc || 'Ubicación no especificada'}</p>
-            </div>
-          </div>
-        ) : (
-          <div className="ppv-hero-empty">
-            <div>
-              <div className="ppv-hero-chips" style={{ justifyContent: 'center', marginBottom: 10 }}>
-                <span className={`ppv-chip ${txCls}`}>{txLabel}</span>
-                <span className={`ppv-chip ${stCls}`}>{stLabel}</span>
-              </div>
-              <div style={{ fontFamily: 'var(--cg)', fontSize: 22, fontWeight: 700, color: '#fff', textAlign: 'center' }}>
-                {property.title || 'Sin título'}
-              </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 4 }}>
-                {loc}
+          {heroUrl ? (
+            <div className="ppv-hero">
+              <img
+                src={heroUrl}
+                alt={property.title || 'Imagen principal'}
+                className="ppv-hero-img"
+                loading="eager"
+                decoding="sync"
+                crossOrigin="anonymous"
+              />
+              <div className="ppv-hero-overlay">
+                <div className="ppv-hero-top">
+                  <div className="ppv-hero-chips">
+                    <span className={`ppv-chip ${txCls}`}>{txLabel}</span>
+                    <span className={`ppv-chip ${stCls}`}>{stLabel}</span>
+                    <span className="ppv-chip chip-type">
+                      {(property.type || 'Inmueble').toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="ppv-hero-ref">REF {refId}</div>
+                </div>
+                <div className="ppv-hero-main">
+                  <h1 className="ppv-hero-title">{property.title || 'Sin título'}</h1>
+                  <p className="ppv-hero-loc">{loc || 'Ubicación no especificada'}</p>
+                </div>
               </div>
             </div>
+          ) : (
+            <div className="ppv-hero-empty">
+              <div className="ppv-hero-empty-inner">
+                <div className="ppv-hero-chips">
+                  <span className={`ppv-chip ${txCls}`}>{txLabel}</span>
+                  <span className={`ppv-chip ${stCls}`}>{stLabel}</span>
+                </div>
+                <h1 className="ppv-hero-empty-title">{property.title || 'Sin título'}</h1>
+                <p className="ppv-hero-empty-loc">{loc || 'Ubicación no especificada'}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="ppv-cover-band avoid-break">
+            <div className="ppv-cover-price">
+              <span className="ppv-price-lbl">
+                {isArriendo ? 'CANON DE ARRIENDO' : 'PRECIO DE VENTA'}
+              </span>
+              <span className="ppv-price-val">
+                {fmt(property.price)}
+                {isArriendo && <small>/ mes</small>}
+              </span>
+            </div>
+            <div className="ppv-cover-meta">
+              <div><strong>Publicación:</strong> {fmtDate(property.createdAt)}</div>
+              <div><strong>Actualización:</strong> {fmtDate(property.updatedAt)}</div>
+              <div><strong>Estado:</strong> {stLabel}</div>
+            </div>
           </div>
-        )}
 
-        {/* PRECIO */}
-        <div className="ppv-price-banner">
-          <span className="ppv-price-lbl">{isArriendo ? 'CANON DE ARRIENDO' : 'PRECIO DE VENTA'}</span>
-          <span className="ppv-price-val">
-            {fmt(property.price)}
-            {isArriendo && <small>/ mes</small>}
-          </span>
-        </div>
-
-        {/* STATS */}
-        <div className="ppv-stats-row">
-          {property.area && <div className="ppv-cstat"><b>{Number(property.area).toLocaleString('es-CO')} m²</b><span>Área total</span></div>}
-          {property.builtArea && <div className="ppv-cstat"><b>{Number(property.builtArea).toLocaleString('es-CO')} m²</b><span>Área const.</span></div>}
-          {property.rooms && <div className="ppv-cstat"><b>{property.rooms}</b><span>Habitaciones</span></div>}
-          {property.bathrooms && <div className="ppv-cstat"><b>{property.bathrooms}</b><span>Baños</span></div>}
-          {property.parkingSpots && <div className="ppv-cstat"><b>{property.parkingSpots}</b><span>Parqueaderos</span></div>}
-          {property.floors && <div className="ppv-cstat"><b>{property.floors}</b><span>Pisos</span></div>}
-          {property.yearBuilt && <div className="ppv-cstat"><b>{property.yearBuilt}</b><span>Año const.</span></div>}
-          {property.stratum && <div className="ppv-cstat"><b>Est. {property.stratum}</b><span>Estrato</span></div>}
-        </div>
-
-        {/* DESCRIPCIÓN */}
-        {property.description && (
-          <div className="ppv-cover-desc">
-            <div className="ppv-cover-desc-title">Descripción</div>
-            <p className="ppv-desc-text">{property.description}</p>
-          </div>
-        )}
-
-        {/* GALERÍA */}
-        {imgs.gallery.length > 0 && (
-          <div className="ppv-cover-gallery">
-            {imgs.gallery.slice(0, 5).map((img, i) => (
-              <div key={i} className="ppv-gthumb" style={{ backgroundImage: `url(${img})` }} />
+          <div className="ppv-stats-row avoid-break">
+            {summaryStats.map((item) => (
+              <div key={item.label} className="ppv-cstat">
+                <b>{item.value}</b>
+                <span>{item.label}</span>
+              </div>
             ))}
           </div>
-        )}
 
-        <div className="ppv-cover-footer">
-          <span className="ppv-cover-footer-cta">¿Interesado? Comuníquese con nosotros hoy mismo</span>
-          <div className="ppv-cover-footer-contact">
-            <strong>310 596 8202 · 320 673 6391</strong>
-            <span>inmobiliaria-ryb-y-asociados.com · Cra 5 #9-28, Anserma, Caldas</span>
-          </div>
-        </div>
+          <div className="ppv-cover-grid">
+            <div className="ppv-cover-left avoid-break">
+              <div className="ppv-cover-desc">
+                <div className="ppv-cover-desc-title">Resumen Ejecutivo</div>
+                <p className="ppv-desc-text">
+                  {compactText(property.description || 'Sin descripción registrada.', 1200)}
+                </p>
+              </div>
 
-        {/* ── SEPARADOR ── */}
-        <div className="ppv-page-sep" />
-
-        {/* ══════════════════════════════
-            PÁGINA 2 — FICHA TÉCNICA
-        ══════════════════════════════ */}
-        <Header subtitle="Características Técnicas e Información Financiera" />
-        <div className="ppv-page-header">
-          <div className="ppv-page-header-title">FICHA TÉCNICA COMPLETA — {property.title}</div>
-          <div className="ppv-page-header-sub">Características · Ubicación · Precio · Propietario · Galería</div>
-        </div>
-
-        <div className="ppv-two-col">
-          {/* Columna izquierda */}
-          <div>
-            <SecLabel>Características Físicas</SecLabel>
-            <table className="ppv-table">
-              <tbody>
-                <Row label="Tipo de inmueble" value={property.type} />
-                <Row label="Área total" value={property.area && `${Number(property.area).toLocaleString('es-CO')} m²`} />
-                <Row label="Área construida" value={property.builtArea && `${Number(property.builtArea).toLocaleString('es-CO')} m²`} />
-                <Row label="Habitaciones" value={property.rooms} />
-                <Row label="Baños" value={property.bathrooms} />
-                <Row label="Parqueaderos" value={property.parkingSpots} />
-                <Row label="Pisos / Niveles" value={property.floors} />
-                <Row label="Año de construcción" value={property.yearBuilt} />
-                <Row label="Estrato" value={property.stratum} />
-              </tbody>
-            </table>
-
-            <SecLabel mt>Ubicación</SecLabel>
-            <table className="ppv-table">
-              <tbody>
-                <Row label="Dirección" value={property.address} />
-                <Row label="Barrio / Vereda" value={property.neighborhood} />
-                <Row label="Ciudad" value={property.city} />
-                <Row label="Departamento" value={property.department} />
-                {property.latitude && property.longitude && (
-                  <Row label="Coordenadas" value={`${property.latitude}, ${property.longitude}`} mono />
-                )}
-              </tbody>
-            </table>
-
-            {hasCosts && (
-              <>
-                <SecLabel mt>Precio y Costos</SecLabel>
-                <table className="ppv-table">
-                  <tbody>
-                    <Row label="Tipo de transacción" value={txLabel} />
-                    <Row label={isArriendo ? 'Canon de arriendo' : 'Precio de venta'} value={fmt(property.price)} />
-                    {property.commissionPercentage && (
-                      <Row label={`Comisión (${property.commissionPercentage}%)`} value={commission ? fmt(commission) : null} />
-                    )}
-                    <Row label="Predial anual" value={property.propertyTax ? fmt(property.propertyTax) : null} />
-                    <Row label="Administración/mes" value={property.administrationFee ? fmt(property.administrationFee) : null} />
-                    <Row label="Depósito" value={property.rentalDeposit ? `${property.rentalDeposit} meses` : null} />
-                    <Row label="Período mínimo" value={property.minimumRentalPeriod ? `${property.minimumRentalPeriod} meses` : null} />
-                  </tbody>
-                </table>
-              </>
-            )}
-          </div>
-
-          {/* Columna derecha */}
-          <div>
-            {/* Precio card */}
-            <div className="ppv-price-card">
-              <div className="ppc-lbl">{isArriendo ? 'CANON DE ARRIENDO' : 'PRECIO DE VENTA'}</div>
-              <div className="ppc-val">{fmt(property.price)}</div>
-              {isArriendo && <div className="ppc-sub">por mes</div>}
-              {property.commissionPercentage && commission && (
-                <div className="ppc-row"><span>Comisión {property.commissionPercentage}%</span><strong>{fmt(commission)}</strong></div>
-              )}
-              {property.administrationFee && (
-                <div className="ppc-row"><span>Admón./mes</span><strong>{fmt(property.administrationFee)}</strong></div>
-              )}
-              {property.propertyTax && (
-                <div className="ppc-row"><span>Predial anual</span><strong>{fmt(property.propertyTax)}</strong></div>
-              )}
-            </div>
-
-            {/* Ref box */}
-            <div className="ppv-ref-box">
-              {refId && <div>Referencia: <strong>{refId}</strong></div>}
-              <div>Estado: <strong>{stLabel}</strong></div>
-              {property.createdAt && <div>Publicado: <strong>{fmtDate(property.createdAt)}</strong></div>}
-              {property.updatedAt && <div>Actualizado: <strong>{fmtDate(property.updatedAt)}</strong></div>}
-            </div>
-
-            {/* Propietario */}
-            {hasOwner && (
-              <>
-                <SecLabel mt>Datos del Propietario</SecLabel>
-                <div className="ppv-confidential-badge">⚠ INFORMACIÓN CONFIDENCIAL · USO INTERNO</div>
-                <table className="ppv-table">
-                  <tbody>
-                    <Row label="Nombre" value={property.ownerName} confidential />
-                    <Row label="Teléfono" value={property.ownerPhone} confidential />
-                    <Row label="Correo" value={property.ownerEmail} confidential />
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {/* Estado administrativo */}
-            <SecLabel mt>Estado Administrativo</SecLabel>
-            <table className="ppv-table">
-              <tbody>
-                <Row label="Estado actual" value={stLabel} />
-                <Row label="Tipo transacción" value={txLabel} />
-                <Row label="ID referencia" value={refId} mono />
-                <Row label="Fecha publicación" value={fmtDate(property.createdAt)} />
-              </tbody>
-            </table>
-
-            {/* Galería col derecha */}
-            {imgs.gallery.length > 0 && (
-              <>
-                <SecLabel mt>Galería</SecLabel>
-                <div className="ppv-gallery-grid">
-                  {imgs.gallery.slice(0, 4).map((img, i) => (
-                    <div key={i} className="ppv-gallery-thumb" style={{ backgroundImage: `url(${img})` }} />
-                  ))}
+              <div className="ppv-summary-panels">
+                <div className="ppv-summary-card">
+                  <span className="ppv-summary-kicker">Ubicación</span>
+                  <p>{loc || 'Ubicación no especificada'}</p>
                 </div>
-              </>
-            )}
+                <div className="ppv-summary-card">
+                  <span className="ppv-summary-kicker">Perfil del activo</span>
+                  <p>{(property.type || 'Inmueble')} · {txLabel} · {stLabel}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="ppv-cover-right avoid-break">
+              <SectionTitle>Galería Principal</SectionTitle>
+              <AdaptiveGallery images={galleryMain} />
+            </div>
           </div>
-        </div>
 
-        <div className="ppv-disclaimer">
-          La información presentada tiene carácter informativo y está sujeta a verificación. Precios, áreas y condiciones pueden variar.
-          Para confirmar disponibilidad contacte <strong>310 596 8202</strong>.
-        </div>
+          <div className="ppv-cover-footer avoid-break">
+            <span className="ppv-cover-footer-cta">
+              Documento interno para gestión comercial y operativa
+            </span>
+            <div className="ppv-cover-footer-contact">
+              <strong>310 596 8202 · 320 673 6391</strong>
+              <span>inmobiliaria-ryb-y-asociados.com · Cra 5 #9-28, Anserma, Caldas</span>
+            </div>
+          </div>
 
-        <IntFooter page={2} total={totalPages} />
+          <Footer page={1} />
+        </section>
 
-        {/* ── SEPARADOR ── */}
-        {(hasLegal || amenities.length > 0 || hasNotes || documents.length > 0) && (
-          <div className="ppv-page-sep" />
-        )}
+        <section className="ppv-page">
+          <Header subtitle="Características Técnicas · Precio · Propietario" />
 
-        {/* ══════════════════════════════
-            PÁGINA 3 — JURÍDICO + AMENIDADES + NOTAS
-        ══════════════════════════════ */}
-        {(hasLegal || amenities.length > 0 || hasNotes || documents.length > 0) && (
-          <>
-            <Header subtitle="Información Jurídica · Amenidades · Observaciones" />
-            <div className="ppv-page-header">
-              <div className="ppv-page-header-title">INFORMACIÓN JURÍDICA, AMENIDADES Y OBSERVACIONES</div>
-              <div className="ppv-page-header-sub">{property.title}</div>
+          <div className="ppv-page-header avoid-break">
+            <div className="ppv-page-header-title">FICHA TÉCNICA COMPLETA</div>
+            <div className="ppv-page-header-sub">
+              Características físicas · Ubicación · Costos · Propietario · Estado administrativo
+            </div>
+          </div>
+
+          <div className="ppv-two-col">
+            <div className="ppv-stack-col">
+              <div className="ppv-block avoid-break">
+                <SectionTitle>Características Físicas</SectionTitle>
+                <table className="ppv-table">
+                  <tbody>
+                    {featuresLeft.map(([label, value]) => (
+                      <Row key={label} label={label} value={value} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="ppv-block avoid-break">
+                <SectionTitle>Ubicación</SectionTitle>
+                <table className="ppv-table">
+                  <tbody>
+                    {locationRows.map(([label, value, mono]) => (
+                      <Row key={label} label={label} value={value} mono={!!mono} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {hasCosts && (
+                <div className="ppv-block avoid-break">
+                  <SectionTitle>Precio y Costos</SectionTitle>
+                  <table className="ppv-table">
+                    <tbody>
+                      {costRows.map(([label, value]) => (
+                        <Row key={label} label={label} value={value} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="ppv-stack-col">
+              <div className="ppv-price-card avoid-break">
+                <div className="ppc-lbl">
+                  {isArriendo ? 'CANON DE ARRIENDO' : 'PRECIO DE VENTA'}
+                </div>
+                <div className="ppc-val">{fmt(property.price)}</div>
+                {isArriendo && <div className="ppc-sub">por mes</div>}
+
+                {commission && (
+                  <div className="ppc-row">
+                    <span>Comisión estimada</span>
+                    <strong>{fmt(commission)}</strong>
+                  </div>
+                )}
+
+                {property.administrationFee && (
+                  <div className="ppc-row">
+                    <span>Administración</span>
+                    <strong>{fmt(property.administrationFee)}</strong>
+                  </div>
+                )}
+
+                {property.propertyTax && (
+                  <div className="ppc-row">
+                    <span>Predial anual</span>
+                    <strong>{fmt(property.propertyTax)}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div className="ppv-ref-box avoid-break">
+                <div>Referencia: <strong>{refId}</strong></div>
+                <div>Estado: <strong>{stLabel}</strong></div>
+                <div>Tipo: <strong>{txLabel}</strong></div>
+                <div>Publicado: <strong>{fmtDate(property.createdAt)}</strong></div>
+                <div>Actualizado: <strong>{fmtDate(property.updatedAt)}</strong></div>
+              </div>
+
+              {hasOwner && (
+                <div className="ppv-block avoid-break">
+                  <SectionTitle>Datos del Propietario</SectionTitle>
+                  <div className="ppv-confidential-badge">
+                    ⚠ INFORMACIÓN CONFIDENCIAL · USO INTERNO
+                  </div>
+                  <table className="ppv-table">
+                    <tbody>
+                      {ownerRows.map(([label, value]) => (
+                        <Row key={label} label={label} value={value} confidential />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="ppv-block avoid-break">
+                <SectionTitle>Estado Administrativo</SectionTitle>
+                <table className="ppv-table">
+                  <tbody>
+                    {adminRows.map(([label, value, mono]) => (
+                      <Row key={label} label={label} value={value} mono={!!mono} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="ppv-block avoid-break">
+                <SectionTitle>Galería Técnica</SectionTitle>
+                <AdaptiveGallery images={galleryTechnical} compact />
+              </div>
+            </div>
+          </div>
+
+          <div className="ppv-disclaimer avoid-break">
+            La información presentada tiene carácter informativo y está sujeta a verificación.
+            Precios, áreas, tiempos, disponibilidad y condiciones pueden variar. Confirmar
+            internamente antes de compartir o cerrar negociación.
+          </div>
+
+          <Footer page={2} />
+        </section>
+
+        {(hasLegal || amenityGroups.length > 0 || hasDocuments) && (
+          <section className="ppv-page">
+            <Header subtitle="Jurídico · Amenidades · Soportes" />
+
+            <div className="ppv-page-header avoid-break">
+              <div className="ppv-page-header-title">
+                SOPORTE JURÍDICO Y COMPLEMENTOS DEL ACTIVO
+              </div>
+              <div className="ppv-page-header-sub">
+                Registro · Estado jurídico · Amenidades · Documentación de respaldo
+              </div>
             </div>
 
             <div className="ppv-two-col">
-              {/* Columna izquierda: jurídico + documentos */}
-              <div>
+              <div className="ppv-stack-col">
                 {hasLegal && (
-                  <>
-                    <SecLabel>Identificación Registral</SecLabel>
+                  <div className="ppv-block avoid-break">
+                    <SectionTitle>Identificación y Estado Jurídico</SectionTitle>
                     <table className="ppv-table">
                       <tbody>
-                        <Row label="Matrícula inmobiliaria" value={property.registrationNumber} mono />
-                        <Row label="Ficha catastral" value={property.cadastralReference} mono />
-                        <Row label="Escritura pública N°" value={property.publicDeedNumber} mono />
-                        <Row label="Propietario registrado" value={property.registeredOwner} />
-                      </tbody>
-                    </table>
-
-                    <SecLabel mt>Estado Jurídico</SecLabel>
-                    <table className="ppv-table">
-                      <tbody>
-                        <Row label="Estado jurídico" value={property.legalStatus} />
-                        <Row label="Avalúo catastral" value={property.cadastralAppraisal ? fmt(property.cadastralAppraisal) : null} />
-                        <Row label="Propiedad horizontal" value={property.horizontalProperty ? 'Sí' : null} />
-                        <Row label="Régimen PH" value={property.horizontalPropertyRegime} />
+                        {legalRows.map(([label, value, mono]) => (
+                          <Row key={label} label={label} value={value} mono={!!mono} />
+                        ))}
                       </tbody>
                     </table>
 
                     {property.liensAndLimitations && (
-                      <>
-                        <SecLabel mt>Gravámenes y Limitaciones</SecLabel>
-                        <div className="ppv-text-block warn">{property.liensAndLimitations}</div>
-                      </>
+                      <div className="ppv-text-block warn">
+                        {property.liensAndLimitations}
+                      </div>
                     )}
-                  </>
+                  </div>
                 )}
 
-                {documents.length > 0 && (
-                  <>
-                    <SecLabel mt>Documentos Adjuntos</SecLabel>
-                    <ul style={{ listStyle: 'none', padding: '5px 0', margin: 0, fontSize: 9.5 }}>
+                {hasDocuments && (
+                  <div className="ppv-block avoid-break">
+                    <SectionTitle>Documentos Adjuntos</SectionTitle>
+                    <ul className="ppv-doc-list">
                       {documents.map((doc, i) => (
-                        <li key={i} style={{ padding: '2px 0', color: '#374151', fontFamily: 'var(--int)' }}>
-                          ◆ {doc.name || `Documento ${i + 1}`}
+                        <li key={doc?.name || i}>
+                          <span className="ppv-doc-bullet">◆</span>
+                          <span>{doc?.name || `Documento ${i + 1}`}</span>
                         </li>
                       ))}
                     </ul>
-                  </>
+                  </div>
                 )}
               </div>
 
-              {/* Columna derecha: amenidades + notas */}
-              <div>
-                {amenities.length > 0 && (
-                  <>
-                    <SecLabel>Amenidades y Características</SecLabel>
-                    <ul className="ppv-amenities-grid">
-                      {amenities.map((a) => <li key={a}>{a}</li>)}
-                    </ul>
-                  </>
-                )}
-
-                {property.propertyObservations && (
-                  <>
-                    <SecLabel mt>Observaciones de la Propiedad</SecLabel>
-                    <div className="ppv-text-block">{property.propertyObservations}</div>
-                  </>
-                )}
-
-                {property.ownerRecommendations && (
-                  <>
-                    <SecLabel mt>Recomendaciones del Propietario</SecLabel>
-                    <div className="ppv-text-block info">{property.ownerRecommendations}</div>
-                  </>
-                )}
-
-                {/* Galería extra si hay más fotos */}
-                {imgs.gallery.length > 4 && (
-                  <>
-                    <SecLabel mt>Galería Adicional</SecLabel>
-                    <div className="ppv-gallery-grid">
-                      {imgs.gallery.slice(4, 8).map((img, i) => (
-                        <div key={i} className="ppv-gallery-thumb" style={{ backgroundImage: `url(${img})` }} />
-                      ))}
+              <div className="ppv-stack-col">
+                {amenityGroups.length > 0 ? (
+                  amenityGroups.map((group, idx) => (
+                    <div key={idx} className="ppv-block avoid-break">
+                      <SectionTitle>
+                        {idx === 0
+                          ? 'Amenidades y Características'
+                          : `Amenidades adicionales ${idx + 1}`}
+                      </SectionTitle>
+                      <ul className="ppv-amenities-grid">
+                        {group.map((a) => <li key={a}>{a}</li>)}
+                      </ul>
                     </div>
-                  </>
+                  ))
+                ) : (
+                  <div className="ppv-block avoid-break">
+                    <SectionTitle>Amenidades y Características</SectionTitle>
+                    <div className="ppv-empty-box">
+                      No se registraron amenidades adicionales.
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="ppv-disclaimer">
-              <strong>DOCUMENTO CONFIDENCIAL · USO EXCLUSIVO INTERNO.</strong> Esta ficha contiene información jurídica,
-              financiera y de contacto de uso restringido. No compartir con terceros sin autorización de la dirección.
-              Generada el {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}.
+            <div className="ppv-disclaimer avoid-break">
+              Documento interno de soporte. Validar matrícula, catastro, gravámenes,
+              régimen de propiedad horizontal y estado de tradición antes de cualquier
+              cierre o promesa de compraventa.
             </div>
 
-            <IntFooter page={3} total={totalPages} />
-          </>
+            <Footer page={3} />
+          </section>
+        )}
+
+        {(hasNotes || hasExtraGallery) && (
+          <section className="ppv-page">
+            <Header subtitle="Observaciones · Recomendaciones · Seguimiento" />
+
+            <div className="ppv-page-header avoid-break">
+              <div className="ppv-page-header-title">
+                SEGUIMIENTO INTERNO Y NOTAS COMERCIALES
+              </div>
+              <div className="ppv-page-header-sub">
+                Espacios preparados para lectura, escritura manual y control interno
+              </div>
+            </div>
+
+            <div className="ppv-notes-layout">
+              <div className="ppv-notes-col">
+                <LinedNotes
+                  title="Observaciones de la Propiedad"
+                  text={property.propertyObservations}
+                  lines={12}
+                />
+
+                <LinedNotes
+                  title="Recomendaciones del Propietario"
+                  text={property.ownerRecommendations}
+                  tone="info"
+                  lines={10}
+                />
+              </div>
+
+              <div className="ppv-notes-col">
+                <LinedNotes
+                  title="Seguimiento Comercial"
+                  text=""
+                  tone="light"
+                  lines={12}
+                />
+
+                <LinedNotes
+                  title="Próximos Pasos / Cierre"
+                  text=""
+                  tone="gold"
+                  lines={10}
+                />
+              </div>
+            </div>
+
+            {hasExtraGallery && (
+              <div className="ppv-bottom-grid">
+                <div className="ppv-block avoid-break">
+                  <SectionTitle>Galería Adicional</SectionTitle>
+                  <div className="ppv-gallery-stack">
+                    {extraGalleryGroups.map((group, idx) => (
+                      <AdaptiveGallery key={idx} images={group} compact />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="ppv-block avoid-break">
+                  <SectionTitle>Espacio Operativo</SectionTitle>
+                  <div className="ppv-op-box">
+                    <div className="ppv-op-row">
+                      <span>Asesor responsable</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Fecha de visita</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Estado del negocio</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Próximo contacto</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Observación rápida</span>
+                      <span className="line" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!hasExtraGallery && (
+              <div className="ppv-bottom-grid ppv-bottom-grid--single">
+                <div className="ppv-block avoid-break">
+                  <SectionTitle>Espacio Operativo</SectionTitle>
+                  <div className="ppv-op-box">
+                    <div className="ppv-op-row">
+                      <span>Asesor responsable</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Fecha de visita</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Estado del negocio</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Próximo contacto</span>
+                      <span className="line" />
+                    </div>
+                    <div className="ppv-op-row">
+                      <span>Observación rápida</span>
+                      <span className="line" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="ppv-disclaimer avoid-break">
+              <strong>DOCUMENTO CONFIDENCIAL · USO EXCLUSIVO INTERNO.</strong> Esta ficha
+              contiene información comercial, jurídica y operativa. No compartir con
+              terceros sin autorización de la dirección.
+            </div>
+
+            <Footer page={pageCount} />
+          </section>
         )}
       </div>
     </div>

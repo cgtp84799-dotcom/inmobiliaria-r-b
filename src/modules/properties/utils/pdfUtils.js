@@ -1,51 +1,3 @@
-import { getStorage, ref, getBlob } from 'firebase/storage';
-
-const storage = getStorage();
-
-// ── CORS FIX: Firebase Storage via SDK (bypasa CORS completamente) ──
-const firebaseToBase64 = async (url) => {
-  try {
-    const match = url.match(/\/o\/(.+?)(?:\?|$)/);
-    if (!match) throw new Error('path not found');
-    const path = decodeURIComponent(match[1]);
-    const blob = await getBlob(ref(storage, path));
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => resolve(url);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return url;
-  }
-};
-
-// ── Archivos locales (logo, etc.) via fetch normal ──
-const localToBase64 = async (url) => {
-  try {
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw new Error('fetch fail');
-    const blob = await r.blob();
-    return new Promise((resolve) => {
-      const fr = new FileReader();
-      fr.onloadend = () => resolve(fr.result);
-      fr.onerror = () => resolve(url);
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    return url;
-  }
-};
-
-export const imgToBase64 = async (url) => {
-  if (!url) return '';
-  if (url.includes('firebasestorage') || url.includes('googleapis.com/v0/b/')) {
-    return firebaseToBase64(url);
-  }
-  return localToBase64(url);
-};
-
-// ── Utilidades ──
 export const fmt = (p) =>
   new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -56,7 +8,12 @@ export const fmt = (p) =>
 export const fmtDate = (ts) => {
   if (!ts) return null;
   const d = ts?.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 };
 
 export const safeFilename = (title) =>
@@ -65,99 +22,232 @@ export const safeFilename = (title) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]/g, '-')
     .replace(/-+/g, '-')
-    .substring(0, 50);
+    .replace(/^-|-$/g, '')
+    .substring(0, 80);
 
-// ── DESCARGA PDF: captura completo y pagina automáticamente ──
-export const generatePDF = async (element, filename) => {
-  const { default: jsPDF } = await import('jspdf');
-  const { default: html2canvas } = await import('html2canvas');
+export const imgToBase64 = async (url) => url;
 
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    imageTimeout: 30000,
-    windowWidth: 794,
-    width: 794,
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isValidImageSrc = (src) =>
+  typeof src === 'string' &&
+  src.trim() &&
+  !src.startsWith('blob:null') &&
+  !src.startsWith('undefined') &&
+  !src.startsWith('null');
+
+const waitForImage = (img) =>
+  new Promise((resolve) => {
+    if (!img) return resolve();
+    if (img.complete && img.naturalWidth > 0) return resolve();
+
+    const done = () => {
+      img.removeEventListener('load', done);
+      img.removeEventListener('error', done);
+      resolve();
+    };
+
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
   });
 
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
-  const PAGE_W_MM = 210;
-  const PAGE_H_MM = 297;
-  const canvasW = canvas.width;
-  const canvasH = canvas.height;
-  const pxPerMm = canvasW / PAGE_W_MM;
-  const pageHeightPx = PAGE_H_MM * pxPerMm;
+const waitForAllImages = async (root, timeout = 15000) => {
+  if (!root) return;
 
-  let yPx = 0;
-  let pageNum = 0;
+  const images = Array.from(root.querySelectorAll('img'));
 
-  while (yPx < canvasH) {
-    if (pageNum > 0) pdf.addPage();
-    const sliceH = Math.min(pageHeightPx, canvasH - yPx);
-    const slice = document.createElement('canvas');
-    slice.width = canvasW;
-    slice.height = Math.ceil(sliceH);
-    const ctx = slice.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvasW, slice.height);
-    ctx.drawImage(canvas, 0, yPx, canvasW, sliceH, 0, 0, canvasW, sliceH);
-    const imgData = slice.toDataURL('image/jpeg', 0.93);
-    const sliceHmm = sliceH / pxPerMm;
-    pdf.addImage(imgData, 'JPEG', 0, 0, PAGE_W_MM, sliceHmm);
-    yPx += pageHeightPx;
-    pageNum++;
-  }
+  images.forEach((img) => {
+    const src = img.getAttribute('src') || '';
 
-  pdf.save(filename);
-};
-
-// ── IMPRIMIR: abre ventana nueva con SOLO la ficha ──
-export const printDocument = (element, title = 'Ficha Técnica') => {
-  const cssText = Array.from(document.styleSheets)
-    .map((sheet) => {
-      try {
-        return Array.from(sheet.cssRules || []).map((r) => r.cssText).join('\n');
-      } catch {
-        return '';
-      }
-    })
-    .join('\n');
-
-  const fontLinks = Array.from(
-    document.querySelectorAll('link[href*="fonts.googleapis"], link[href*="fontshare"], link[href*="fonts.gstatic"]')
-  ).map((l) => l.outerHTML).join('\n');
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>${title}</title>
-  ${fontLinks}
-  <style>
-    ${cssText}
-    @page { size: A4; margin: 0; }
-    body { margin: 0; padding: 0; background: white; }
-    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .no-print, .ppv-toolbar, .cflyer-toolbar { display: none !important; }
-    .ppv-backdrop, .cflyer-backdrop {
-      position: static !important;
-      background: none !important;
-      padding: 0 !important;
-      overflow: visible !important;
-      display: block !important;
+    if (!isValidImageSrc(src)) {
+      img.removeAttribute('src');
+      img.style.visibility = 'hidden';
+      return;
     }
-  </style>
-</head>
-<body>${element.innerHTML}</body>
-</html>`;
 
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { alert('Activa las ventanas emergentes para poder imprimir.'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 1200);
+    img.setAttribute('loading', 'eager');
+    img.setAttribute('decoding', 'sync');
+    img.setAttribute('crossorigin', 'anonymous');
+    img.removeAttribute('srcset');
+  });
+
+  await Promise.race([
+    Promise.all(images.map(waitForImage)),
+    wait(timeout),
+  ]);
 };
+
+const waitForFonts = async (docLike = document, timeout = 5000) => {
+  try {
+    if (docLike?.fonts?.ready) {
+      await Promise.race([docLike.fonts.ready, wait(timeout)]);
+    } else {
+      await wait(500);
+    }
+  } catch {
+    await wait(500);
+  }
+};
+
+const cloneForExport = (sourceEl) => {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'export-shell';
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-100000px';
+  wrapper.style.top = '0';
+  wrapper.style.zIndex = '-1';
+  wrapper.style.pointerEvents = 'none';
+  wrapper.style.background = '#ffffff';
+  wrapper.style.padding = '0';
+  wrapper.style.margin = '0';
+  wrapper.style.boxSizing = 'border-box';
+  wrapper.style.overflow = 'visible';
+
+  const clone = sourceEl.cloneNode(true);
+
+  clone.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src') || '';
+    if (!isValidImageSrc(src)) {
+      img.remove();
+      return;
+    }
+
+    img.setAttribute('loading', 'eager');
+    img.setAttribute('decoding', 'sync');
+    img.setAttribute('crossorigin', 'anonymous');
+    img.removeAttribute('srcset');
+  });
+
+  clone.querySelectorAll('.no-print').forEach((el) => {
+    el.remove();
+  });
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  return { wrapper, clone };
+};
+
+const removeNodeSafe = (node) => {
+  try {
+    node?.parentNode?.removeChild(node);
+  } catch {}
+};
+
+const getScale = () => {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.max(2, Math.min(3, dpr * 2));
+};
+
+const getPageTargets = (root, pageSelector) => {
+  const pages = Array.from(root.querySelectorAll(pageSelector));
+  return pages.length ? pages : [root];
+};
+
+const ensureStablePageSize = (page) => {
+  const rect = page.getBoundingClientRect();
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
+
+  page.style.width = `${width}px`;
+  page.style.minWidth = `${width}px`;
+  page.style.maxWidth = `${width}px`;
+  page.style.height = `${height}px`;
+  page.style.minHeight = `${height}px`;
+  page.style.maxHeight = `${height}px`;
+  page.style.boxSizing = 'border-box';
+
+  return { width, height };
+};
+
+export const downloadPDFExactVisual = async (
+  elementRef,
+  filename,
+  pageSelector = '.ppv-page, .cflyer-page, .pdf-page'
+) => {
+  if (!elementRef?.current) throw new Error('Elemento no encontrado');
+
+  const source = elementRef.current;
+  const sourceRect = source.getBoundingClientRect();
+  const { wrapper, clone } = cloneForExport(source);
+
+  try {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
+
+    const rootWidth = Math.max(1, Math.ceil(sourceRect.width));
+    wrapper.style.width = `${rootWidth}px`;
+    wrapper.style.minWidth = `${rootWidth}px`;
+    wrapper.style.maxWidth = 'none';
+
+    clone.classList.add('exact-pdf-mode');
+
+    await waitForFonts(document, 5000);
+    await waitForAllImages(wrapper, 15000);
+    await wait(250);
+
+    const targets = getPageTargets(clone, pageSelector);
+
+    let pdf = null;
+
+    for (let i = 0; i < targets.length; i += 1) {
+      const page = targets[i];
+      const { width, height } = ensureStablePageSize(page);
+
+      await waitForAllImages(page, 8000);
+      await wait(120);
+
+      const canvas = await html2canvas(page, {
+        scale: getScale(),
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        foreignObjectRendering: false,
+        width,
+        height,
+        windowWidth: width,
+        windowHeight: height,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+      const pageFormat = [canvas.width, canvas.height];
+
+      if (!pdf) {
+        pdf = new jsPDF({
+          orientation,
+          unit: 'px',
+          format: pageFormat,
+          compress: true,
+          precision: 12,
+        });
+      } else {
+        pdf.addPage(pageFormat, orientation);
+      }
+
+      pdf.addImage(
+        imgData,
+        'JPEG',
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+        `page-${i + 1}`,
+        'FAST'
+      );
+    }
+
+    if (!pdf) throw new Error('No se pudo generar el PDF');
+
+    pdf.save(filename || `${safeFilename('propiedad')}.pdf`);
+  } finally {
+    removeNodeSafe(wrapper);
+  }
+};  
