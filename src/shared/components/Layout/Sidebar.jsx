@@ -4,7 +4,7 @@ import {
   FaChartLine, FaBuilding, FaUsers, FaFolder, FaUserCog,
   FaEnvelope, FaCalendar, FaSignOutAlt, FaTimes,
   FaChevronLeft, FaChevronRight, FaShieldAlt, FaEye, FaUser,
-  FaFileContract, FaCalendarCheck,
+  FaFileContract, FaCalendarCheck, FaUserTie,
 } from "react-icons/fa";
 import { useAuth } from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
@@ -34,9 +34,11 @@ const Sidebar = ({
   const { signOut, currentUser } = useAuth();
   const role = currentUser?.role;
 
+  // ── FIX: todos los roles con su badge correcto (incluyendo AGENT) ──
   const roleMeta = {
     [USER_ROLES.ADMIN]:  { label: "Administrador",      color: "text-red-400",   bg: "bg-red-500/15",   icon: FaShieldAlt },
-    [USER_ROLES.MEMBER]: { label: "Miembro del equipo",  color: "text-yellow-400", bg: "bg-yellow-500/15", icon: FaUsers     },
+    [USER_ROLES.MEMBER]: { label: "Miembro del equipo",  color: "text-blue-400",  bg: "bg-blue-500/15",  icon: FaUsers     },
+    [USER_ROLES.AGENT]:  { label: "Agente inmobiliario", color: "text-green-400", bg: "bg-green-500/15", icon: FaUserTie   },
     [USER_ROLES.VIEWER]: { label: "Solo lectura",        color: "text-slate-400", bg: "bg-slate-500/15", icon: FaEye       },
   };
   const currentRoleMeta = roleMeta[role] || roleMeta[USER_ROLES.VIEWER];
@@ -46,13 +48,12 @@ const Sidebar = ({
     { icon: FaChartLine,      label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
     { icon: FaBuilding,       label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
     { icon: FaUsers,          label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients", "read") },
-    // FIX BUG-04: permiso corregido de "clients" a "contracts"
     { icon: FaFileContract,   label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts", "read") },
-    // FIX: ítem Visitas agregado — el módulo existía pero no era accesible desde el menú
     { icon: FaCalendarCheck,  label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits", "read") },
     { icon: FaCalendar,       label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
     { icon: FaEnvelope,       label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
     { icon: FaFolder,         label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
+    // Gestión de usuarios y solicitudes: solo admin
     { icon: FaUserCog,        label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users", "read") },
     { icon: FaUserCog,        label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users", "create") },
     { icon: FaUser,           label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
@@ -61,7 +62,6 @@ const Sidebar = ({
   const menuItems = allMenuItems.filter((item) => item.visible);
   const isDesktop = () => window.innerWidth >= 1024;
   const showMobile = !isDesktop();
-  const showDesktopOverlay = isDesktop() && isHoverExpanded;
 
   const handleNavigation = () => {
     if (!isDesktop()) onClose();
@@ -163,98 +163,81 @@ const Sidebar = ({
     >
       <button
         onClick={() => { signOut(); if (showMobile) onClose(); onRequestCloseOverlay(); }}
-        className={`flex items-center ${compact ? "justify-center px-2" : "gap-3 px-4"} w-full py-3 rounded-xl transition-all duration-200 font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/30`}
+        className={`flex items-center ${compact ? "justify-center px-2" : "gap-3 px-4"} py-3 rounded-xl w-full transition-all duration-200 hover:bg-red-500/10 text-red-400/70 hover:text-red-400`}
       >
-        <FaSignOutAlt size={18} />
-        {!compact && <span className="text-sm">Cerrar Sesión</span>}
+        <FaSignOutAlt className="text-lg flex-shrink-0" />
+        {!compact && <span className="text-sm font-medium">Cerrar Sesión</span>}
       </button>
     </div>
   );
 
-  return (
-    <>
-      {/* ── Overlay móvil ── */}
+  // ── Mobile overlay ────────────────────────────────────────────────────────
+  if (showMobile) {
+    return (
       <AnimatePresence>
-        {showMobile && isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
-          />
+        {isOpen && (
+          <>
+            <motion.div
+              key="overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+              onClick={onClose}
+            />
+            <motion.aside
+              key="sidebar"
+              initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed top-0 left-0 h-full w-72 z-50 flex flex-col shadow-2xl"
+              style={{ background: SB.bg }}
+            >
+              <SidebarHeader showClose />
+              <UserCard />
+              <NavItems />
+              <SignOutBtn />
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
+    );
+  }
 
-      {/* ── Overlay desktop ── */}
-      <AnimatePresence>
-        {showDesktopOverlay && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.12 }}
-            onMouseDown={onRequestCloseOverlay}
-            onClick={onRequestCloseOverlay}
-            className="hidden lg:block fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── SIDEBAR MINI (desktop) ── */}
+  // ── Desktop collapsed (icon-only) ─────────────────────────────────────────
+  if (collapsed && !isHoverExpanded) {
+    return (
       <aside
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-20 flex-col h-[100dvh] max-h-[100dvh] border-r"
-        style={{ backgroundColor: SB.bg, borderColor: SB.border }}
+        className="hidden lg:flex flex-col h-full w-16 shrink-0 border-r"
+        style={{ background: SB.bg, borderColor: SB.border }}
       >
         <div
           className="h-20 flex items-center justify-center shrink-0 border-b"
-          style={{
-            background: `linear-gradient(to right, ${SB.bg}, color-mix(in srgb, ${SB.bg} 80%, #2a2825))`,
-            borderColor: SB.border,
-          }}
+          style={{ borderColor: SB.border }}
         >
-          <img src="/logo.jpg.png" alt="Rincón Bedoya" className="h-10 w-auto object-contain max-w-[64px]" draggable={false} />
+          <button
+            onClick={onToggleCollapse}
+            className="p-2 rounded-lg transition-all"
+            style={{ color: SB.muted }}
+          >
+            <FaChevronRight size={16} />
+          </button>
         </div>
         <UserCard mini />
         <NavItems showLabel={false} />
         <SignOutBtn compact />
       </aside>
+    );
+  }
 
-      {/* ── PANEL EXPANDIDO (desktop hover) ── */}
-      <AnimatePresence>
-        {showDesktopOverlay && (
-          <motion.aside
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -20, opacity: 0 }}
-            transition={{ type: "tween", duration: 0.22 }}
-            className="hidden lg:flex fixed inset-y-0 left-0 z-[70] w-72 flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r"
-            style={{ backgroundColor: SB.bg, borderColor: SB.border }}
-          >
-            <SidebarHeader showClose />
-            <UserCard />
-            <NavItems />
-            <SignOutBtn />
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* ── SIDEBAR MÓVIL ── */}
-      <AnimatePresence>
-        {showMobile && isOpen && (
-          <motion.aside
-            initial={{ x: "-100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "-100%" }}
-            transition={{ type: "tween", duration: 0.25 }}
-            className="lg:hidden fixed inset-y-0 left-0 z-50 w-72 flex flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r"
-            style={{ backgroundColor: SB.bg, borderColor: SB.border }}
-          >
-            <SidebarHeader showClose />
-            <UserCard />
-            <NavItems />
-            <SignOutBtn />
-          </motion.aside>
-        )}
-      </AnimatePresence>
-    </>
+  // ── Desktop expanded ──────────────────────────────────────────────────────
+  return (
+    <aside
+      className="hidden lg:flex flex-col h-full w-64 shrink-0 border-r"
+      style={{ background: SB.bg, borderColor: SB.border }}
+    >
+      <SidebarHeader showClose />
+      <UserCard />
+      <NavItems />
+      <SignOutBtn />
+    </aside>
   );
 };
 
