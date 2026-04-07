@@ -28,6 +28,12 @@
   --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
   --color-sidebar-active-bg:  rgba(245,158,11,0.18);
 
+  /* Footer siempre oscuro */
+  --color-footer-bg:      #1a1816;
+  --color-footer-border:  rgba(255,255,255,0.07);
+  --color-footer-text:    #c9c7c4;
+  --color-footer-muted:   #7a7875;
+
   --color-nav-bg:         rgba(245,244,240,0.92);
   --color-nav-border:     rgba(0,0,0,0.09);
   --color-nav-text:       #1a1916;
@@ -98,6 +104,12 @@
   --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
   --color-sidebar-active-bg:  rgba(245,158,11,0.18);
 
+  /* Footer modo oscuro */
+  --color-footer-bg:      #060d1e;
+  --color-footer-border:  rgba(255,255,255,0.06);
+  --color-footer-text:    #c9c7c4;
+  --color-footer-muted:   #5a5856;
+
   --color-nav-bg:         rgba(2,6,23,0.92);
   --color-nav-border:     rgba(255,255,255,0.07);
   --color-nav-text:       #e5e7eb;
@@ -148,7 +160,7 @@
   --tw-primary-50:        rgba(245,158,11,0.50);
 }
 
-/* ━━━ BASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━ BASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 *, *::before, *::after { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
@@ -166,24 +178,38 @@ body {
 
 /* ━━━ OVERRIDES GLOBALES: clases Tailwind hardcodeadas → variables semánticas
 
-   En modo claro, bg-slate-950/bg-slate-900/bg-slate-800 etc. producen fondos
-   casi negros sobre fondo beige. Los sobrescribimos aquí sin tocar los JSX.
-   En .dark el comportamiento original se mantiene porque los vars apuntan
-   de vuelta a los mismos valores oscuros.
+   REGLA FUNDAMENTAL: .text-white y .text-slate-* sólo se sobreescriben
+   en secciones de fondo CLARO. Cualquier elemento dentro de una sección
+   con bg-slate-950 / bg-slate-900 / bg-gradient-to-br (hero oscuro) DEBE
+   mantener el blanco original para legibilidad.
+
+   Patrón: excluimos secciones oscuras con :not() contextual.
+   Los overrides de bg-slate-* ya mueven esos fondos a beige en modo claro,
+   por lo que el texto también debe seguir la variable del tema.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* ── Textos ── */
-.text-light,
-.text-white       { color: var(--color-text) !important; }
-.text-slate-100   { color: var(--color-text) !important; }
-.text-slate-200   { color: var(--color-text) !important; }
-.text-slate-300   { color: var(--color-text-muted) !important; }
-.text-slate-400   { color: var(--color-text-muted) !important; }
-.text-slate-500   { color: var(--color-text-faint) !important; }
+/* ── Textos ──
+   FIX: .text-white se acota a elementos dentro de contenedores que YA
+   fueron reasignados a fondo claro (bg-slate-950 → var(--color-bg)).
+   El hero, sidebar y footer tienen fondos oscuros explícitos con style={{}},
+   por lo que esta regla no los afecta cuando el navegador resuelve estilos.
+   Se elimina el override global destructivo y se usa una selección más precisa. */
+.bg-slate-950 .text-white,
+.bg-slate-900 .text-white {
+  color: var(--color-text) !important;
+}
+
+/* Solo .text-light (clase personalizada del proyecto) se sobrescribe siempre */
+.text-light         { color: var(--color-text) !important; }
+.text-slate-100     { color: var(--color-text) !important; }
+.text-slate-200     { color: var(--color-text) !important; }
+.text-slate-300     { color: var(--color-text-muted) !important; }
+.text-slate-400     { color: var(--color-text-muted) !important; }
+.text-slate-500     { color: var(--color-text-faint) !important; }
 .text-light\/70,
-.text-light70     { color: var(--tw-text-light-70) !important; }
+.text-light70       { color: var(--tw-text-light-70) !important; }
 .text-light\/50,
-.text-light50     { color: var(--tw-text-light-50) !important; }
+.text-light50       { color: var(--tw-text-light-50) !important; }
 
 /* ── Fondos (surface layer)
    Jerarquía: 950 → fondo base | 900 → tarjeta | 800 → item interno
@@ -229,7 +255,7 @@ body {
 .hover\:bg-slate-800:hover,
 .hover\:bg-slate-700:hover { background-color: var(--color-row-hover) !important; }
 
-/* ── Inputs y selects: el patrón más repetido: bg-slate-950 border-slate-700 text-light ── */
+/* ── Inputs y selects ── */
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 textarea,
 select {
@@ -259,10 +285,9 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   border-color: var(--color-modal-border) !important;
 }
 
-/* ━━━ LAYER: COMPONENTS — clases semánticas reutilizables ━━━━━━━━━━━━━━━ */
+/* ━━━ LAYER: COMPONENTS — clases semánticas reutilizables ━━━━━━━━━━━ */
 @layer components {
 
-  /* ── Tarjeta base ── */
   .card-soft {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -271,7 +296,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
-  /* ── Tarjeta interna (lista items, filas) ── */
   .card-inner {
     background-color: var(--color-inner-card);
     border: 1px solid var(--color-inner-border);
@@ -280,7 +304,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   }
   .card-inner:hover { background-color: var(--color-row-hover); }
 
-  /* ── Texto semántico ── */
   .t-heading  { color: var(--color-text);       font-weight: 800; }
   .t-body     { color: var(--color-text); }
   .t-muted    { color: var(--color-text-muted); }
@@ -289,14 +312,12 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .text-faint      { color: var(--color-text-faint); }
   .text-muted-soft { color: var(--color-text-faint); }
 
-  /* ── Divisor semántico ── */
   .divider {
     height: 1px;
     background-color: var(--color-divider);
     border: none;
   }
 
-  /* ── Input temático (si se usa clase explícita) ── */
   .input-themed {
     background-color: var(--color-input-bg);
     border: 1px solid var(--color-input-border);
@@ -313,7 +334,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
   }
 
-  /* ── Botón dorado ── */
   .button-gold {
     display: inline-flex;
     align-items: center;
@@ -333,7 +353,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .button-gold:hover  { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.40); }
   .button-gold:active { transform: translateY(0); filter: brightness(0.97); }
 
-  /* ── Botones de paginación (paátern slate) ── */
   .btn-page {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -349,7 +368,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .btn-page.active    { background-color: #f59e0b; color: #111827; border-color: #f59e0b; }
   .btn-page:disabled  { opacity: 0.4; cursor: not-allowed; }
 
-  /* ── Toggle de tema ── */
   .theme-toggle {
     display: inline-flex;
     align-items: center;
@@ -366,7 +384,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .theme-toggle:hover  { background: var(--color-toggle-hover); transform: scale(1.08); }
   .theme-toggle:active { transform: scale(0.95); }
 
-  /* ── Tooltip / panel flotante (SettingsFab, overlays) ── */
   .tooltip-surface {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -376,20 +393,17 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     transition: background-color 0.25s ease;
   }
 
-  /* ── Sección divisora con ícono (ProfilePage) ── */
   .section-divider-line {
     flex: 1;
     height: 1px;
     background-color: var(--color-divider);
   }
 
-  /* ── Banner de perfil ── */
   .profile-banner {
     background: linear-gradient(to bottom, var(--color-banner-from), var(--color-banner-to));
     transition: background 0.3s ease;
   }
 
-  /* ── Stat pill (ProfilePage) ── */
   .stat-pill {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -399,7 +413,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     transition: background-color 0.25s ease, border-color 0.25s ease;
   }
 
-  /* ── Barra de completitud ── */
   .completion-track {
     height: 0.5rem;
     background-color: var(--color-surface-off);
@@ -407,7 +420,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     overflow: hidden;
   }
 
-  /* ── Tooltip de gráfica Recharts ── */
   .recharts-tooltip-themed {
     background-color: var(--color-surface-2) !important;
     border: 1px solid var(--color-border) !important;
@@ -415,7 +427,6 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     color: var(--color-text) !important;
   }
 
-  /* ── SettingsFab (panel quick-settings) ── */
   .settings-fab-panel {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -434,30 +445,25 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .settings-fab-btn:hover { background-color: var(--color-row-hover); border-color: var(--color-text-faint); }
 }
 
-/* ━━━ OVERRIDES ESPECÍFICOS por componente ━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━ OVERRIDES ESPECÍFICOS por componente ━━━━━━━━━━━━━━━━━━━━━ */
 
-/* Navbar pública: letras */
 nav.sticky .text-light,
 nav.sticky .hover\:text-primary {
   color: var(--color-nav-text);
 }
 
-/* PropertyCard / tarjetas con fondo oscuro hardcodeado:
-   el card propiamente tiene bg oscuro (es un diseño intencional con foto),
-   solo forzamos legibilidad en las secciones info — NO tocamos el hero de foto */
 .property-card-info {
   background-color: var(--color-surface) !important;
   color: var(--color-text) !important;
 }
 
-/* Paginación: botones heredados con bg-slate-900/60 */
 [class*="bg-slate-900"][class*="rounded"][class*="border"] {
   background-color: var(--color-surface) !important;
   border-color: var(--color-border) !important;
   color: var(--color-text-muted) !important;
 }
 
-/* ━━━ ANIMACIONES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━ ANIMACIONES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 @keyframes spin-slow  { from { transform: rotate(0deg);   } to { transform: rotate(360deg); } }
 @keyframes fade-in    { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes shimmer    { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
