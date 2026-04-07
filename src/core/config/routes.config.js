@@ -30,5 +30,5 @@ export const PRIVATE_ROUTES = {
   USERS:       '/usuarios',
   REQUESTS:    '/solicitudes',
   PROFILE:     '/perfil',
-  VISITS:      '/usuarios/visitas',
+  VISITS:      '/visitas',
 };
