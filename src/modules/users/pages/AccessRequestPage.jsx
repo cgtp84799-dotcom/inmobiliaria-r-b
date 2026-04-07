@@ -1,63 +1,131 @@
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { FaUserPlus } from 'react-icons/fa';
-import { requestService } from '../services/request.service';
-import { useNavigate } from 'react-router-dom';
+import {
+  FaUserPlus, FaEnvelope, FaUser, FaPhone, FaCommentAlt, FaArrowLeft
+} from 'react-icons/fa';
+import {
+  collection, addDoc, serverTimestamp, query, where, getDocs
+} from 'firebase/firestore';
+import { db } from '../../../core/config/firebase.config';
 
+// ── Notifica al admin escribiendo en /notifications ──────────────────────────
+const notifyAdmins = async ({ name, email }) => {
+  try {
+    // Busca todos los usuarios con rol admin para notificarlos
+    const adminsSnap = await getDocs(
+      query(collection(db, 'users'), where('role', '==', 'admin'))
+    );
+    const writes = adminsSnap.docs.map((adminDoc) =>
+      addDoc(collection(db, 'notifications'), {
+        type:      'access_request',
+        title:     'Nueva solicitud de acceso',
+        message:   `${name} (${email}) solicitó acceso al sistema.`,
+        userId:    adminDoc.id,          // docId = email del admin
+        read:      false,
+        createdAt: serverTimestamp(),
+      })
+    );
+    await Promise.all(writes);
+  } catch (err) {
+    // No bloqueamos el flujo principal si falla la notificación
+    console.warn('No se pudo notificar a los admins:', err);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 const AccessRequestPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [sent,    setSent]    = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    name: '',
-    message: ''
+    name:    '',
+    email:   '',
+    phone:   '',
+    message: '',
   });
+
+  const handleChange = (field) => (e) =>
+    setFormData((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.email || !formData.name || !formData.password) {
-      toast.error('Por favor completa los campos obligatorios');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast.error('Nombre y correo son obligatorios.');
       return;
     }
 
     setLoading(true);
-
     try {
-      await requestService.createRequest({
-        email: formData.email,
-        name: formData.name,
-        phone: '',
-        message: formData.message || 'Solicitud de acceso al sistema'
+      // Escribe en /accessRequests (regla Firestore: allow create: if true)
+      await addDoc(collection(db, 'accessRequests'), {
+        name:      formData.name.trim(),
+        email:     formData.email.trim().toLowerCase(),
+        phone:     formData.phone.trim(),
+        message:   formData.message.trim() || 'Sin mensaje adicional.',
+        status:    'pending',
+        createdAt: serverTimestamp(),
       });
 
-      toast.success('Solicitud enviada exitosamente. Te contactaremos pronto.');
-      
-      setFormData({ email: '', password: '', name: '', message: '' });
-      
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
+      // Notifica a todos los admins
+      await notifyAdmins({
+        name:  formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+      });
+
+      setSent(true);
+      toast.success('Solicitud enviada. Te contactaremos pronto.');
     } catch (error) {
       console.error('Error enviando solicitud:', error);
-      toast.error('Error al enviar solicitud. Intenta nuevamente.');
+      toast.error('Error al enviar. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Pantalla de confirmación ───────────────────────────────────────────────
+  if (sent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full text-center bg-slate-900/60 backdrop-blur-xl border border-slate-800/50 rounded-3xl p-10 shadow-2xl"
+        >
+          <div className="w-20 h-20 mx-auto mb-6 bg-green-500/10 rounded-2xl flex items-center justify-center">
+            <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">¡Solicitud enviada!</h2>
+          <p className="text-slate-400 mb-8">
+            Un administrador revisará tu solicitud y te contactará al correo{' '}
+            <span className="text-primary font-medium">{formData.email}</span>.
+          </p>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 bg-primary text-slate-950 font-bold px-6 py-3 rounded-xl hover:opacity-90 transition"
+          >
+            <FaArrowLeft className="text-sm" />
+            Volver al inicio
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ── Formulario ─────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 left-10 w-96 h-96 bg-primary rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+      {/* Decoración */}
+      <div className="absolute inset-0 opacity-10 pointer-events-none">
+        <div className="absolute top-20 left-10 w-96 h-96 bg-primary rounded-full blur-3xl animate-pulse" />
+        <div
+          className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        />
       </div>
 
       <motion.div
@@ -66,118 +134,130 @@ const AccessRequestPage = () => {
         transition={{ duration: 0.6 }}
         className="max-w-lg w-full relative z-10"
       >
+        {/* Encabezado */}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="inline-block mb-4"
           >
-            <div className="w-20 h-20 mx-auto bg-gradient-to-br from-primary to-yellow-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-primary/30">
+            <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-primary to-yellow-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-primary/30">
               <FaUserPlus className="text-slate-950 text-3xl" />
             </div>
           </motion.div>
-          
-          <h1 className="text-4xl md:text-5xl font-bold mb-3">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">
             <span className="bg-gradient-to-r from-primary via-yellow-500 to-primary bg-clip-text text-transparent">
-              Acceso autorizado
+              Solicitar acceso
             </span>
           </h1>
-          <p className="text-slate-400 text-lg">
-            Solo para agentes y personal de Rincón Bedoya & Asociados
+          <p className="text-slate-400">
+            Completa el formulario y un administrador revisará tu solicitud.
           </p>
         </div>
 
+        {/* Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
           className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-8 shadow-2xl"
         >
-          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-800">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <FaUserPlus className="text-primary text-xl" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-100">Solicitar acceso</h2>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Correo electrónico <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="tu@correo.com"
-                className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 px-4 text-slate-100 placeholder-slate-500
-                         focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all duration-300"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Contraseña deseada <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="Mínimo 6 caracteres"
-                className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 px-4 text-slate-100 placeholder-slate-500
-                         focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all duration-300"
-                required
-                minLength={6}
-              />
-            </div>
-
+            {/* Nombre */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Nombre completo <span className="text-red-400">*</span>
               </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Juan Pérez"
-                className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 px-4 text-slate-100 placeholder-slate-500
-                         focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all duration-300"
-                required
-              />
+              <div className="relative group">
+                <FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={handleChange('name')}
+                  placeholder="Juan Pérez"
+                  className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 pl-12 pr-4 text-slate-100
+                             placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-2
+                             focus:ring-primary/30 transition-all"
+                  required
+                />
+              </div>
             </div>
 
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Correo electrónico <span className="text-red-400">*</span>
+              </label>
+              <div className="relative group">
+                <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange('email')}
+                  placeholder="tu@correo.com"
+                  className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 pl-12 pr-4 text-slate-100
+                             placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-2
+                             focus:ring-primary/30 transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Teléfono */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Teléfono <span className="text-slate-500">(opcional)</span>
+              </label>
+              <div className="relative group">
+                <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange('phone')}
+                  placeholder="310 123 4567"
+                  className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 pl-12 pr-4 text-slate-100
+                             placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-2
+                             focus:ring-primary/30 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Motivo de la solicitud
               </label>
-              <textarea
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                placeholder="Cuéntanos por qué necesitas acceso..."
-                rows={4}
-                className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 px-4 text-slate-100 placeholder-slate-500
-                         focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all duration-300 resize-none"
-              />
+              <div className="relative">
+                <FaCommentAlt className="absolute left-4 top-3.5 text-slate-500" />
+                <textarea
+                  value={formData.message}
+                  onChange={handleChange('message')}
+                  placeholder="Cuéntanos por qué necesitas acceso..."
+                  rows={4}
+                  className="w-full bg-slate-950/50 border border-slate-700/70 rounded-xl py-3 pl-12 pr-4 text-slate-100
+                             placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-2
+                             focus:ring-primary/30 transition-all resize-none"
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            {/* Botones */}
+            <div className="flex gap-3 pt-2">
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-gradient-to-r from-primary to-yellow-600 hover:from-yellow-500 hover:to-primary 
-                         text-slate-950 font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-primary/50 
-                         transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-                         transform hover:scale-[1.02] active:scale-[0.98]"
+                className="flex-1 bg-gradient-to-r from-primary to-yellow-600 hover:from-yellow-500 hover:to-primary
+                           text-slate-950 font-bold py-3.5 rounded-xl shadow-lg hover:shadow-primary/50
+                           transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                           hover:scale-[1.02] active:scale-[0.98]"
               >
                 {loading ? 'Enviando...' : 'Enviar solicitud'}
               </button>
               <button
                 type="button"
                 onClick={() => navigate('/')}
-                className="px-6 py-3.5 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 font-semibold rounded-xl 
-                         border border-slate-700/50 hover:border-slate-600 transition-all duration-300"
+                className="px-6 py-3.5 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 font-semibold rounded-xl
+                           border border-slate-700/50 hover:border-slate-600 transition-all"
               >
                 Cancelar
               </button>
@@ -185,19 +265,20 @@ const AccessRequestPage = () => {
           </form>
         </motion.div>
 
+        {/* Link de vuelta al login */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
           className="text-center text-slate-500 text-sm mt-6"
         >
-          ¿Ya tienes una cuenta?{' '}
-          <button
-            onClick={() => navigate('/acceso')}
-            className="text-primary hover:text-yellow-500 font-semibold transition-colors duration-300"
+          ¿Ya tienes cuenta?{' '}
+          <Link
+            to="/acceso"
+            className="text-primary hover:text-yellow-500 font-semibold transition-colors"
           >
             Inicia sesión aquí
-          </button>
+          </Link>
         </motion.p>
       </motion.div>
     </div>
