@@ -8,7 +8,7 @@ import {
   collection, query, where, orderBy, limit,
   onSnapshot, getDocs,
 } from 'firebase/firestore';
-import { db } from '../../../core/firebase/config';
+import { db } from '../../../core/config/firebase.config';
 import {
   FaTimes, FaUserTie, FaUserShield, FaUsers, FaEye,
   FaEnvelope, FaPhone, FaCalendarAlt, FaEdit,
@@ -415,7 +415,7 @@ const UserDetailPanel = ({
                       </section>
                     )}
 
-                    {/* Lista de propiedades asignadas */}
+                    {/* Nota agente */}
                     {isAgent && (
                       <section>
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Nota</h3>
