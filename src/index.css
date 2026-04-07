@@ -28,6 +28,12 @@
   --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
   --color-sidebar-active-bg:  rgba(245,158,11,0.18);
 
+  /* Footer siempre oscuro (igual que sidebar) */
+  --color-footer-bg:      #1a1816;
+  --color-footer-border:  rgba(255,255,255,0.07);
+  --color-footer-text:    #c9c7c4;
+  --color-footer-muted:   #7a7875;
+
   --color-nav-bg:         rgba(245,244,240,0.92);
   --color-nav-border:     rgba(0,0,0,0.09);
   --color-nav-text:       #1a1916;
@@ -97,6 +103,12 @@
   --color-sidebar-muted:      #5a5856;
   --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
   --color-sidebar-active-bg:  rgba(245,158,11,0.18);
+
+  /* Footer modo oscuro */
+  --color-footer-bg:      #060d1e;
+  --color-footer-border:  rgba(255,255,255,0.06);
+  --color-footer-text:    #c9c7c4;
+  --color-footer-muted:   #5a5856;
 
   --color-nav-bg:         rgba(2,6,23,0.92);
   --color-nav-border:     rgba(255,255,255,0.07);
@@ -333,7 +345,7 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .button-gold:hover  { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.40); }
   .button-gold:active { transform: translateY(0); filter: brightness(0.97); }
 
-  /* ── Botones de paginación (paátern slate) ── */
+  /* ── Botones de paginación ── */
   .btn-page {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -366,7 +378,7 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .theme-toggle:hover  { background: var(--color-toggle-hover); transform: scale(1.08); }
   .theme-toggle:active { transform: scale(0.95); }
 
-  /* ── Tooltip / panel flotante (SettingsFab, overlays) ── */
+  /* ── Tooltip / panel flotante ── */
   .tooltip-surface {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -376,7 +388,7 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     transition: background-color 0.25s ease;
   }
 
-  /* ── Sección divisora con ícono (ProfilePage) ── */
+  /* ── Sección divisora con ícono ── */
   .section-divider-line {
     flex: 1;
     height: 1px;
@@ -389,7 +401,7 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     transition: background 0.3s ease;
   }
 
-  /* ── Stat pill (ProfilePage) ── */
+  /* ── Stat pill ── */
   .stat-pill {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -415,7 +427,7 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     color: var(--color-text) !important;
   }
 
-  /* ── SettingsFab (panel quick-settings) ── */
+  /* ── SettingsFab ── */
   .settings-fab-panel {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
@@ -442,15 +454,13 @@ nav.sticky .hover\:text-primary {
   color: var(--color-nav-text);
 }
 
-/* PropertyCard / tarjetas con fondo oscuro hardcodeado:
-   el card propiamente tiene bg oscuro (es un diseño intencional con foto),
-   solo forzamos legibilidad en las secciones info — NO tocamos el hero de foto */
+/* PropertyCard info */
 .property-card-info {
   background-color: var(--color-surface) !important;
   color: var(--color-text) !important;
 }
 
-/* Paginación: botones heredados con bg-slate-900/60 */
+/* Paginación: botones heredados */
 [class*="bg-slate-900"][class*="rounded"][class*="border"] {
   background-color: var(--color-surface) !important;
   border-color: var(--color-border) !important;
