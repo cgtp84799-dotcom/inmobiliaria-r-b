@@ -6,11 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from '../../../modules/notifications/components/NotificationBell';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { useTheme } from '../../../core/contexts/ThemeContext';
+import { PUBLIC_ROUTES, AUTH_ROUTES, PRIVATE_ROUTES } from '../../../core/config/routes.config';
 
 const NAV_LINKS = [
-  { to: '/',           icon: FaHome,     label: 'Inicio'      },
-  { to: 'propiedades', icon: FaBuilding, label: 'Propiedades' },
-  { to: 'contacto',   icon: FaEnvelope, label: 'Contacto'    },
+  { to: PUBLIC_ROUTES.HOME,    icon: FaHome,     label: 'Inicio'      },
+  { to: PUBLIC_ROUTES.CATALOG, icon: FaBuilding, label: 'Propiedades' },
+  { to: PUBLIC_ROUTES.CONTACT, icon: FaEnvelope, label: 'Contacto'    },
 ];
 
 export default function Navbar() {
@@ -20,6 +21,9 @@ export default function Navbar() {
   const location = useLocation();
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  const dashboardLink = currentUser ? PRIVATE_ROUTES.DASHBOARD : AUTH_ROUTES.ACCESS_REQUEST;
+  const dashboardLabel = currentUser ? 'Dashboard' : 'Acceso Agentes';
 
   return (
     <motion.nav
@@ -32,7 +36,7 @@ export default function Navbar() {
         <div className="flex h-16 sm:h-20 items-center justify-between gap-3">
 
           {/* Logo */}
-          <Link to="/" className="flex items-center min-w-0">
+          <Link to={PUBLIC_ROUTES.HOME} className="flex items-center min-w-0">
             <img
               src="/logo.jpg.png"
               alt="Rincón Bedoya & Asociados"
@@ -59,7 +63,6 @@ export default function Navbar() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {/* Theme toggle */}
             {toggleTheme && (
               <motion.button
                 whileTap={{ scale: 0.9 }}
@@ -76,11 +79,8 @@ export default function Navbar() {
             {currentUser && <NotificationBell />}
 
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link
-                to={currentUser ? '/dashboard' : '/acceso'}
-                className="button-gold"
-              >
-                {currentUser ? 'Dashboard' : 'Acceso Agentes'}
+              <Link to={dashboardLink} className="button-gold">
+                {dashboardLabel}
               </Link>
             </motion.div>
 
@@ -123,10 +123,10 @@ export default function Navbar() {
                 </Link>
               ))}
               <Link
-                to={currentUser ? '/dashboard' : '/acceso'}
+                to={dashboardLink}
                 className="button-gold w-full text-center block mt-3"
               >
-                {currentUser ? 'Dashboard' : 'Acceso Agentes'}
+                {dashboardLabel}
               </Link>
             </div>
           </motion.div>

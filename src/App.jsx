@@ -35,7 +35,11 @@ import PublicLayout from "./shared/components/Layout/PublicLayout";
 import AdminLayout from "./shared/components/Layout/AdminLayout";
 import ScrollToTop from "./shared/components/ScrollToTop";
 import { AuthProvider, useAuth } from "./core/contexts/AuthContext";
-import { PUBLIC_ROUTES, PRIVATE_ROUTES, AUTH_ROUTES } from "./core/config/routes.config";
+import {
+  PUBLIC_ROUTES,
+  PRIVATE_ROUTES,
+  AUTH_ROUTES,
+} from "./core/config/routes.config";
 
 import {
   requestNotificationPermission,
@@ -51,35 +55,18 @@ import SettingsFab from "./shared/components/UI/SettingsFab";
 import LocationPage from "./modules/public/pages/LocationPage";
 import ProfilePage from "./modules/profile/pages/ProfilePage";
 
-// ── Visitas: lazy porque el panel admin es pesado
-const VisitsPage       = lazy(() => import("./modules/visits/pages/VisitsPage"));
+const VisitsPage        = lazy(() => import("./modules/visits/pages/VisitsPage"));
 const ScheduleVisitPage = lazy(() => import("./modules/visits/pages/ScheduleVisitPage"));
 
-const DashboardPage = lazy(() =>
-  import("./modules/dashboard/pages/DashboardPage")
-);
-const PropertyManagement = lazy(() =>
-  import("./modules/properties/pages/PropertyManagement")
-);
-const ClientManagement = lazy(() =>
-  import("./modules/clients/pages/ClientManagement")
-);
-const DocumentsPage = lazy(() =>
-  import("./modules/documents/pages/DocumentsPage")
-);
-const ContactsPage = lazy(() =>
-  import("./modules/contacts/pages/ContactsPage")
-);
-const CalendarPage = lazy(() =>
-  import("./modules/calendar/pages/CalendarPage")
-);
-const UsersPage = lazy(() => import("./modules/users/pages/UsersPage"));
-const RequestsPage = lazy(() =>
-  import("./modules/users/pages/RequestsPage")
-);
+const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
+const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
+const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
+const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
+const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
+const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
+const UsersPage          = lazy(() => import("./modules/users/pages/UsersPage"));
+const RequestsPage       = lazy(() => import("./modules/users/pages/RequestsPage"));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Loader genérico para Suspense
 // ─────────────────────────────────────────────────────────────────────────────
 const PageLoader = () => (
   <div className="flex items-center justify-center h-[60vh]">
@@ -87,8 +74,6 @@ const PageLoader = () => (
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Inicializador de notificaciones push
 // ─────────────────────────────────────────────────────────────────────────────
 const NotificationInitializer = () => {
   const { currentUser } = useAuth();
@@ -99,20 +84,13 @@ const NotificationInitializer = () => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/firebase-messaging-sw.js")
-        .then((registration) => {
-          console.log("✅ Service Worker registrado:", registration.scope);
-        })
-        .catch((error) => {
-          console.error("❌ Error registrando Service Worker:", error);
-        });
+        .then((r) => console.log("✅ SW registrado:", r.scope))
+        .catch((e) => console.error("❌ SW error:", e));
     }
 
     if (currentUser?.email) {
-      const timeout = setTimeout(() => {
-        requestNotificationPermission(currentUser.email);
-      }, 3000);
-
-      return () => clearTimeout(timeout);
+      const t = setTimeout(() => requestNotificationPermission(currentUser.email), 3000);
+      return () => clearTimeout(t);
     }
   }, [currentUser]);
 
@@ -120,39 +98,13 @@ const NotificationInitializer = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mapa de colores para las tarjetas de servicios
-// ─────────────────────────────────────────────────────────────────────────────
 const serviceColorMap = {
-  primary: {
-    bg: "bg-primary/10",
-    text: "text-primary",
-    border: "hover:border-primary/50",
-  },
-  "blue-500": {
-    bg: "bg-blue-500/10",
-    text: "text-blue-500",
-    border: "hover:border-blue-500/50",
-  },
-  "green-500": {
-    bg: "bg-green-500/10",
-    text: "text-green-500",
-    border: "hover:border-green-500/50",
-  },
-  "purple-500": {
-    bg: "bg-purple-500/10",
-    text: "text-purple-500",
-    border: "hover:border-purple-500/50",
-  },
-  "orange-500": {
-    bg: "bg-orange-500/10",
-    text: "text-orange-500",
-    border: "hover:border-orange-500/50",
-  },
-  "red-500": {
-    bg: "bg-red-500/10",
-    text: "text-red-500",
-    border: "hover:border-red-500/50",
-  },
+  primary:    { bg: "bg-primary/10",    text: "text-primary",    border: "hover:border-primary/50"    },
+  "blue-500": { bg: "bg-blue-500/10",   text: "text-blue-500",   border: "hover:border-blue-500/50"   },
+  "green-500":{ bg: "bg-green-500/10",  text: "text-green-500",  border: "hover:border-green-500/50"  },
+  "purple-500":{ bg: "bg-purple-500/10",text: "text-purple-500", border: "hover:border-purple-500/50" },
+  "orange-500":{ bg: "bg-orange-500/10",text: "text-orange-500", border: "hover:border-orange-500/50" },
+  "red-500":  { bg: "bg-red-500/10",    text: "text-red-500",    border: "hover:border-red-500/50"    },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,10 +114,7 @@ const HomePage = () => (
   <div className="overflow-hidden">
     <Helmet>
       <title>Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas</title>
-      <meta
-        name="description"
-        content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados."
-      />
+      <meta name="description" content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados." />
       <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
       <meta property="og:title" content="Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas" />
       <meta property="og:description" content="Tu inmobiliaria de confianza en Anserma, Caldas. Casas, apartamentos, lotes y fincas para compra, venta y arriendo." />
@@ -176,9 +125,7 @@ const HomePage = () => (
 
     {/* ── Hero ── */}
     <motion.section
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
       className="relative min-h-[78vh] sm:min-h-[85vh] lg:min-h-[90vh] flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden"
     >
       <div className="absolute inset-0 opacity-20">
@@ -473,22 +420,16 @@ function App() {
         <Routes>
           {/* ── Rutas públicas ── */}
           <Route element={<PublicLayout />}>
-            <Route path={PUBLIC_ROUTES.HOME} element={<HomePage />} />
-            <Route path="/catalogo" element={<CatalogPage />} />
-            <Route path={PUBLIC_ROUTES.CATALOG} element={<CatalogPage />} />
-            <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<LocationPage />} />
+            <Route path={PUBLIC_ROUTES.HOME}             element={<HomePage />} />
+            <Route path={PUBLIC_ROUTES.CATALOG}          element={<CatalogPage />} />
+            <Route path={PUBLIC_ROUTES.CITY_PROPERTIES}  element={<LocationPage />} />
             <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<LocationPage />} />
-            <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL} element={<PropertyDetailPage />} />
-            <Route path={PUBLIC_ROUTES.CONTACT} element={<ContactPage />} />
-            <Route path="/solicitar-acceso" element={<AccessRequestPage />} />
-            {/* ── NUEVO: formulario público para agendar visitas ── */}
+            <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL}  element={<PropertyDetailPage />} />
+            <Route path={PUBLIC_ROUTES.CONTACT}          element={<ContactPage />} />
+            <Route path={AUTH_ROUTES.ACCESS_REQUEST}     element={<AccessRequestPage />} />
             <Route
               path={PUBLIC_ROUTES.SCHEDULE_VISIT}
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <ScheduleVisitPage />
-                </Suspense>
-              }
+              element={<Suspense fallback={<PageLoader />}><ScheduleVisitPage /></Suspense>}
             />
           </Route>
 
@@ -506,7 +447,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path={PRIVATE_ROUTES.DASHBOARD} element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
+            <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
@@ -516,15 +457,9 @@ function App() {
             <Route path={PRIVATE_ROUTES.USERS}      element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.REQUESTS}   element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
-
-            {/* ── NUEVO: panel de administración de visitas ── */}
             <Route
               path={PRIVATE_ROUTES.VISITS}
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <VisitsPage />
-                </Suspense>
-              }
+              element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>}
             />
           </Route>
 
