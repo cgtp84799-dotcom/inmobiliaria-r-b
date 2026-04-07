@@ -7,7 +7,6 @@ import NotificationBell from '../../../modules/notifications/components/Notifica
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { USER_ROLES } from '../../../modules/users/types/user.types';
 
-// Metadatos de rol — misma paleta que Sidebar para coherencia visual
 const ROLE_META = {
   [USER_ROLES.ADMIN]:  { label: 'Admin',       color: '#f87171', bg: 'rgba(239,68,68,0.12)',   Icon: FaShieldAlt },
   [USER_ROLES.MEMBER]: { label: 'Asesor',       color: '#fbbf24', bg: 'rgba(245,158,11,0.12)',  Icon: FaUsers     },
@@ -51,18 +50,19 @@ const AdminLayout = () => {
     leaveTimerRef.current = setTimeout(() => setSidebarHover(false), 80);
   };
 
-  // Nombre de display: primero displayName de Auth, luego parte local del email
   const displayName =
     currentUser?.displayName ||
     currentUser?.email?.split('@')[0] ||
     'Usuario';
 
   return (
+    // FIX: sin will-change ni filter en el root — evita crear stacking context
+    // que rompe position:fixed del sidebar cuando los modales usan backdrop-filter
     <div
       className="min-h-[100dvh] w-full overflow-x-hidden relative"
       style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
     >
-      {/* DESKTOP hover zone */}
+      {/* DESKTOP hover zone — queda FUERA del flujo del contenido principal */}
       {isDesktop && (
         <div
           className="hidden lg:block fixed inset-y-0 left-0 z-40 w-20"
@@ -95,12 +95,12 @@ const AdminLayout = () => {
       {/* CONTENIDO PRINCIPAL */}
       <div className="min-h-[100dvh] flex flex-col min-w-0 lg:pl-20">
 
-        {/* ── Topbar (visible en todos los tamaños) ──────────────────── */}
+        {/* Topbar — SIN backdrop-blur para no crear filter context que destruya el fixed sidebar */}
         <motion.header
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="h-16 backdrop-blur-sm flex items-center px-4 sm:px-6 shrink-0 border-b gap-3"
+          className="h-16 flex items-center px-4 sm:px-6 shrink-0 border-b gap-3"
           style={{
             backgroundColor: 'var(--color-topbar-bg)',
             borderColor:     'var(--color-topbar-border)',
@@ -116,7 +116,7 @@ const AdminLayout = () => {
             <FaBars size={20} />
           </button>
 
-          {/* Logo (solo móvil — en desktop el sidebar lo tiene) */}
+          {/* Logo solo móvil */}
           <div className="lg:hidden flex-shrink-0">
             <img
               src="/logo.jpg.png"
@@ -126,24 +126,17 @@ const AdminLayout = () => {
             />
           </div>
 
-          {/* Espaciador */}
           <div className="flex-1" />
 
-          {/* ── Zona derecha del topbar ── */}
           <div className="flex items-center gap-3">
-
-            {/* Campana de notificaciones */}
             {currentUser && <NotificationBell />}
 
-            {/* Separador visual */}
             <div
               className="hidden sm:block w-px h-6 self-center"
               style={{ backgroundColor: 'var(--color-topbar-border)' }}
             />
 
-            {/* Avatar + nombre + rol */}
             <div className="hidden sm:flex items-center gap-2.5">
-              {/* Avatar */}
               <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden
                 bg-gradient-to-br from-yellow-500/30 to-yellow-700/20
                 border-2 border-yellow-500/30 flex items-center justify-center
@@ -153,7 +146,6 @@ const AdminLayout = () => {
                   : displayName[0]?.toUpperCase()}
               </div>
 
-              {/* Nombre + badge de rol */}
               <div className="flex flex-col leading-none">
                 <span
                   className="text-sm font-semibold truncate max-w-[120px]"
@@ -170,10 +162,8 @@ const AdminLayout = () => {
                 </span>
               </div>
             </div>
-
           </div>
         </motion.header>
-        {/* ────────────────────────────────────────────────────────────── */}
 
         {/* Área scrollable */}
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden min-w-0">
