@@ -1,7 +1,7 @@
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, getDocs, query, where, orderBy,
-  serverTimestamp,
+  serverTimestamp, onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { VISIT_STATUS } from '../types/visit.types';
@@ -16,6 +16,19 @@ const ref = (id) => doc(db, COLLECTION, id);
  */
 export const visitService = {
 
+  /**
+   * Suscripción en tiempo real a todas las visitas.
+   * Retorna la función unsub para limpiar en useEffect.
+   */
+  subscribeAll(onData, onError) {
+    const q = query(col(), orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err)  => onError?.(err)
+    );
+  },
+
   /** Crea una solicitud de visita y notifica a los admins. */
   async requestVisit(payload) {
     const docRef = await addDoc(col(), {
@@ -24,23 +37,22 @@ export const visitService = {
       updatedAt: serverTimestamp(),
     });
 
-    // Notificar a los admins buscando users con role=='admin'
     try {
       const adminsSnap = await getDocs(
         query(collection(db, 'users'), where('role', '==', 'admin'))
       );
       const notifPromises = adminsSnap.docs.map((d) =>
         notificationService.createNotification({
-          userId:  d.id,           // docId es el email
-          type:    'visit_request',
-          title:   'Nueva solicitud de visita',
-          message: `${payload.clientName} quiere visitar "${payload.propertyName}"`,
+          userId:    d.id,
+          type:      'visit_request',
+          title:     'Nueva solicitud de visita',
+          message:   `${payload.clientName} quiere visitar "${payload.propertyName}"`,
           actionUrl: '/usuarios/visitas',
         })
       );
       await Promise.allSettled(notifPromises);
     } catch (_) {
-      // Las notificaciones son best-effort; no bloquear la solicitud
+      // notificaciones best-effort
     }
 
     return docRef.id;
@@ -68,13 +80,9 @@ export const visitService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  /**
-   * Cambia el estado de una visita.
-   * Después de aprobar/rechazar notifica al cliente.
-   */
+  /** Cambia el estado de una visita. */
   async updateStatus(visitId, newStatus, adminNotes = '') {
-    const visitRef = ref(visitId);
-    await updateDoc(visitRef, {
+    await updateDoc(ref(visitId), {
       status: newStatus,
       adminNotes,
       updatedAt: serverTimestamp(),
@@ -91,51 +99,44 @@ export const visitService = {
     await deleteDoc(ref(visitId));
   },
 
-  /**
-   * Aprueba una visita y notifica al cliente.
-   */
+  /** Aprueba una visita y notifica al cliente y al agente. */
   async approveVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.APPROVED, adminNotes);
     if (visit.clientEmail) {
       await notificationService.createNotification({
-        userId:  visit.clientEmail,
-        type:    'visit_approved',
-        title:   'Visita aprobada',
-        message: `Tu visita a "${visit.propertyName}" fue aprobada para el ${visit.requestedDate} a las ${visit.requestedTime}.`,
+        userId:    visit.clientEmail,
+        type:      'visit_approved',
+        title:     'Visita aprobada',
+        message:   `Tu visita a "${visit.propertyName}" fue aprobada para el ${visit.requestedDate} a las ${visit.requestedTime}.`,
         actionUrl: '/portal/visitas',
       });
     }
-    // También notifica al agente asignado si hay uno
     if (visit.agentEmail) {
       await notificationService.createNotification({
-        userId:  visit.agentEmail,
-        type:    'visit_approved',
-        title:   'Visita asignada',
-        message: `Tienes una visita aprobada: "${visit.propertyName}" — ${visit.clientName} el ${visit.requestedDate}.`,
+        userId:    visit.agentEmail,
+        type:      'visit_approved',
+        title:     'Visita asignada',
+        message:   `Tienes una visita aprobada: "${visit.propertyName}" — ${visit.clientName} el ${visit.requestedDate}.`,
         actionUrl: '/usuarios/visitas',
       });
     }
   },
 
-  /**
-   * Rechaza una visita y notifica al cliente.
-   */
+  /** Rechaza una visita y notifica al cliente. */
   async rejectVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
     if (visit.clientEmail) {
       await notificationService.createNotification({
-        userId:  visit.clientEmail,
-        type:    'visit_rejected',
-        title:   'Visita no aprobada',
-        message: `Tu solicitud de visita a "${visit.propertyName}" no pudo ser aprobada. ${adminNotes ? adminNotes : ''}`,
+        userId:    visit.clientEmail,
+        type:      'visit_rejected',
+        title:     'Visita no aprobada',
+        message:   `Tu solicitud de visita a "${visit.propertyName}" no pudo ser aprobada. ${adminNotes || ''}`,
         actionUrl: '/portal/visitas',
       });
     }
   },
 
-  /**
-   * Marca una visita como completada.
-   */
+  /** Marca una visita como completada. */
   async completeVisit(visitId, adminNotes = '') {
     await this.updateStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
   },
