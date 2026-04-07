@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FaHome, FaBuilding, FaEnvelope, FaBars, FaTimes } from 'react-icons/fa';
 import { MdLightMode, MdDarkMode } from 'react-icons/md';
 import { motion, AnimatePresence } from 'framer-motion';
-import { NotificationBell } from '../../../../../src/modules/notifications/components/NotificationBell';
+import NotificationBell from '../../../modules/notifications/components/NotificationBell';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { useTheme } from '../../../core/contexts/ThemeContext';
 
