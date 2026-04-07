@@ -61,6 +61,7 @@ const ScheduleVisitPage = lazy(() => import("./modules/visits/pages/ScheduleVisi
 const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
 const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
 const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
+const ContractsPage      = lazy(() => import("./modules/contracts/pages/ContractsPage"));
 const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
 const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
 const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
@@ -422,8 +423,8 @@ function App() {
           <Route element={<PublicLayout />}>
             <Route path={PUBLIC_ROUTES.HOME}             element={<HomePage />} />
             <Route path={PUBLIC_ROUTES.CATALOG}          element={<CatalogPage />} />
+            {/* Una sola ruta de zona: el patrón /propiedades/zona/:city cubre ambos casos */}
             <Route path={PUBLIC_ROUTES.CITY_PROPERTIES}  element={<LocationPage />} />
-            <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<LocationPage />} />
             <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL}  element={<PropertyDetailPage />} />
             <Route path={PUBLIC_ROUTES.CONTACT}          element={<ContactPage />} />
             <Route path={AUTH_ROUTES.ACCESS_REQUEST}     element={<AccessRequestPage />} />
@@ -450,6 +451,9 @@ function App() {
             <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
+            {/* FIX: ruta de contratos registrada correctamente */}
+            <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
+            <Route path={PRIVATE_ROUTES.VISITS}     element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CHAT}       element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />} />
             <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
@@ -457,10 +461,6 @@ function App() {
             <Route path={PRIVATE_ROUTES.USERS}      element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.REQUESTS}   element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
-            <Route
-              path={PRIVATE_ROUTES.VISITS}
-              element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>}
-            />
           </Route>
 
           {/* Fallback */}
