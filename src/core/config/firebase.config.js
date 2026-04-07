@@ -1,7 +1,7 @@
 // src/core/config/firebase.config.js
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
@@ -39,7 +39,11 @@ const app = initializeApp(firebaseConfig);
 
 // Exportar servicios
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Fix: experimentalForceLongPolling evita el bug INTERNAL ASSERTION FAILED de Firestore v12+
+export const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+  experimentalForceLongPolling: true,
+});
 export const rtdb = getDatabase(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
