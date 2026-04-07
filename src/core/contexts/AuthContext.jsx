@@ -91,7 +91,6 @@ export const AuthProvider = ({ children }) => {
 
   // ========================================
   // SYNC: crea doc en Firestore si no existe
-  // Solo para primer login — admins crean usuarios manualmente
   // ========================================
 
   const syncUserToFirestore = async (authUser) => {
@@ -162,7 +161,6 @@ export const AuthProvider = ({ children }) => {
 
   // ========================================
   // FUNCIONES PÚBLICAS
-  // signUp eliminado — los usuarios los crea el admin desde UserManagement
   // ========================================
 
   const signIn = async (email, password) => {
@@ -199,9 +197,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helpers de rol — disponibles para cualquier componente
+  // Helpers de rol
+  // isAgent: true si el usuario tiene rol 'agent' o 'admin' (los admins ven todo)
+  // Usado en Sidebar para mostrar/ocultar módulo de Contratos
   const isAdmin  = userData?.role === 'admin';
   const isMember = userData?.role === 'member';
+  const isAgent  = userData?.role === 'agent' || userData?.role === 'admin';
   const isViewer = userData?.role === 'viewer';
 
   const value = {
@@ -210,6 +211,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAdmin,
     isMember,
+    isAgent,
     isViewer,
     signIn,
     signOut
