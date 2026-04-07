@@ -46,7 +46,8 @@ const Sidebar = ({
     { icon: FaChartLine,    label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
     { icon: FaBuilding,     label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
     { icon: FaUsers,        label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients", "read") },
-    { icon: FaFileContract, label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "clients", "read") },
+    // FIX BUG-04: permiso corregido de "clients" a "contracts"
+    { icon: FaFileContract, label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts", "read") },
     { icon: FaCalendar,     label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
     { icon: FaEnvelope,     label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
     { icon: FaFolder,       label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
@@ -72,7 +73,7 @@ const Sidebar = ({
     </div>
   );
 
-  // ── Partes reutilizables ──────────────────────────────
+  // ── Partes reutilizables ──────────────────────────────────────────────────
   const SidebarHeader = ({ showClose = false }) => (
     <div
       className="px-4 sm:px-6 h-20 flex items-center justify-between shrink-0 border-b"
@@ -218,10 +219,11 @@ const Sidebar = ({
       <AnimatePresence>
         {showDesktopOverlay && (
           <motion.aside
-            initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}
-            transition={{ type: "tween", duration: 0.18, ease: "easeOut" }}
-            onMouseLeave={onRequestCloseOverlay}
-            className="hidden lg:flex fixed inset-y-0 left-0 z-[70] w-64 flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r pb-[env(safe-area-inset-bottom)]"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -20, opacity: 0 }}
+            transition={{ type: "tween", duration: 0.22 }}
+            className="hidden lg:flex fixed inset-y-0 left-0 z-[70] w-72 flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r"
             style={{ backgroundColor: SB.bg, borderColor: SB.border }}
           >
             <SidebarHeader showClose />
@@ -233,18 +235,23 @@ const Sidebar = ({
       </AnimatePresence>
 
       {/* ── SIDEBAR MÓVIL ── */}
-      <motion.aside
-        initial={false}
-        animate={{ x: isOpen ? 0 : -320 }}
-        transition={{ type: "tween", duration: 0.22, ease: "easeOut" }}
-        className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r pb-[env(safe-area-inset-bottom)]"
-        style={{ backgroundColor: SB.bg, borderColor: SB.border }}
-      >
-        <SidebarHeader showClose />
-        <UserCard />
-        <NavItems />
-        <SignOutBtn />
-      </motion.aside>
+      <AnimatePresence>
+        {showMobile && isOpen && (
+          <motion.aside
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "tween", duration: 0.25 }}
+            className="lg:hidden fixed inset-y-0 left-0 z-50 w-72 flex flex-col h-[100dvh] max-h-[100dvh] shadow-2xl border-r"
+            style={{ backgroundColor: SB.bg, borderColor: SB.border }}
+          >
+            <SidebarHeader showClose />
+            <UserCard />
+            <NavItems />
+            <SignOutBtn />
+          </motion.aside>
+        )}
+      </AnimatePresence>
     </>
   );
 };
