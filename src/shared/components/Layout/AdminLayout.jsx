@@ -5,14 +5,8 @@ import { FaBars } from "react-icons/fa";
 
 const AdminLayout = () => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
-
-  // Móvil
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Desktop (pin opcional, por ahora lo dejamos)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-
-  // Desktop overlay por hover
   const [sidebarHover, setSidebarHover] = useState(false);
 
   const enterTimerRef = useRef(null);
@@ -22,11 +16,9 @@ const AdminLayout = () => {
     const onResize = () => {
       const large = window.innerWidth >= 1024;
       setIsDesktop(large);
-
       if (large) setSidebarOpen(false);
       if (!large) setSidebarHover(false);
     };
-
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -43,12 +35,13 @@ const AdminLayout = () => {
     leaveTimerRef.current = setTimeout(() => setSidebarHover(false), 80);
   };
 
-  // Desktop: mini sidebar fijo (no mover contenido)
-  const desktopPaddingLeft = "lg:pl-20";
-
   return (
-    <div className="min-h-[100dvh] w-full bg-slate-950 text-slate-100 overflow-x-hidden relative">
-      {/* DESKTOP: hover SOLO sobre el mini (w-20) */}
+    /* bg usa variable semántica — cambia automáticamente con el tema */
+    <div
+      className="min-h-[100dvh] w-full overflow-x-hidden relative"
+      style={{ backgroundColor: "var(--color-bg)", color: "var(--color-text)" }}
+    >
+      {/* DESKTOP hover zone */}
       {isDesktop && (
         <div
           className="hidden lg:block fixed inset-y-0 left-0 z-40 w-20"
@@ -79,17 +72,23 @@ const AdminLayout = () => {
       )}
 
       {/* CONTENIDO */}
-      <div className={`min-h-[100dvh] flex flex-col min-w-0 ${desktopPaddingLeft}`}>
-        {/* Header superior del panel (solo móvil) */}
-        <div className="lg:hidden h-16 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center px-4 shrink-0 gap-3">
+      <div className="min-h-[100dvh] flex flex-col min-w-0 lg:pl-20">
+        {/* Topbar móvil — usa variable semántica */}
+        <div
+          className="lg:hidden h-16 backdrop-blur flex items-center px-4 shrink-0 gap-3 border-b"
+          style={{
+            backgroundColor: "var(--color-topbar-bg)",
+            borderColor: "var(--color-topbar-border)",
+          }}
+        >
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="p-2 text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: "var(--color-text-muted)" }}
             aria-label="Abrir menú"
           >
             <FaBars size={20} />
           </button>
-
           <div className="flex-1 min-w-0 flex items-center">
             <img
               src="/logo.jpg.png"
@@ -102,7 +101,6 @@ const AdminLayout = () => {
 
         {/* Área scrollable */}
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden min-w-0">
-          {/* Container global del panel (mismos paddings para todas las páginas) */}
           <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
             <Outlet
               context={{

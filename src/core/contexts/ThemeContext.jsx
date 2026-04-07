@@ -10,24 +10,25 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState("dark"); // "dark" | "light"
-
-  useEffect(() => {
+  // Default: light (o lo que el usuario haya guardado en Firestore/localStorage)
+  const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem(THEME_KEY);
-    const initial = saved === "light" ? "light" : "dark";
-    setTheme(initial);
+    return saved === "dark" ? "dark" : "light";
+  });
 
-    if (initial === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-  }, []);
+  // Aplica la clase .dark al <html> al montar y cada vez que cambie
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     localStorage.setItem(THEME_KEY, next);
-
-    if (next === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
   };
 
   const value = useMemo(() => ({ theme, toggleTheme }), [theme]);
