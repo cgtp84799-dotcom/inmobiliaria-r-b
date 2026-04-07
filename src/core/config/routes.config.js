@@ -4,16 +4,18 @@
  */
 
 export const PUBLIC_ROUTES = {
-  HOME:            '/',
-  CATALOG:         '/catalogo',
-  CITY_PROPERTIES: '/propiedades/zona/:typeCity',
-  PROPERTY_DETAIL: '/propiedades/:slugId',
-  CONTACT:         '/contacto',
-  SCHEDULE_VISIT:  '/agendar-visita',
+  HOME:                '/',
+  CATALOG:             '/catalogo',
+  CITY_PROPERTIES:     '/propiedades/zona/:city',
+  TYPE_CITY_PROPERTIES:'/propiedades/zona/:typeCity',
+  PROPERTY_DETAIL:     '/propiedades/:slugId',
+  CONTACT:             '/contacto',
+  SCHEDULE_VISIT:      '/agendar-visita',
 };
 
 export const AUTH_ROUTES = {
-  LOGIN: '/login',
+  LOGIN:           '/login',
+  ACCESS_REQUEST:  '/solicitar-acceso',
 };
 
 export const PRIVATE_ROUTES = {
