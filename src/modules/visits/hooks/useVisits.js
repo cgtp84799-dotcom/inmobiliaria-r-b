@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { visitService } from '../services/visit.service';
 import { VISIT_STATUS } from '../types/visit.types';
 import toast from 'react-hot-toast';
@@ -6,80 +6,73 @@ import toast from 'react-hot-toast';
 /**
  * useVisits — hook para la página de administración de visitas.
  *
- * Carga todas las visitas una vez y expone helpers para
- * aprobar, rechazar y completar sin recargar la página.
+ * Usa onSnapshot (subscribeAll) para recibir actualizaciones
+ * en tiempo real sin necesidad de reload manual.
+ *
+ * La API pública es idéntica a la versión anterior:
+ * { visits, loading, error, counts, approve, reject, complete, remove, reload }
  */
 export function useVisits() {
   const [visits,  setVisits]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await visitService.getAllVisits();
-      setVisits(data);
-    } catch (e) {
-      setError(e);
-      toast.error('Error al cargar las visitas');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    // Suscripción real-time — el unsub se devuelve para el cleanup
+    const unsub = visitService.subscribeAll(
+      (data) => { setVisits(data); setLoading(false); },
+      (err)  => { setError(err);   setLoading(false); toast.error('Error al cargar las visitas'); }
+    );
+    return () => unsub();
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Contadores por estado
+  const counts = useMemo(
+    () => visits.reduce((acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }), {}),
+    [visits]
+  );
 
-  // Helpers — actualizan el estado local sin recargar Firestore
-  const optimisticUpdate = (visitId, patch) =>
-    setVisits((prev) =>
-      prev.map((v) => (v.id === visitId ? { ...v, ...patch } : v))
-    );
-
-  const approve = async (visit, adminNotes = '') => {
+  // --- Acciones ---
+  // Con onSnapshot ya no necesitamos actualización optimista:
+  // Firestore emitirá el cambio automáticamente después del write.
+  const approve = useCallback(async (visit, adminNotes = '') => {
     try {
       await visitService.approveVisit(visit, adminNotes);
-      optimisticUpdate(visit.id, { status: VISIT_STATUS.APPROVED, adminNotes });
       toast.success('Visita aprobada');
     } catch {
       toast.error('Error al aprobar la visita');
     }
-  };
+  }, []);
 
-  const reject = async (visit, adminNotes = '') => {
+  const reject = useCallback(async (visit, adminNotes = '') => {
     try {
       await visitService.rejectVisit(visit, adminNotes);
-      optimisticUpdate(visit.id, { status: VISIT_STATUS.REJECTED, adminNotes });
       toast.success('Visita rechazada');
     } catch {
       toast.error('Error al rechazar la visita');
     }
-  };
+  }, []);
 
-  const complete = async (visitId, adminNotes = '') => {
+  const complete = useCallback(async (visitId, adminNotes = '') => {
     try {
       await visitService.completeVisit(visitId, adminNotes);
-      optimisticUpdate(visitId, { status: VISIT_STATUS.COMPLETED, adminNotes });
       toast.success('Visita marcada como completada');
     } catch {
       toast.error('Error al completar la visita');
     }
-  };
+  }, []);
 
-  const remove = async (visitId) => {
+  const remove = useCallback(async (visitId) => {
     try {
       await visitService.deleteVisit(visitId);
-      setVisits((prev) => prev.filter((v) => v.id !== visitId));
       toast.success('Visita eliminada');
     } catch {
       toast.error('Error al eliminar la visita');
     }
-  };
+  }, []);
 
-  // Contadores por estado para los badges de los tabs
-  const counts = visits.reduce(
-    (acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }),
-    {}
-  );
+  // reload mantenido por compatibilidad — con onSnapshot es no-op
+  const reload = useCallback(() => {}, []);
 
-  return { visits, loading, error, counts, approve, reject, complete, remove, reload: load };
+  return { visits, loading, error, counts, approve, reject, complete, remove, reload };
 }

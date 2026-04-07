@@ -22,6 +22,7 @@ export const PRIVATE_ROUTES = {
   DASHBOARD:   '/dashboard',
   PROPERTIES:  '/propiedades-admin',
   CLIENTS:     '/clientes',
+  CONTRACTS:   '/contratos',
   QUERIES:     '/consultas',
   CHAT:        '/chat',
   DOCUMENTS:   '/documentos',

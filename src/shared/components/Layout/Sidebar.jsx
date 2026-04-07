@@ -4,6 +4,7 @@ import {
   FaChartLine, FaBuilding, FaUsers, FaFolder, FaUserCog,
   FaEnvelope, FaCalendar, FaSignOutAlt, FaTimes,
   FaChevronLeft, FaChevronRight, FaShieldAlt, FaEye, FaUser,
+  FaFileContract,
 } from "react-icons/fa";
 import { useAuth } from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
@@ -42,15 +43,16 @@ const Sidebar = ({
   const RoleIcon = currentRoleMeta.icon;
 
   const allMenuItems = [
-    { icon: FaChartLine, label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
-    { icon: FaBuilding,  label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
-    { icon: FaUsers,     label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients", "read") },
-    { icon: FaCalendar,  label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
-    { icon: FaEnvelope,  label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
-    { icon: FaFolder,    label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
-    { icon: FaUserCog,   label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users", "read") },
-    { icon: FaUserCog,   label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users", "create") },
-    { icon: FaUser,      label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
+    { icon: FaChartLine,    label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
+    { icon: FaBuilding,     label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
+    { icon: FaUsers,        label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients", "read") },
+    { icon: FaFileContract, label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "clients", "read") },
+    { icon: FaCalendar,     label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
+    { icon: FaEnvelope,     label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
+    { icon: FaFolder,       label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
+    { icon: FaUserCog,      label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users", "read") },
+    { icon: FaUserCog,      label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users", "create") },
+    { icon: FaUser,         label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
   ];
 
   const menuItems = allMenuItems.filter((item) => item.visible);
