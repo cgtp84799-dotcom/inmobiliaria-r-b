@@ -3,73 +3,73 @@
 @tailwind utilities;
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   VARIABLES SEMÁNTICAS — todo responde a .dark
+   VARIABLES SEMÁNTICAS — responden a .dark
    Default: LIGHT elegante (beige cálido)
-   .dark:   los colores originales oscuros del proyecto
+   .dark: colores oscuros originales del proyecto
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 :root {
-  /* ── Fondos ── */
   --color-bg:            #f5f4f0;
   --color-surface:       #faf9f7;
   --color-surface-2:     #ffffff;
   --color-surface-off:   #edecea;
-  --color-border:        rgba(0, 0, 0, 0.08);
-  --color-divider:       rgba(0, 0, 0, 0.06);
+  --color-border:        rgba(0,0,0,0.08);
+  --color-divider:       rgba(0,0,0,0.06);
 
-  /* ── Texto ── */
   --color-text:          #1a1916;
   --color-text-muted:    #6b6b68;
   --color-text-faint:    #a8a7a4;
   --color-text-inverse:  #f5f4f0;
 
-  /* ── Sidebar (siempre oscuro — contraste con logo dorado) ── */
+  /* Sidebar siempre oscuro */
   --color-sidebar-bg:        #1e1c1a;
-  --color-sidebar-border:    rgba(255, 255, 255, 0.06);
+  --color-sidebar-border:    rgba(255,255,255,0.06);
   --color-sidebar-text:      #c9c7c4;
   --color-sidebar-muted:     #7a7875;
-  --color-sidebar-hover-bg:  rgba(255, 255, 255, 0.05);
-  --color-sidebar-active-bg: rgba(245, 158, 11, 0.18);
+  --color-sidebar-hover-bg:  rgba(255,255,255,0.05);
+  --color-sidebar-active-bg: rgba(245,158,11,0.18);
 
-  /* ── Navbar público ── */
-  --color-nav-bg:        rgba(245, 244, 240, 0.88);
-  --color-nav-border:    rgba(0, 0, 0, 0.08);
+  --color-nav-bg:        rgba(245,244,240,0.88);
+  --color-nav-border:    rgba(0,0,0,0.08);
   --color-nav-text:      #1a1916;
   --color-nav-text-sub:  #6b6b68;
 
-  /* ── Footer público ── */
   --color-footer-bg:     #1e1c1a;
   --color-footer-text:   #c9c7c4;
   --color-footer-muted:  #7a7875;
-  --color-footer-border: rgba(255, 255, 255, 0.07);
+  --color-footer-border: rgba(255,255,255,0.07);
 
-  /* ── Topbar móvil panel admin ── */
-  --color-topbar-bg:     rgba(250, 249, 247, 0.88);
-  --color-topbar-border: rgba(0, 0, 0, 0.08);
+  --color-topbar-bg:     rgba(250,249,247,0.88);
+  --color-topbar-border: rgba(0,0,0,0.08);
 
-  /* ── Inputs ── */
   --color-input-bg:      #ffffff;
-  --color-input-border:  rgba(0, 0, 0, 0.14);
+  --color-input-border:  rgba(0,0,0,0.14);
   --color-input-focus:   #f59e0b;
 
-  /* ── Sombras ── */
-  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 6px 18px rgba(0, 0, 0, 0.04);
-  --shadow-lg:   0 12px 40px rgba(0, 0, 0, 0.10);
+  --color-row-hover:     rgba(0,0,0,0.03);
+  --color-row-stripe:    rgba(0,0,0,0.02);
+  --color-inner-card:    rgba(0,0,0,0.03);
+  --color-inner-border:  rgba(0,0,0,0.07);
 
-  /* ── Toggle tema ── */
-  --color-toggle-bg:     rgba(0, 0, 0, 0.07);
-  --color-toggle-hover:  rgba(0, 0, 0, 0.12);
-  --color-toggle-icon:   #6b6b68;
+  /* Banner de perfil (rol) */
+  --color-banner-from:   rgba(245,158,11,0.08);
+  --color-banner-to:     #f5f4f0;
+
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.05);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 6px 18px rgba(0,0,0,0.04);
+  --shadow-lg:   0 12px 40px rgba(0,0,0,0.10);
+
+  --color-toggle-bg:    rgba(0,0,0,0.07);
+  --color-toggle-hover: rgba(0,0,0,0.12);
+  --color-toggle-icon:  #6b6b68;
 }
 
-/* ━━━ MODO OSCURO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .dark {
   --color-bg:            #020617;
   --color-surface:       #0f172a;
   --color-surface-2:     #1e293b;
   --color-surface-off:   #1e293b;
-  --color-border:        rgba(255, 255, 255, 0.08);
-  --color-divider:       rgba(255, 255, 255, 0.06);
+  --color-border:        rgba(255,255,255,0.08);
+  --color-divider:       rgba(255,255,255,0.06);
 
   --color-text:          #e5e7eb;
   --color-text-muted:    #94a3b8;
@@ -77,165 +77,208 @@
   --color-text-inverse:  #020617;
 
   --color-sidebar-bg:        #0b1120;
-  --color-sidebar-border:    rgba(255, 255, 255, 0.06);
+  --color-sidebar-border:    rgba(255,255,255,0.06);
   --color-sidebar-text:      #c9c7c4;
   --color-sidebar-muted:     #5a5856;
-  --color-sidebar-hover-bg:  rgba(255, 255, 255, 0.05);
-  --color-sidebar-active-bg: rgba(245, 158, 11, 0.18);
+  --color-sidebar-hover-bg:  rgba(255,255,255,0.05);
+  --color-sidebar-active-bg: rgba(245,158,11,0.18);
 
-  --color-nav-bg:        rgba(2, 6, 23, 0.90);
-  --color-nav-border:    rgba(255, 255, 255, 0.07);
+  --color-nav-bg:        rgba(2,6,23,0.90);
+  --color-nav-border:    rgba(255,255,255,0.07);
   --color-nav-text:      #e5e7eb;
   --color-nav-text-sub:  #94a3b8;
 
   --color-footer-bg:     #020617;
   --color-footer-text:   #c9c7c4;
   --color-footer-muted:  #5a5856;
-  --color-footer-border: rgba(255, 255, 255, 0.06);
+  --color-footer-border: rgba(255,255,255,0.06);
 
-  --color-topbar-bg:     rgba(2, 6, 23, 0.90);
-  --color-topbar-border: rgba(255, 255, 255, 0.07);
+  --color-topbar-bg:     rgba(2,6,23,0.90);
+  --color-topbar-border: rgba(255,255,255,0.07);
 
   --color-input-bg:      #1e293b;
-  --color-input-border:  rgba(255, 255, 255, 0.12);
+  --color-input-border:  rgba(255,255,255,0.12);
   --color-input-focus:   #f59e0b;
 
-  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.30);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
-  --shadow-lg:   0 12px 40px rgba(0, 0, 0, 0.55);
+  --color-row-hover:     rgba(255,255,255,0.04);
+  --color-row-stripe:    rgba(255,255,255,0.02);
+  --color-inner-card:    rgba(255,255,255,0.04);
+  --color-inner-border:  rgba(255,255,255,0.08);
 
-  --color-toggle-bg:    rgba(255, 255, 255, 0.07);
-  --color-toggle-hover: rgba(255, 255, 255, 0.12);
+  --color-banner-from:   rgba(239,68,68,0.25);
+  --color-banner-to:     #020617;
+
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.30);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.35), 0 6px 18px rgba(0,0,0,0.25);
+  --shadow-lg:   0 12px 40px rgba(0,0,0,0.55);
+
+  --color-toggle-bg:    rgba(255,255,255,0.07);
+  --color-toggle-hover: rgba(255,255,255,0.12);
   --color-toggle-icon:  #94a3b8;
 }
 
 /* ━━━ BASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 *, *::before, *::after { box-sizing: border-box; }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
   min-height: 100dvh;
-  /* transición suave al cambiar de tema */
   transition:
-    background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    color            0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background-color 0.3s cubic-bezier(0.4,0,0.2,1),
+    color            0.25s cubic-bezier(0.4,0,0.2,1);
 }
-
 #root { min-height: 100dvh; }
 
-/* ━━━ CLASES UTILITARIAS ━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━ LAYER: COMPONENTS — clases semánticas reutilizables ━━━━━━━━━━━━━━━ */
+@layer components {
 
-/* Superficie estándar — tarjeta, panel */
-.surface {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-card);
-  transition:
-    background-color 0.3s ease,
-    border-color     0.3s ease,
-    box-shadow       0.3s ease;
+  /* ── Tarjeta base ── */
+  .card-soft {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    border-radius: 0.75rem;
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  /* ── Tarjeta interna (lista items, filas) ── */
+  .card-inner {
+    background-color: var(--color-inner-card);
+    border: 1px solid var(--color-inner-border);
+    border-radius: 0.75rem;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+  }
+  .card-inner:hover {
+    background-color: var(--color-row-hover);
+  }
+
+  /* ── Texto semántico ── */
+  .t-heading  { color: var(--color-text);       font-weight: 800; }
+  .t-body     { color: var(--color-text); }
+  .t-muted    { color: var(--color-text-muted); }
+  .t-faint    { color: var(--color-text-faint); }
+  .text-muted      { color: var(--color-text-muted); }
+  .text-faint      { color: var(--color-text-faint); }
+  .text-muted-soft { color: var(--color-text-faint); }
+
+  /* ── Divisor semántico ── */
+  .divider {
+    height: 1px;
+    background-color: var(--color-divider);
+    border: none;
+  }
+
+  /* ── Input temático ── */
+  .input-themed {
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    color: var(--color-text);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+    transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.2s ease;
+  }
+  .input-themed::placeholder { color: var(--color-text-faint); }
+  .input-themed:focus {
+    outline: none;
+    border-color: var(--color-input-focus);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
+  }
+
+  /* ── Botón dorado ── */
+  .button-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    border-radius: 9999px;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.875rem;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #111827;
+    border: 1px solid #facc15;
+    box-shadow: 0 2px 8px rgba(245,158,11,0.30);
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .button-gold:hover  { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.40); }
+  .button-gold:active { transform: translateY(0); filter: brightness(0.97); }
+
+  /* ── Toggle de tema ── */
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    background: var(--color-toggle-bg);
+    color: var(--color-toggle-icon);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  }
+  .theme-toggle:hover  { background: var(--color-toggle-hover); transform: scale(1.08); }
+  .theme-toggle:active { transform: scale(0.95); }
+
+  /* ── Tooltip del SettingsFab u otros flotantes ── */
+  .tooltip-surface {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text);
+    border-radius: 0.75rem;
+    transition: background-color 0.25s ease;
+  }
+
+  /* ── Sección divisora con ícono (usado en ProfilePage) ── */
+  .section-divider-line {
+    flex: 1;
+    height: 1px;
+    background-color: var(--color-divider);
+  }
+
+  /* ── Banner de perfil ── */
+  .profile-banner {
+    background: linear-gradient(to bottom, var(--color-banner-from), var(--color-banner-to));
+    transition: background 0.3s ease;
+  }
+
+  /* ── Stat pill (ProfilePage) ── */
+  .stat-pill {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    backdrop-filter: blur(4px);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+  }
+
+  /* ── Barra de completitud ── */
+  .completion-track {
+    height: 0.5rem;
+    background-color: var(--color-surface-off);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+
+  /* ── Tooltip de gráfica Recharts ── */
+  .recharts-tooltip-themed {
+    background-color: var(--color-surface-2) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 0.625rem !important;
+    color: var(--color-text) !important;
+  }
 }
 
-/* Inputs globales — responden al tema */
-.input-themed {
-  background-color: var(--color-input-bg);
-  border: 1px solid var(--color-input-border);
-  color: var(--color-text);
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  transition:
-    background-color 0.25s ease,
-    border-color     0.25s ease,
-    box-shadow       0.2s ease;
-}
-.input-themed:focus {
-  outline: none;
-  border-color: var(--color-input-focus);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
-}
-
-/* Textos semánticos */
-.text-muted      { color: var(--color-text-muted); }
-.text-faint      { color: var(--color-text-faint); }
-.text-muted-soft { color: var(--color-text-faint); }
-
-/* ━━━ BOTÓN DORADO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-.button-gold {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  border-radius: 9999px;
-  padding: 0.5rem 1.25rem;
-  font-size: 0.875rem;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  color: #111827;
-  border: 1px solid #facc15;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.30);
-  transition:
-    filter     0.15s ease,
-    transform  0.15s ease,
-    box-shadow 0.15s ease;
-  cursor: pointer;
-  text-decoration: none;
-}
-.button-gold:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.40);
-}
-.button-gold:active {
-  transform: translateY(0);
-  filter: brightness(0.97);
-}
-
-/* ━━━ TOGGLE DE TEMA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.625rem;
-  background: var(--color-toggle-bg);
-  color: var(--color-toggle-icon);
-  border: none;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color      0.2s ease,
-    transform  0.15s ease;
-}
-.theme-toggle:hover {
-  background: var(--color-toggle-hover);
-  transform: scale(1.08);
-}
-.theme-toggle:active {
-  transform: scale(0.95);
-}
-
-/* ━━━ ANIMACIONES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
+/* ━━━ ANIMACIONES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+@keyframes spin-slow  { from { transform: rotate(0deg);   } to { transform: rotate(360deg); } }
+@keyframes fade-in    { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .animate-spin-slow { animation: spin-slow 8s linear infinite; }
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in { animation: fade-in 0.3s ease forwards; }
-
-/* Transición de página */
-.page-transition {
-  animation: fade-in 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
+.animate-fade-in   { animation: fade-in 0.3s ease forwards; }
+.page-transition   { animation: fade-in 0.25s cubic-bezier(0.4,0,0.2,1) forwards; }
