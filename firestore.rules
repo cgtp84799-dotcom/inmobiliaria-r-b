@@ -1,78 +1,195 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Función auxiliar para verificar autenticación
-    function isAuthenticated() {
+
+    function isSignedIn() {
       return request.auth != null;
     }
-    
-    // Función para verificar si el usuario es el dueño
+
+    // getUserData() lee por email (el docId en /users es el email del usuario).
+    // Si el doc no existe durante el registro, la regla deniega por defecto — comportamiento correcto.
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data;
+    }
+
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.token.email));
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userExists() && getUserData().role == 'admin';
+    }
+
+    function isMemberOrAdmin() {
+      return isSignedIn() && userExists() && getUserData().role in ['admin', 'member'];
+    }
+
+    // userId en /users es siempre el email (docId = email), no el uid de Auth.
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.token.email == userId;
     }
-    
-    // Función para verificar roles
-    function hasRole(role) {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-    
-    // Usuarios
+
+
+    // ── USUARIOS ────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isOwner(userId) || hasRole('admin');
-      allow delete: if hasRole('admin');
+      allow read:   if isSignedIn();
+      allow create: if true;  // registro público + Cloud Function createUserByAdmin
+      allow update: if isAdmin() || isOwner(userId);
+      allow delete: if isAdmin();
     }
-    
-    // Propiedades
+
+
+    // ── SOLICITUDES DE ACCESO ───────────────────────────────────────────────
+    match /accessRequests/{requestId} {
+      allow create: if true;  // usuarios sin cuenta pueden solicitar acceso
+      allow read:   if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+
+    // ── PRESENCIA ───────────────────────────────────────────────────────────
+    match /presence/{userId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+
+    // ── PROPIEDADES ─────────────────────────────────────────────────────────
     match /properties/{propertyId} {
-      // Lectura pública para propiedades con visibility = 'public'
-      allow read: if resource.data.visibility == 'public' || isAuthenticated();
-      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
-      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
-      allow delete: if hasRole('admin');
+      allow read:            if true;  // catálogo público
+      allow create, update:  if isMemberOrAdmin();
+      allow delete:          if isAdmin();
     }
-    
-    // Clientes
+
+
+    // ── CLIENTES ────────────────────────────────────────────────────────────
     match /clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
-      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('agent'));
-      allow delete: if hasRole('admin');
+      allow read:           if isSignedIn();
+      allow create, update: if isMemberOrAdmin();
+      allow delete:         if isAdmin();
     }
-    
-    // Contratos
+
+
+    // ── CONTRATOS ───────────────────────────────────────────────────────────
     match /contracts/{contractId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (hasRole('admin') || hasRole('lawyer') || hasRole('agent'));
-      allow update: if isAuthenticated() && (hasRole('admin') || hasRole('lawyer'));
-      allow delete: if hasRole('admin');
+      allow read:           if isSignedIn();
+      allow create, update: if isMemberOrAdmin();
+      allow delete:         if isAdmin();
     }
-    
-    // Chats
-    match /chats/{chatId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
-      allow delete: if hasRole('admin');
+
+
+    // ── DOCUMENTOS ──────────────────────────────────────────────────────────
+    match /documents/{documentId} {
+      allow read:           if isSignedIn();
+      allow create, update: if isMemberOrAdmin();
+      allow delete:         if isAdmin();
     }
-    
-    // Mensajes
-    match /messages/{messageId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && request.auth.uid == resource.data.sender.uid;
-      allow delete: if hasRole('admin');
+
+
+    // ── CONTACTOS (formulario público de la web) ─────────────────────────
+    match /contacts/{contactId} {
+      allow create:            if true;
+      allow read, update, delete: if isSignedIn();
     }
-    
-    // Notificaciones
+
+
+    // ── VISITAS ─────────────────────────────────────────────────────────────
+    // Cualquier visitante puede solicitar una visita (create: if true).
+    // Solo admin/member gestionan el estado; cualquier usuario autenticado puede leer.
+    match /visits/{visitId} {
+      allow create: if true;   // formulario público de agendar visita
+      allow read:   if isSignedIn();
+      allow update: if isMemberOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── CHAT ────────────────────────────────────────────────────────────────
+    // viewers solo leen; member/admin pueden crear y escribir.
+    match /conversations/{conversationId} {
+      allow read:           if isSignedIn();
+      allow create, update: if isMemberOrAdmin();
+      allow delete:         if isAdmin();
+      match /messages/{messageId} {
+        allow read:   if isSignedIn();
+        allow create: if isMemberOrAdmin();
+        allow update: if isSignedIn() && request.auth.token.email == resource.data.senderEmail;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /groupChat/{document=**} {
+      allow read:  if isSignedIn();
+      allow write: if isMemberOrAdmin();
+    }
+
+    match /chatMessages/{messageId} {
+      allow read:          if isSignedIn();
+      allow create:        if isMemberOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /chatRooms/{roomId} {
+      allow read:  if isSignedIn();
+      allow write: if isMemberOrAdmin();
+    }
+
+
+    // ── NOTIFICACIONES ──────────────────────────────────────────────────────
+    // Un usuario solo ve y gestiona sus propias notificaciones.
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow read: if isSignedIn() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.userId == request.auth.token.email);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+                       (resource.data.userId == request.auth.uid ||
+                        resource.data.userId == request.auth.token.email);
+      allow delete: if isAdmin() ||
+                       (isSignedIn() &&
+                        (resource.data.userId == request.auth.uid ||
+                         resource.data.userId == request.auth.token.email));
+    }
+
+
+    // ── CALENDARIO ──────────────────────────────────────────────────────────
+    match /events/{eventId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read, write: if isSignedIn();
+    }
+
+
+    // ── ANALYTICS Y STATS ── solo admin escribe ────────────────────────────
+    match /analytics/{document=**} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /activity/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /stats/{document=**} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+
+    // ── CONTADORES ── solo admin escribe para evitar manipulación ──────────
+    match /counters/{document=**} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+
+    // ── CONFIGURACIÓN ───────────────────────────────────────────────────────
+    match /settings/{document=**} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

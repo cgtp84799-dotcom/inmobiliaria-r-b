@@ -1,74 +1,78 @@
-import { formatDistanceToNow, format, isValid, differenceInDays } from 'date-fns';
-import { es } from 'date-fns/locale';
+/**
+ * formatDate — utilidades de fecha para toda la app.
+ *
+ * Usa Intl.DateTimeFormat en locale es-CO para que el formato
+ * sea consistente con el mercado colombiano sin dependencias externas.
+ */
+
+const locale = 'es-CO';
 
 /**
- * Convierte un valor de fecha (Timestamp de Firestore, Date, string ISO, o número)
- * en un objeto Date de JS.
+ * Acepta: Firestore Timestamp, Date, string ISO, número (epoch ms).
+ * Devuelve un Date de JS o null si el valor no es convertible.
  */
 function toDate(value) {
   if (!value) return null;
-  // Firestore Timestamp ({ seconds, nanoseconds } con método .toDate())
+  // Firestore Timestamp tiene .toDate()
   if (typeof value?.toDate === 'function') return value.toDate();
   const d = new Date(value);
-  return isValid(d) ? d : null;
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /**
- * Tiempo relativo en español:
- *   formatRelative(ts)  → "hace 3 minutos" / "hace 2 días" / etc.
- *   Retorna '—' si el valor no es parseable.
- */
-export function formatRelative(value) {
-  const d = toDate(value);
-  if (!d) return '—';
-  return formatDistanceToNow(d, { addSuffix: true, locale: es });
-}
-
-/**
- * Fecha corta: "15 abr. 2025"
+ * Formato corto: "6 abr. 2026"
  */
 export function formatShort(value) {
   const d = toDate(value);
   if (!d) return '—';
-  return format(d, "d MMM. yyyy", { locale: es });
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric', month: 'short', year: 'numeric',
+  }).format(d);
 }
 
 /**
- * Fecha larga: "martes, 15 de abril de 2025"
+ * Formato largo: "lunes, 6 de abril de 2026"
  */
 export function formatLong(value) {
   const d = toDate(value);
   if (!d) return '—';
-  return format(d, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(d);
 }
 
 /**
- * Fecha + hora: "15 abr. 2025, 14:30"
+ * Formato con hora: "6 abr. 2026, 10:30 a. m."
  */
 export function formatDateTime(value) {
   const d = toDate(value);
   if (!d) return '—';
-  return format(d, "d MMM. yyyy, HH:mm", { locale: es });
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).format(d);
 }
 
 /**
- * Solo la hora: "14:30"
+ * Tiempo relativo: "hace 3 días", "en 2 horas"
+ * Usa Intl.RelativeTimeFormat si está disponible, fallback a formatShort.
  */
-export function formatTime(value) {
+export function formatRelative(value) {
   const d = toDate(value);
   if (!d) return '—';
-  return format(d, 'HH:mm');
-}
 
-/**
- * Días restantes hasta una fecha:
- *   formatDaysLeft(ts)  → "vence en 5 días" | "venció hace 2 días" | "vence hoy"
- */
-export function formatDaysLeft(value) {
-  const d = toDate(value);
-  if (!d) return '—';
-  const diff = differenceInDays(d, new Date());
-  if (diff === 0)  return 'vence hoy';
-  if (diff > 0)    return `vence en ${diff} día${diff === 1 ? '' : 's'}`;
-  return `venció hace ${Math.abs(diff)} día${Math.abs(diff) === 1 ? '' : 's'}`;
+  const diffMs   = d.getTime() - Date.now();
+  const diffSecs = Math.round(diffMs / 1000);
+  const diffMins = Math.round(diffMs / 60_000);
+  const diffHrs  = Math.round(diffMs / 3_600_000);
+  const diffDays = Math.round(diffMs / 86_400_000);
+
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+
+  if (Math.abs(diffSecs) < 60)  return rtf.format(diffSecs, 'second');
+  if (Math.abs(diffMins) < 60)  return rtf.format(diffMins, 'minute');
+  if (Math.abs(diffHrs)  < 24)  return rtf.format(diffHrs,  'hour');
+  if (Math.abs(diffDays) < 30)  return rtf.format(diffDays, 'day');
+
+  return formatShort(d);
 }
