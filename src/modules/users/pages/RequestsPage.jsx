@@ -1,236 +1,202 @@
-import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+// src/modules/users/pages/RequestsPage.jsx
+//
+// Vista de solicitudes de acceso pendientes — solo admin.
+// El admin puede: aprobar (asignando rol) o rechazar.
+// Al aprobar: crea el usuario en Firestore via userService.createUser()
+// con contraseña temporal aleatoria y envía reset de contraseña al email.
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  FaEnvelope,
-  FaClock,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaTrash,
-  FaSpinner,
-  FaExclamationTriangle,
-  FaPhone
+  FaInbox, FaCheck, FaTimes, FaSpinner, FaFilter,
+  FaUser, FaEnvelope, FaPhone, FaCommentAlt, FaClock,
+  FaShieldAlt, FaUsers, FaEye,
 } from 'react-icons/fa';
 import { requestService } from '../services/request.service';
-import { userService } from '../services/user.service';
-import {
-  USER_ROLES,
-  USER_ROLE_LABELS,
-  hasPermission // ✅
-} from '../types/user.types';
-import { useAuth } from '../../../core/contexts/AuthContext';
-import { auth } from '../../../core/config/firebase.config';
+import { userService }    from '../services/user.service';
+import { useAuth }        from '../../../core/contexts/AuthContext';
+import { USER_ROLES, USER_ROLE_LABELS } from '../types/user.types';
 import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
 
-const CREATE_USER_FUNCTION_URL =
-  'https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net/createUserByAdmin';
+// Contraseña temporal aleatoria — el usuario la reemplaza con el reset email
+const generateTempPassword = () => {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  return Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
+const formatDate = (date) => {
+  if (!date) return '—';
+  return new Intl.DateTimeFormat('es-CO', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).format(date instanceof Date ? date : date.toDate?.() ?? new Date(date));
+};
+
+const STATUS_LABELS = {
+  pending:  { label: 'Pendiente',  color: 'yellow' },
+  approved: { label: 'Aprobada',   color: 'green'  },
+  rejected: { label: 'Rechazada',  color: 'red'    },
+};
+
+const ROLE_ICONS = {
+  [USER_ROLES.ADMIN]:  FaShieldAlt,
+  [USER_ROLES.MEMBER]: FaUsers,
+  [USER_ROLES.VIEWER]: FaEye,
+};
+
 
 const RequestsPage = () => {
-  const { currentUser } = useAuth();
+  const { userData } = useAuth();
 
-  // ✅ Reemplaza isAdmin — solo admin puede gestionar solicitudes
-  const canManage = hasPermission(currentUser?.role, 'users', 'create');
-
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
-  const [processingId, setProcessingId] = useState(null);
-
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [selectedRole, setSelectedRole] = useState(USER_ROLES.MEMBER);
-
+  const [requests, setRequests]         = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [filterStatus, setFilterStatus] = useState('pending');
   const [confirmModal, setConfirmModal] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: null,
+    isOpen: false, title: '', message: '', confirmText: '', onConfirm: null,
   });
 
-  useEffect(() => {
-    loadRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  // Estado de aprobación por solicitud (para el selector de rol)
+  const [approveState, setApproveState] = useState({}); // { [requestId]: role }
 
-  const loadRequests = async () => {
+
+  // ── Carga ────────────────────────────────────────────────────────────────
+
+  const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await requestService.getAllRequests({
-        status: filter !== 'all' ? filter : null
-      });
+      const data = await requestService.getAllRequests(
+        filterStatus ? { status: filterStatus } : {}
+      );
       setRequests(data);
-    } catch (error) {
-      console.error('Error cargando solicitudes:', error);
+    } catch {
       toast.error('Error al cargar solicitudes');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus]);
 
-  const handleApproveClick = (request) => {
-    setSelectedRequest(request);
-    setSelectedRole(USER_ROLES.MEMBER);
-    setShowApproveModal(true);
-  };
+  useEffect(() => { loadRequests(); }, [loadRequests]);
 
-  const createUserByAdmin = async (payload) => {
-    const user = auth.currentUser;
-    if (!user) throw new Error('No estás autenticado');
-    const token = await user.getIdToken();
-    const response = await fetch(CREATE_USER_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ data: payload })
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || 'Error creando usuario');
-    return body;
-  };
 
-  const handleApprove = async () => {
-    if (!canManage) {
-      toast.error('No tienes permisos para aprobar solicitudes');
-      return;
-    }
-    if (!selectedRequest?.id || !selectedRequest?.email) return;
+  // ── Stats ────────────────────────────────────────────────────────────────
 
-    setProcessingId(selectedRequest.id);
-    try {
-      let userExists = false;
-      try {
-        await userService.getUserById(selectedRequest.email);
-        userExists = true;
-      } catch {
-        userExists = false;
-      }
+  const stats = useMemo(() => ({
+    total:    requests.length,
+    pending:  requests.filter(r => r.status === 'pending').length,
+    approved: requests.filter(r => r.status === 'approved').length,
+    rejected: requests.filter(r => r.status === 'rejected').length,
+  }), [requests]);
 
-      if (userExists) {
-        await userService.updateUser(selectedRequest.email, {
-          role: selectedRole,
-          status: 'active'
-        });
-      } else {
-        const defaultPassword = Math.random().toString(36).slice(-8) + 'Aa1!';
-        await createUserByAdmin({
-          displayName: selectedRequest.name || '',
-          email: selectedRequest.email,
-          phone: selectedRequest.phone || '',
-          role: selectedRole,
-          status: 'active',
-          password: defaultPassword
-        });
+
+  // ── Aprobar ──────────────────────────────────────────────────────────────
+
+  const handleApprove = (request) => {
+    const role = approveState[request.id] || USER_ROLES.MEMBER;
+    const RoleIcon = ROLE_ICONS[role];
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Aprobar solicitud',
+      message: `¿Aprobar a ${request.name} como ${USER_ROLE_LABELS[role]}? 
+        Se creará su cuenta y recibirá un email para configurar su contraseña.`,
+      confirmText: 'Sí, aprobar y crear cuenta',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        const toastId = toast.loading('Creando cuenta...');
         try {
-          await userService.sendPasswordReset(selectedRequest.email);
-        } catch (emailError) {
-          console.warn('⚠️ No se pudo enviar email de reset:', emailError?.message);
+          // 1. Crear usuario en Auth + Firestore
+          await userService.createUser(
+            {
+              displayName: request.name,
+              email:       request.email,
+              phone:       request.phone || '',
+              role,
+              status: 'active',
+            },
+            generateTempPassword()
+          );
+
+          // 2. Enviar email de reset para que el usuario establezca su contraseña
+          await userService.sendPasswordReset(request.email);
+
+          // 3. Marcar solicitud como aprobada
+          await requestService.approveRequest(request.id, role, userData?.email);
+
+          toast.success(
+            `Cuenta creada para ${request.name}. Email de acceso enviado.`,
+            { id: toastId }
+          );
+          loadRequests();
+        } catch (error) {
+          // Error de email duplicado en Auth
+          if (error.code === 'auth/email-already-in-use') {
+            // El usuario ya tiene cuenta — solo aprobar la solicitud
+            await requestService.approveRequest(request.id, role, userData?.email).catch(() => {});
+            toast.success(
+              `${request.name} ya tiene cuenta. Solicitud marcada como aprobada.`,
+              { id: toastId }
+            );
+            loadRequests();
+          } else {
+            toast.error('Error al crear la cuenta. Inténtalo de nuevo.', { id: toastId });
+          }
         }
-      }
-
-      await requestService.approveRequest(
-        selectedRequest.id,
-        selectedRole,
-        currentUser.email
-      );
-
-      toast.success(
-        userExists
-          ? 'Usuario actualizado y solicitud aprobada'
-          : 'Usuario creado y solicitud aprobada. Email enviado.'
-      );
-
-      setShowApproveModal(false);
-      setSelectedRequest(null);
-      await loadRequests();
-    } catch (error) {
-      console.error('Error aprobando solicitud:', error);
-      toast.error(error.message || 'Error al aprobar solicitud');
-    } finally {
-      setProcessingId(null);
-    }
+      },
+    });
   };
+
+
+  // ── Rechazar ─────────────────────────────────────────────────────────────
 
   const handleReject = (request) => {
-    if (!canManage) {
-      toast.error('No tienes permisos para rechazar solicitudes');
-      return;
-    }
     setConfirmModal({
       isOpen: true,
       title: 'Rechazar solicitud',
-      message: `¿Seguro que quieres rechazar la solicitud de ${request.name}?`,
+      message: `¿Rechazar la solicitud de ${request.name} (${request.email})?`,
+      confirmText: 'Sí, rechazar',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        setProcessingId(request.id);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
         try {
-          await requestService.rejectRequest(request.id, currentUser.email);
+          await requestService.rejectRequest(request.id, userData?.email);
           toast.success('Solicitud rechazada');
-          await loadRequests();
-        } catch (error) {
-          console.error('Error rechazando solicitud:', error);
-          toast.error('Error al rechazar solicitud');
-        } finally {
-          setProcessingId(null);
+          loadRequests();
+        } catch {
+          toast.error('Error al rechazar la solicitud');
         }
       },
     });
   };
 
-  const handleDelete = (requestId) => {
-    if (!canManage) {
-      toast.error('No tienes permisos para eliminar solicitudes');
-      return;
-    }
+
+  // ── Eliminar ─────────────────────────────────────────────────────────────
+
+  const handleDelete = (request) => {
     setConfirmModal({
       isOpen: true,
       title: 'Eliminar solicitud',
-      message: '¿Seguro que quieres eliminar esta solicitud? Esta acción no se puede deshacer.',
+      message: `¿Eliminar definitivamente la solicitud de ${request.name}?`,
+      confirmText: 'Sí, eliminar',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
         try {
-          await requestService.deleteRequest(requestId);
+          await requestService.deleteRequest(request.id);
           toast.success('Solicitud eliminada');
-          await loadRequests();
-        } catch (error) {
-          console.error('Error eliminando solicitud:', error);
-          toast.error('Error al eliminar solicitud');
+          loadRequests();
+        } catch {
+          toast.error('Error al eliminar la solicitud');
         }
       },
     });
   };
 
-  const getStatusBadge = (status) => {
-    const styles = {
-      pending:  'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      approved: 'bg-green-500/10  text-green-500  border-green-500/30',
-      rejected: 'bg-red-500/10    text-red-500    border-red-500/30'
-    };
-    const labels = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
-    const icons  = {
-      pending:  <FaClock />,
-      approved: <FaCheckCircle />,
-      rejected: <FaTimesCircle />
-    };
-    return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${styles[status]}`}>
-        {icons[status]}
-        {labels[status]}
-      </span>
-    );
-  };
 
-  const stats = useMemo(() => ({
-    pending:  requests.filter((r) => r.status === 'pending').length,
-    approved: requests.filter((r) => r.status === 'approved').length,
-    rejected: requests.filter((r) => r.status === 'rejected').length
-  }), [requests]);
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="px-4 py-6 space-y-6">
 
-      {/* ENCABEZADO */}
+      {/* Encabezado */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -241,245 +207,206 @@ const RequestsPage = () => {
             Solicitudes de acceso
           </h1>
           <p className="text-muted text-sm">
-            Revisa y aprueba solicitudes de nuevos usuarios
+            Aprueba o rechaza solicitudes de nuevos usuarios.
           </p>
         </div>
       </motion.div>
 
-      {/* ESTADÍSTICAS */}
+      {/* Stats */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-              <FaClock className="text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Pendientes</p>
-              <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
-            </div>
+        {[
+          { label: 'Total',     value: stats.total,    color: 'primary' },
+          { label: 'Pendientes',value: stats.pending,  color: 'yellow-400' },
+          { label: 'Aprobadas', value: stats.approved, color: 'green-400' },
+          { label: 'Rechazadas',value: stats.rejected, color: 'red-400' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="card-soft p-4">
+            <p className="text-xs text-slate-400 mb-1">{label}</p>
+            <p className={`text-2xl font-bold text-${color} tabular-nums`}>{value}</p>
           </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-              <FaCheckCircle className="text-green-500" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Aprobadas</p>
-              <p className="text-2xl font-bold text-green-500">{stats.approved}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-soft p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <FaTimesCircle className="text-red-500" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Rechazadas</p>
-              <p className="text-2xl font-bold text-red-500">{stats.rejected}</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </motion.div>
 
-      {/* FILTROS DE ESTADO */}
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { value: 'pending',  label: 'Pendientes' },
-          { value: 'approved', label: 'Aprobadas'  },
-          { value: 'rejected', label: 'Rechazadas' },
-          { value: 'all',      label: 'Todas'      },
-        ].map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => setFilter(value)}
-            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-              filter === value
-                ? 'bg-primary text-slate-900'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Filtro de estado */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="flex items-center gap-2 flex-wrap"
+      >
+        <FaFilter className="text-slate-400 text-sm" />
+        {[{ value: '', label: 'Todas' }, ...Object.entries(STATUS_LABELS).map(([v, { label }]) => ({ value: v, label }))]
+          .map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setFilterStatus(value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                ${ filterStatus === value
+                  ? 'bg-primary text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700' }`}
+            >
+              {label}
+            </button>
+          ))
+        }
+      </motion.div>
 
-      {/* LISTADO */}
+      {/* Listado */}
       {loading ? (
         <div className="card-soft py-16 text-center">
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
           <p className="text-slate-400">Cargando solicitudes...</p>
         </div>
+
       ) : requests.length === 0 ? (
-        <div className="card-soft py-16 px-6 text-center border border-dashed border-slate-700">
-          <FaExclamationTriangle className="text-slate-600 text-5xl mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-light mb-2">No hay solicitudes</h2>
-          <p className="text-slate-400">No se encontraron solicitudes con este filtro</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card-soft py-16 px-6 text-center border border-dashed border-slate-700"
+        >
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+            <FaInbox className="text-primary text-3xl" />
+          </div>
+          <h2 className="text-2xl font-bold text-light mb-2">Sin solicitudes</h2>
+          <p className="text-slate-400 max-w-sm mx-auto">
+            {filterStatus === 'pending'
+              ? 'No hay solicitudes pendientes por revisar.'
+              : 'No hay solicitudes en este estado.'}
+          </p>
+        </motion.div>
+
       ) : (
-        <div className="space-y-4">
-          {requests.map((request) => (
-            <motion.div
-              key={request.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="card-soft p-5 border border-slate-800 hover:border-primary/50 transition-all"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 text-xl font-bold text-primary">
-                      {(request.name?.charAt?.(0) || 'U').toUpperCase()}
-                    </div>
+        <AnimatePresence mode="popLayout">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {requests.map((req) => {
+              const statusInfo   = STATUS_LABELS[req.status] ?? STATUS_LABELS.pending;
+              const selectedRole = approveState[req.id] || USER_ROLES.MEMBER;
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-light font-bold text-lg">{request.name}</h3>
-                        {getStatusBadge(request.status)}
+              return (
+                <motion.div
+                  key={req.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+                  className="card-soft border border-slate-800/80 flex flex-col gap-4"
+                >
+                  {/* Cabecera de tarjeta */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <FaUser className="text-primary" />
                       </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm text-slate-400">
-                          <FaEnvelope className="flex-shrink-0" />
-                          <span>{request.email}</span>
-                        </div>
-                        {request.phone && (
-                          <div className="flex items-center gap-2 text-sm text-slate-400">
-                            <FaPhone className="flex-shrink-0" />
-                            <span>{request.phone}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {request.message && (
-                        <p className="text-slate-300 text-sm mt-2 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
-                          {request.message}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-light truncate">{req.name || '—'}</p>
+                        <p className="text-xs text-slate-400">
+                          <FaClock className="inline mr-1" />
+                          {formatDate(req.createdAt)}
                         </p>
-                      )}
-
-                      <p className="text-xs text-slate-500 mt-2">
-                        Solicitado el {request.createdAt?.toLocaleDateString?.()} a las{' '}
-                        {request.createdAt?.toLocaleTimeString?.()}
-                      </p>
+                      </div>
                     </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0
+                      bg-${statusInfo.color}-400/10 text-${statusInfo.color}-400`}>
+                      {statusInfo.label}
+                    </span>
                   </div>
-                </div>
 
-                {/* ✅ Botones aprobar/rechazar — solo si canManage */}
-                {canManage && request.status === 'pending' && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApproveClick(request)}
-                      disabled={processingId === request.id}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold text-sm transition-all disabled:opacity-50"
-                    >
-                      {processingId === request.id ? (
-                        <FaSpinner className="animate-spin" />
-                      ) : (
-                        <FaCheckCircle />
-                      )}
-                      Aprobar
-                    </button>
-
-                    <button
-                      onClick={() => handleReject(request)}
-                      disabled={processingId === request.id}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold text-sm transition-all disabled:opacity-50"
-                    >
-                      <FaTimesCircle />
-                      Rechazar
-                    </button>
+                  {/* Datos de contacto */}
+                  <div className="space-y-1.5 text-sm">
+                    <p className="text-slate-300 flex items-center gap-2">
+                      <FaEnvelope className="text-slate-500 flex-shrink-0" />
+                      <span className="truncate">{req.email}</span>
+                    </p>
+                    {req.phone && (
+                      <p className="text-slate-300 flex items-center gap-2">
+                        <FaPhone className="text-slate-500 flex-shrink-0" />
+                        {req.phone}
+                      </p>
+                    )}
+                    {req.message && (
+                      <p className="text-slate-400 flex items-start gap-2 text-xs mt-2">
+                        <FaCommentAlt className="text-slate-500 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-3">{req.message}</span>
+                      </p>
+                    )}
                   </div>
-                )}
 
-                {/* ✅ Botón eliminar — solo si canManage y no pendiente */}
-                {canManage && request.status !== 'pending' && (
-                  <button
-                    onClick={() => handleDelete(request.id)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold text-sm transition-all"
-                  >
-                    <FaTrash />
-                    Eliminar
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                  {/* Acciones — solo para pendientes */}
+                  {req.status === 'pending' && (
+                    <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-800">
+                      {/* Selector de rol */}
+                      <select
+                        value={selectedRole}
+                        onChange={(e) =>
+                          setApproveState(prev => ({ ...prev, [req.id]: e.target.value }))
+                        }
+                        className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg
+                          py-2 px-3 text-sm text-light focus:outline-none focus:border-primary"
+                      >
+                        {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        onClick={() => handleApprove(req)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs
+                          font-medium bg-green-500/10 text-green-400 hover:bg-green-500/20
+                          border border-green-500/20 transition-all"
+                      >
+                        <FaCheck /> Aprobar
+                      </button>
+
+                      <button
+                        onClick={() => handleReject(req)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs
+                          font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20
+                          border border-red-500/20 transition-all"
+                      >
+                        <FaTimes /> Rechazar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Info si ya fue procesada */}
+                  {req.status !== 'pending' && req.approvedBy && (
+                    <p className="text-xs text-slate-500 border-t border-slate-800 pt-2">
+                      {req.status === 'approved' ? 'Aprobada' : 'Rechazada'} por{' '}
+                      <span className="text-slate-400">{req.approvedBy}</span>
+                    </p>
+                  )}
+
+                  {/* Botón eliminar — solo aprobadas/rechazadas */}
+                  {req.status !== 'pending' && (
+                    <button
+                      onClick={() => handleDelete(req)}
+                      className="text-xs text-slate-500 hover:text-red-400 transition-colors self-end"
+                    >
+                      Eliminar registro
+                    </button>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+        </AnimatePresence>
       )}
 
-      {/* MODAL APROBAR */}
-      {showApproveModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="card-soft max-w-md w-full p-6"
-          >
-            <h2 className="text-2xl font-bold text-primary mb-4">Aprobar solicitud</h2>
-
-            <div className="mb-6">
-              <p className="text-slate-300 mb-2">
-                Usuario: <span className="font-bold text-light">{selectedRequest.name}</span>
-              </p>
-              <p className="text-slate-300 mb-4">
-                Email: <span className="font-bold text-light">{selectedRequest.email}</span>
-              </p>
-
-              <label className="block text-sm text-slate-300 mb-2">
-                Asignar rol <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-              >
-                {Object.entries(USER_ROLE_LABELS).map(([roleKey, label]) => (
-                  <option key={roleKey} value={roleKey}>{label}</option>
-                ))}
-              </select>
-
-              <p className="text-xs text-slate-400 mt-2">
-                Se creará la cuenta y se enviará un email para establecer contraseña
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleApprove}
-                disabled={!!processingId}
-                className="flex-1 button-gold disabled:opacity-50"
-              >
-                {processingId ? 'Procesando...' : 'Confirmar aprobación'}
-              </button>
-              <button
-                onClick={() => { setShowApproveModal(false); setSelectedRequest(null); }}
-                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all"
-              >
-                Cancelar
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* ConfirmModal rechazar / eliminar */}
+      {/* Modal de confirmación */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
         onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-        confirmText="Sí, confirmar"
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
+
     </div>
   );
 };
