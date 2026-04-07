@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import { PRIVATE_ROUTES, AUTH_ROUTES } from '../../../core/config/routes.config';
 import toast from 'react-hot-toast';
 
 // ─── Límite de intentos fallidos (en memoria, sin localStorage) ──────────────
@@ -23,14 +24,12 @@ const AuthPage = () => {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  // Estado local para el bloqueo — fuerza re-render cuando cambia
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockSecondsLeft, setBlockSecondsLeft] = useState(0);
 
   const { signIn } = useAuth();
   const navigate   = useNavigate();
 
-  // ── Contador regresivo durante el bloqueo ──────────────────────────────────
   const startBlockCountdown = () => {
     setIsBlocked(true);
     const interval = setInterval(() => {
@@ -46,11 +45,9 @@ const AuthPage = () => {
     }, 500);
   };
 
-  // ── Login ──────────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    // Bloqueo activo
     if (Date.now() < blockedUntil) {
       const remaining = Math.ceil((blockedUntil - Date.now()) / 1000);
       toast.error(`Demasiados intentos. Espera ${remaining}s antes de reintentar.`);
@@ -61,7 +58,8 @@ const AuthPage = () => {
     try {
       await signIn(email, password);
       failedAttempts = 0;
-      navigate('/dashboard');
+      // FIX: usar constante en vez de string hardcodeado
+      navigate(PRIVATE_ROUTES.DASHBOARD);
     } catch (error) {
       failedAttempts++;
       console.error('Error de autenticación:', error);
@@ -81,7 +79,6 @@ const AuthPage = () => {
     }
   };
 
-  // ── Recuperar contraseña ───────────────────────────────────────────────────
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       toast.error('Escribe tu correo en el campo de arriba y luego haz clic aquí.');
@@ -99,10 +96,8 @@ const AuthPage = () => {
     }
   };
 
-  // ──────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Decoración de fondo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 right-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
         <div
@@ -117,7 +112,6 @@ const AuthPage = () => {
         transition={{ duration: 0.6 }}
         className="w-full max-w-md relative z-10"
       >
-        {/* Header */}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
@@ -135,14 +129,12 @@ const AuthPage = () => {
           </p>
         </div>
 
-        {/* Formulario de Login */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-slate-800/50 rounded-3xl p-8 shadow-2xl"
         >
-          {/* Banner de bloqueo */}
           {isBlocked && (
             <div className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-800/60 text-red-300 text-sm text-center">
               ⚠️ Demasiados intentos. Espera{' '}
@@ -152,7 +144,6 @@ const AuthPage = () => {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email */}
             <div>
               <label className="block text-sm font-semibold text-slate-300 mb-2">
                 Correo electrónico
@@ -173,7 +164,6 @@ const AuthPage = () => {
               </div>
             </div>
 
-            {/* Contraseña */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-semibold text-slate-300">
@@ -203,7 +193,6 @@ const AuthPage = () => {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading || isBlocked}
@@ -216,10 +205,9 @@ const AuthPage = () => {
             </button>
           </form>
 
-          {/* Solicitar acceso — link directo a /solicitar-acceso */}
           <div className="mt-6 pt-6 border-t border-slate-800/50 text-center">
             <Link
-              to="/solicitar-acceso"
+              to={AUTH_ROUTES.ACCESS_REQUEST}
               className="text-sm text-slate-400 hover:text-primary transition-colors font-medium"
             >
               ¿No tienes acceso?{' '}
@@ -228,7 +216,6 @@ const AuthPage = () => {
           </div>
         </motion.div>
 
-        {/* Volver al inicio */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

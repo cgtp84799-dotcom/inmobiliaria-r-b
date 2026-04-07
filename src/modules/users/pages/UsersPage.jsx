@@ -6,42 +6,42 @@ import toast from 'react-hot-toast';
 import {
   FaUserPlus, FaFilter, FaSearch, FaUsers, FaSpinner,
   FaTimesCircle, FaUserShield, FaShieldAlt, FaEye, FaInfoCircle,
+  FaUserTie,
 } from 'react-icons/fa';
 import { userService } from '../services/user.service';
 import {
-  USER_ROLES,
-  USER_ROLE_LABELS,
-  USER_ROLE_DESCRIPTIONS,
+  USER_ROLES, USER_ROLE_LABELS, USER_ROLE_DESCRIPTIONS,
   hasPermission,
 } from '../types/user.types';
-import UserCard      from '../components/UserCard';
-import UserEditModal from '../components/UserEditModal';
-import { useAuth }   from '../../../core/contexts/AuthContext';
-import ConfirmModal  from '../../../shared/components/UI/ConfirmModal';
+import UserCard        from '../components/UserCard';
+import UserEditModal   from '../components/UserEditModal';
+import UserDetailPanel from '../components/UserDetailPanel'; // ✅ NUEVO
+import { useAuth }     from '../../../core/contexts/AuthContext';
+import ConfirmModal    from '../../../shared/components/UI/ConfirmModal';
 
 
 const UsersPage = () => {
-  // ✅ role viene de userData (Firestore), no de currentUser (FirebaseAuth)
   const { currentUser, userData } = useAuth();
 
   const canCreate = hasPermission(userData?.role, 'users', 'create');
   const canUpdate = hasPermission(userData?.role, 'users', 'update');
   const canDelete = hasPermission(userData?.role, 'users', 'delete');
 
-  const [users, setUsers]               = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [filtersOpen, setFiltersOpen]   = useState(true);
-  const [modalOpen, setModalOpen]       = useState(false);
-  const [editingUser, setEditingUser]   = useState(null);   // null → crear, objeto → editar
-  const [filters, setFilters]           = useState({ searchTerm: '', role: '', status: '' });
+  const [users,        setUsers]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [filtersOpen,  setFiltersOpen]  = useState(true);
+  const [modalOpen,    setModalOpen]    = useState(false);
+  const [editingUser,  setEditingUser]  = useState(null);
+  const [filters,      setFilters]      = useState({ searchTerm: '', role: '', status: '' });
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false, title: '', message: '', confirmText: 'Sí, confirmar', onConfirm: null,
   });
 
+  // ✅ NUEVO: estado del panel lateral
+  const [detailUser,   setDetailUser]   = useState(null);
+  const [panelOpen,    setPanelOpen]    = useState(false);
 
-  // ── Datos derivados ────────────────────────────────────────────────────────
-
-  // Filtrado reactivo — sin estado duplicado ni stale closure
+  // ── Datos derivados ────────────────────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
     let result = [...users];
     if (filters.searchTerm) {
@@ -57,18 +57,17 @@ const UsersPage = () => {
     return result;
   }, [users, filters]);
 
-  // Stats memoizados — no se recalculan en cada render
+  // ✅ agents incluido en stats
   const stats = useMemo(() => ({
     total:   users.length,
     active:  users.filter(u => u.status === 'active').length,
-    admins:  users.filter(u => u.role   === USER_ROLES.ADMIN).length,
-    members: users.filter(u => u.role   === USER_ROLES.MEMBER).length,
-    viewers: users.filter(u => u.role   === USER_ROLES.VIEWER).length,
+    admins:  users.filter(u => u.role === USER_ROLES.ADMIN).length,
+    members: users.filter(u => u.role === USER_ROLES.MEMBER).length,
+    agents:  users.filter(u => u.role === USER_ROLES.AGENT).length,
+    viewers: users.filter(u => u.role === USER_ROLES.VIEWER).length,
   }), [users]);
 
-
-  // ── Carga de datos ─────────────────────────────────────────────────────────
-
+  // ── Carga de datos ────────────────────────────────────────────────────────────
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,18 +82,22 @@ const UsersPage = () => {
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-
-  // ── Filtros ────────────────────────────────────────────────────────────────
-
+  // ── Filtros ───────────────────────────────────────────────────────────────
   const handleFilterChange = (field, value) =>
     setFilters(prev => ({ ...prev, [field]: value }));
 
   const clearFilters = () =>
     setFilters({ searchTerm: '', role: '', status: '' });
 
+  // ── Panel de detalle ───────────────────────────────────────────────────────────
+  const handleViewDetail = (user) => {
+    setDetailUser(user);
+    setPanelOpen(true);
+  };
 
-  // ── Modal crear / editar ───────────────────────────────────────────────────
+  const closePanel = () => setPanelOpen(false);
 
+  // ── Modal crear / editar ─────────────────────────────────────────────────────────
   const openCreateModal = () => {
     if (!canCreate) { toast.error('No tienes permisos para crear usuarios'); return; }
     setEditingUser(null);
@@ -105,6 +108,7 @@ const UsersPage = () => {
     if (!canUpdate) { toast.error('No tienes permisos para editar usuarios'); return; }
     setEditingUser(user);
     setModalOpen(true);
+    closePanel(); // cerrar panel si está abierto al abrir el modal
   };
 
   const closeModal = () => {
@@ -112,12 +116,7 @@ const UsersPage = () => {
     setEditingUser(null);
   };
 
-  /**
-   * handleSave recibe (formData, editingUser) desde UserEditModal.
-   * No llama a closeModal() — el modal se cierra solo si onSave resuelve sin error.
-   */
   const handleSave = async (formData, editingUser) => {
-    // Doble-check de permisos (defensa en profundidad)
     if (editingUser && !canUpdate) throw new Error('Sin permisos para editar usuarios');
     if (!editingUser && !canCreate) throw new Error('Sin permisos para crear usuarios');
 
@@ -132,32 +131,18 @@ const UsersPage = () => {
       toast.success('Usuario actualizado');
     } else {
       await userService.createUser(
-        {
-          displayName: formData.displayName,
-          email:       formData.email,
-          phone:       formData.phone,
-          role:        formData.role,
-          status:      formData.status,
-        },
+        { displayName: formData.displayName, email: formData.email, phone: formData.phone, role: formData.role, status: formData.status },
         formData.password
       );
       toast.success('Usuario creado exitosamente');
     }
-
     loadUsers();
-    // ⚠️ No cerrar aquí — UserEditModal llama onClose() tras onSave exitoso
   };
 
-
-  // ── Acciones de tarjeta ────────────────────────────────────────────────────
-
+  // ── Acciones de tarjeta ─────────────────────────────────────────────────────────
   const handleDelete = (user) => {
     if (!canDelete) { toast.error('No tienes permisos para eliminar usuarios'); return; }
-    // Solo bloquea auto-eliminación, no a todos los admins
-    if (user.email === currentUser?.email) {
-      toast.error('No puedes eliminar tu propia cuenta');
-      return;
-    }
+    if (user.email === currentUser?.email) { toast.error('No puedes eliminar tu propia cuenta'); return; }
     setConfirmModal({
       isOpen: true,
       title: 'Eliminar usuario',
@@ -169,9 +154,8 @@ const UsersPage = () => {
           await userService.deleteUser(user.id);
           toast.success('Usuario eliminado');
           loadUsers();
-        } catch {
-          toast.error('Error al eliminar usuario');
-        }
+          closePanel();
+        } catch { toast.error('Error al eliminar usuario'); }
       },
     });
   };
@@ -183,9 +167,7 @@ const UsersPage = () => {
       await userService.changeUserStatus(user.id, newStatus);
       toast.success(`Usuario ${newStatus === 'active' ? 'activado' : 'desactivado'}`);
       loadUsers();
-    } catch {
-      toast.error('Error al cambiar el estado');
-    }
+    } catch { toast.error('Error al cambiar el estado'); }
   };
 
   const handleResetPassword = (user) => {
@@ -200,20 +182,16 @@ const UsersPage = () => {
         try {
           await userService.sendPasswordReset(user.email);
           toast.success('Email de restablecimiento enviado');
-        } catch {
-          toast.error('Error al enviar email');
-        }
+        } catch { toast.error('Error al enviar email'); }
       },
     });
   };
 
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
+  // ── Render ────────────────────────────────────────────────────────────────────────
   return (
     <div className="px-4 py-6 space-y-6">
 
-      {/* ── Encabezado ── */}
+      {/* Encabezado */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -221,37 +199,30 @@ const UsersPage = () => {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-primary mb-1">
-            Gestión de usuarios
-          </h1>
-          <p className="text-muted text-sm">
-            Administra el equipo de trabajo y controla los accesos al sistema.
-          </p>
+          <h1 className="text-3xl md:text-4xl font-bold text-primary mb-1">Gestión de usuarios</h1>
+          <p className="text-muted text-sm">Administra el equipo de trabajo y controla los accesos al sistema.</p>
         </div>
         {canCreate && (
-          <button
-            onClick={openCreateModal}
-            className="button-gold inline-flex items-center gap-2 px-6 py-3"
-          >
-            <FaUserPlus />
-            Nuevo usuario
+          <button onClick={openCreateModal} className="button-gold inline-flex items-center gap-2 px-6 py-3">
+            <FaUserPlus /> Nuevo usuario
           </button>
         )}
       </motion.div>
 
-      {/* ── Estadísticas ── */}
+      {/* KPIs — ahora incluye Agentes */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-5 gap-4"
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
       >
         {[
-          { label: 'Total',           value: stats.total,   color: 'primary',   Icon: FaUsers      },
-          { label: 'Activos',         value: stats.active,  color: 'green-400', Icon: FaUserShield },
-          { label: 'Administradores', value: stats.admins,  color: 'red-400',   Icon: FaShieldAlt  },
-          { label: 'Equipo',          value: stats.members, color: 'primary',   Icon: FaUsers      },
-          { label: 'Lectura',         value: stats.viewers, color: 'slate-400', Icon: FaEye        },
+          { label: 'Total',       value: stats.total,   color: 'primary',    Icon: FaUsers      },
+          { label: 'Activos',     value: stats.active,  color: 'green-400',  Icon: FaUserShield },
+          { label: 'Admins',      value: stats.admins,  color: 'red-400',    Icon: FaShieldAlt  },
+          { label: 'Agentes',     value: stats.agents,  color: 'green-400',  Icon: FaUserTie    },
+          { label: 'Equipo',      value: stats.members, color: 'blue-400',   Icon: FaUsers      },
+          { label: 'Solo lectura',value: stats.viewers, color: 'slate-400',  Icon: FaEye        },
         ].map(({ label, value, color, Icon }) => (
           <div key={label} className="card-soft p-4">
             <div className="flex items-center gap-3">
@@ -267,7 +238,7 @@ const UsersPage = () => {
         ))}
       </motion.div>
 
-      {/* ── Info de roles ── */}
+      {/* Info roles — ahora incluye AGENT */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -278,10 +249,11 @@ const UsersPage = () => {
           <FaInfoCircle className="text-blue-400 mt-1 flex-shrink-0" />
           <div>
             <h3 className="text-blue-400 font-semibold mb-2">Roles del sistema</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               {[
-                { emoji: '✨', label: 'Administrador',      role: USER_ROLES.ADMIN  },
-                { emoji: '👥', label: 'Miembro del equipo', role: USER_ROLES.MEMBER },
+                { emoji: '✨', label: 'Administrador',       role: USER_ROLES.ADMIN  },
+                { emoji: '👥', label: 'Miembro del equipo',  role: USER_ROLES.MEMBER },
+                { emoji: '👔', label: 'Agente inmobiliario', role: USER_ROLES.AGENT  },
                 { emoji: '👁️', label: 'Solo lectura',        role: USER_ROLES.VIEWER },
               ].map(({ emoji, label, role }) => (
                 <div key={role}>
@@ -294,7 +266,7 @@ const UsersPage = () => {
         </div>
       </motion.div>
 
-      {/* ── Filtros ── */}
+      {/* Filtros */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -311,47 +283,33 @@ const UsersPage = () => {
               <p className="text-xs text-slate-400">Busca usuarios específicos</p>
             </div>
           </div>
-          <button
-            onClick={() => setFiltersOpen(v => !v)}
-            className="text-xs text-primary hover:underline"
-          >
+          <button onClick={() => setFiltersOpen(v => !v)} className="text-xs text-primary hover:underline">
             {filtersOpen ? 'Ocultar' : 'Mostrar'}
           </button>
         </div>
 
         {filtersOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            {/* Búsqueda por texto */}
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">
-                  <FaSearch />
-                </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none"><FaSearch /></span>
                 <input
                   type="text"
                   placeholder="Nombre, correo electrónico, teléfono..."
                   value={filters.searchTerm}
                   onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light
-                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Filtro por rol */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Rol</label>
                 <select
                   value={filters.role}
                   onChange={(e) => handleFilterChange('role', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light
-                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Todos los roles</option>
                   {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
@@ -359,15 +317,12 @@ const UsersPage = () => {
                   ))}
                 </select>
               </div>
-
-              {/* Filtro por estado */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Estado</label>
                 <select
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light
-                    focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Todos</option>
                   <option value="active">Activos</option>
@@ -376,17 +331,12 @@ const UsersPage = () => {
                   <option value="blocked">Bloqueados</option>
                 </select>
               </div>
-
-              {/* Limpiar — el filtro ya es reactivo, el botón es UX explícita */}
               <div className="flex items-end gap-3 md:col-span-2">
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs
-                    text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600
-                    rounded-xl transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600 rounded-xl transition-all"
                 >
-                  <FaTimesCircle />
-                  Limpiar filtros
+                  <FaTimesCircle /> Limpiar filtros
                 </button>
               </div>
             </div>
@@ -394,7 +344,7 @@ const UsersPage = () => {
         )}
       </motion.div>
 
-      {/* ── Contador de resultados ── */}
+      {/* Contador */}
       {!loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <p className="text-slate-400 text-sm">
@@ -404,13 +354,9 @@ const UsersPage = () => {
         </motion.div>
       )}
 
-      {/* ── Listado ── */}
+      {/* Grid de usuarios */}
       {loading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="card-soft py-16 text-center"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card-soft py-16 text-center">
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
           <p className="text-slate-400">Cargando usuarios...</p>
         </motion.div>
@@ -434,8 +380,7 @@ const UsersPage = () => {
           </p>
           {users.length === 0 && canCreate && (
             <button onClick={openCreateModal} className="button-gold inline-flex items-center gap-2 px-6 py-3">
-              <FaUserPlus />
-              Crear primer usuario
+              <FaUserPlus /> Crear primer usuario
             </button>
           )}
         </motion.div>
@@ -450,17 +395,18 @@ const UsersPage = () => {
             <UserCard
               key={user.id}
               user={user}
-              onEdit={canUpdate            ? handleEdit         : null}
-              onDelete={canDelete          ? handleDelete        : null}
+              onEdit={canUpdate           ? handleEdit         : null}
+              onDelete={canDelete         ? handleDelete        : null}
               onChangeStatus={canUpdate   ? handleChangeStatus  : null}
               onResetPassword={canUpdate  ? handleResetPassword : null}
+              onViewDetail={handleViewDetail}  // ✅ siempre disponible para admin
               currentUserRole={userData?.role}
             />
           ))}
         </motion.div>
       )}
 
-      {/* ── Modal crear / editar (UserEditModal) ── */}
+      {/* Modal crear / editar */}
       <UserEditModal
         editingUser={editingUser}
         isOpen={modalOpen}
@@ -469,7 +415,7 @@ const UsersPage = () => {
         currentUserRole={userData?.role}
       />
 
-      {/* ── Modal de confirmación ── */}
+      {/* Modal confirmación */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
@@ -477,6 +423,16 @@ const UsersPage = () => {
         confirmText={confirmModal.confirmText}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* ✅ Panel lateral de detalle de usuario */}
+      <UserDetailPanel
+        user={detailUser}
+        isOpen={panelOpen}
+        onClose={closePanel}
+        onEdit={canUpdate          ? handleEdit         : null}
+        onChangeStatus={canUpdate  ? handleChangeStatus  : null}
+        onResetPassword={canUpdate ? handleResetPassword : null}
       />
 
     </div>

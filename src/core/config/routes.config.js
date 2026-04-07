@@ -19,16 +19,19 @@ export const AUTH_ROUTES = {
 };
 
 export const PRIVATE_ROUTES = {
-  DASHBOARD:   '/dashboard',
-  PROPERTIES:  '/propiedades-admin',
-  CLIENTS:     '/clientes',
-  CONTRACTS:   '/contratos',
-  QUERIES:     '/consultas',
-  CHAT:        '/chat',
-  DOCUMENTS:   '/documentos',
-  CALENDAR:    '/calendario',
-  USERS:       '/usuarios',
-  REQUESTS:    '/solicitudes',
-  PROFILE:     '/perfil',
-  VISITS:      '/usuarios/visitas',
+  DASHBOARD:        '/dashboard',
+  AGENT_DASHBOARD:  '/mi-panel',      // ✅ Ruta exclusiva para rol agent
+  PROPERTIES:       '/propiedades-admin',
+  CLIENTS:          '/clientes',
+  CONTRACTS:        '/contratos',
+  QUERIES:          '/consultas',
+  CHAT:             '/chat',
+  DOCUMENTS:        '/documentos',
+  CALENDAR:         '/calendario',
+  USERS:            '/usuarios',
+  REQUESTS:         '/solicitudes',
+  PROFILE:          '/perfil',
+  VISITS:           '/visitas',
+  AGENTS:           '/agentes',
+  AGENT_DETAIL:     '/agentes/:agentId',
 };
