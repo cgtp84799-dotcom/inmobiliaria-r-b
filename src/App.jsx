@@ -61,6 +61,7 @@ const ScheduleVisitPage = lazy(() => import("./modules/visits/pages/ScheduleVisi
 const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
 const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
 const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
+const ContractsPage      = lazy(() => import("./modules/contracts/pages/ContractsPage"));
 const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
 const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
 const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
@@ -450,6 +451,7 @@ function App() {
             <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
+            <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CHAT}       element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />} />
             <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
