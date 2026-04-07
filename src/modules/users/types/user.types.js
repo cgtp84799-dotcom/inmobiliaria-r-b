@@ -5,26 +5,29 @@
 export const USER_ROLES = {
   ADMIN:  'admin',
   MEMBER: 'member',
+  AGENT:  'agent',
   VIEWER: 'viewer',
 };
 
 export const USER_ROLE_LABELS = {
   [USER_ROLES.ADMIN]:  'Administrador',
   [USER_ROLES.MEMBER]: 'Miembro del equipo',
+  [USER_ROLES.AGENT]:  'Agente inmobiliario',
   [USER_ROLES.VIEWER]: 'Solo lectura',
 };
 
 export const USER_ROLE_DESCRIPTIONS = {
   [USER_ROLES.ADMIN]:  'Control total del sistema + gestión de usuarios',
   [USER_ROLES.MEMBER]: 'Acceso completo para operar (propiedades, clientes, contratos, documentos)',
+  [USER_ROLES.AGENT]:  'Gestiona sus propias visitas, propiedades y contratos. Ve su panel de rendimiento',
   [USER_ROLES.VIEWER]: 'Solo puede consultar información, sin editar ni crear',
 };
 
 // ✅ Clases completas de Tailwind — nunca strings parciales como 'primary'
-// Tailwind no puede detectar clases generadas dinámicamente con template literals
 export const USER_ROLE_COLORS = {
   [USER_ROLES.ADMIN]:  'red',
   [USER_ROLES.MEMBER]: 'blue',
+  [USER_ROLES.AGENT]:  'green',
   [USER_ROLES.VIEWER]: 'slate',
 };
 
@@ -52,6 +55,8 @@ export const ROLE_PERMISSIONS = {
     clients:    ['create', 'read', 'update', 'delete'],
     documents:  ['create', 'read', 'update', 'delete'],
     contracts:  ['create', 'read', 'update', 'delete'],
+    visits:     ['create', 'read', 'update', 'delete'],
+    agents:     ['create', 'read', 'update', 'delete'],
     users:      ['create', 'read', 'update', 'delete'],
     chat:       ['read', 'send'],
     settings:   ['manage'],
@@ -61,7 +66,20 @@ export const ROLE_PERMISSIONS = {
     clients:    ['create', 'read', 'update', 'delete'],
     documents:  ['create', 'read', 'update', 'delete'],
     contracts:  ['create', 'read', 'update', 'delete'],
+    visits:     ['create', 'read', 'update', 'delete'],
+    agents:     ['read'],
     users:      ['read'],
+    chat:       ['read', 'send'],
+    settings:   [],
+  },
+  [USER_ROLES.AGENT]: {
+    properties: ['create', 'read', 'update'],
+    clients:    ['create', 'read', 'update'],
+    documents:  ['read'],
+    contracts:  ['create', 'read', 'update'],
+    visits:     ['create', 'read', 'update'],
+    agents:     ['read'],
+    users:      [],
     chat:       ['read', 'send'],
     settings:   [],
   },
@@ -70,6 +88,8 @@ export const ROLE_PERMISSIONS = {
     clients:    ['read'],
     documents:  ['read'],
     contracts:  ['read'],
+    visits:     ['read'],
+    agents:     [],
     users:      [],
     chat:       ['read'],
     settings:   [],
@@ -78,9 +98,6 @@ export const ROLE_PERMISSIONS = {
 
 /**
  * Verifica si un usuario tiene permiso sobre una acción en un módulo.
- * @param {string} userRole - Rol del usuario ('admin' | 'member' | 'viewer')
- * @param {string} module   - Módulo ('users' | 'properties' | 'clients' | ...)
- * @param {string} action   - Acción ('create' | 'read' | 'update' | 'delete')
  */
 export const hasPermission = (userRole, module, action) => {
   const permissions = ROLE_PERMISSIONS[userRole];
@@ -89,23 +106,10 @@ export const hasPermission = (userRole, module, action) => {
 };
 
 /**
- * Determina si el usuario autenticado puede asignar/gestionar un rol dado.
- *
- * Reglas:
- *  - Solo admins pueden gestionar roles
- *  - Un admin puede asignar cualquier rol del sistema (admin, member, viewer)
- *  - En este sistema no hay super_admin ni manager — solo los 3 roles definidos
- *
- * @param {string} currentUserRole - Rol del usuario logueado (de userData en Firestore)
- * @param {string} targetRole      - Rol que se quiere asignar o gestionar
- * @returns {boolean}
+ * Determina si el usuario autenticado puede gestionar un rol dado.
  */
 export const canManageUser = (currentUserRole, targetRole) => {
-  // Solo admins pueden gestionar
   if (currentUserRole !== USER_ROLES.ADMIN) return false;
-
-  // Solo puede asignar roles que existen en el sistema
   if (!Object.values(USER_ROLES).includes(targetRole)) return false;
-
   return true;
 };
