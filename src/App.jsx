@@ -45,7 +45,8 @@ const ClientManagement  = lazy(() => import("./modules/clients/pages/ClientManag
 const ContractsPage     = lazy(() => import("./modules/contracts/pages/ContractsPage"));
 const DocumentsPage     = lazy(() => import("./modules/documents/pages/DocumentsPage"));
 const ContactsPage      = lazy(() => import("./modules/contacts/pages/ContactsPage"));
-const CalendarPage      = lazy(() => import("./modules/calendar/pages/CalendarPage"));
+// ── 3C: CalendarPage viene del módulo de visitas ──────────────────────────────
+const CalendarPage      = lazy(() => import("./modules/visits/pages/CalendarPage"));
 const UsersPage         = lazy(() => import("./modules/users/pages/UsersPage"));
 const RequestsPage      = lazy(() => import("./modules/users/pages/RequestsPage"));
 
@@ -56,8 +57,6 @@ const PageLoader = () => (
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Guard exclusivo para agentes: redirige a /dashboard si no es agent
 // ─────────────────────────────────────────────────────────────────────────────
 const AgentRoute = ({ children }) => {
   const { userData } = useAuth();
@@ -97,8 +96,6 @@ const serviceColorMap = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Página pública de inicio
-// ─────────────────────────────────────────────────────────────────────────────
 const HomePage = () => (
   <div className="overflow-hidden">
     <Helmet>
@@ -112,7 +109,6 @@ const HomePage = () => (
       <meta property="og:type" content="website" />
     </Helmet>
 
-    {/* Hero */}
     <motion.section
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
       className="relative min-h-[78vh] sm:min-h-[85vh] lg:min-h-[90vh] flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden"
@@ -170,7 +166,6 @@ const HomePage = () => (
       </motion.div>
     </motion.section>
 
-    {/* Para compradores / propietarios */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-900 to-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
@@ -218,7 +213,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* Servicios especializados */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
@@ -249,7 +243,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* Cómo trabajamos */}
     <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-950 to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
@@ -277,7 +270,6 @@ const HomePage = () => (
       </div>
     </section>
 
-    {/* CTA final */}
     <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="card-soft p-6 sm:p-10 lg:p-12 text-center border-2 border-primary/30">
@@ -297,8 +289,6 @@ const HomePage = () => (
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Página de contacto pública
 // ─────────────────────────────────────────────────────────────────────────────
 const ContactPage = () => (
   <div className="max-w-5xl mx-auto py-7 sm:py-12 lg:py-14 px-4 sm:px-6">
@@ -381,8 +371,6 @@ const ContactPage = () => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Root
-// ─────────────────────────────────────────────────────────────────────────────
 function App() {
   return (
     <AuthProvider>
@@ -391,7 +379,6 @@ function App() {
         <NotificationInitializer />
         <Toaster position="top-right" />
         <Routes>
-          {/* Rutas públicas */}
           <Route element={<PublicLayout />}>
             <Route path={PUBLIC_ROUTES.HOME}            element={<HomePage />} />
             <Route path={PUBLIC_ROUTES.CATALOG}         element={<CatalogPage />} />
@@ -402,10 +389,8 @@ function App() {
             <Route path={PUBLIC_ROUTES.SCHEDULE_VISIT}  element={<Suspense fallback={<PageLoader />}><ScheduleVisitPage /></Suspense>} />
           </Route>
 
-          {/* Autenticación */}
           <Route path={AUTH_ROUTES.LOGIN} element={<AuthPage />} />
 
-          {/* Rutas privadas */}
           <Route
             element={
               <ProtectedRoute>
@@ -416,21 +401,15 @@ function App() {
               </ProtectedRoute>
             }
           >
-            {/* Dashboard admin/member/viewer */}
-            <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-
-            {/* ✅ Dashboard exclusivo para agentes: /mi-panel */}
+            <Route path={PRIVATE_ROUTES.DASHBOARD}       element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
             <Route
               path={PRIVATE_ROUTES.AGENT_DASHBOARD}
               element={
                 <AgentRoute>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentDashboard />
-                  </Suspense>
+                  <Suspense fallback={<PageLoader />}><AgentDashboard /></Suspense>
                 </AgentRoute>
               }
             />
-
             <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
@@ -438,13 +417,13 @@ function App() {
             <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.CHAT}       element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />} />
             <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
+            {/* 3C: Calendario unificado (visits + appointments) */}
             <Route path={PRIVATE_ROUTES.CALENDAR}   element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.USERS}      element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.REQUESTS}   element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
             <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
           </Route>
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
         </Routes>
       </BrowserRouter>
