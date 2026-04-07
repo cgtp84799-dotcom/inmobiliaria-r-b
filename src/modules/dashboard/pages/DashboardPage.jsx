@@ -12,7 +12,7 @@ import { useAuth } from "../../../core/contexts/AuthContext";
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "../../../core/config/firebase.config";
 
-/* ── Tooltip semántico para Recharts ──────────────────────────────── */
+/* ── Tooltip semántico para Recharts ──────────────────────────────────── */
 const tooltipStyle = () => ({
   backgroundColor: "var(--color-surface-2, #1e293b)",
   border: "1px solid var(--color-border)",
@@ -20,17 +20,17 @@ const tooltipStyle = () => ({
   color: "var(--color-text)",
 });
 
-/* ── Colores de gráficas ───────────────────────────────────── */
+/* ── Colores de gráficas ───────────────────────────────────────── */
 const COLORS = ["#F4CA64", "#3B82F6", "#10B981", "#EF4444"];
 
-/* ── Animación helper ───────────────────────────────────────── */
+/* ── Animación helper ────────────────────────────────────────── */
 const cardAnim = (d) => ({
   initial: { opacity: 0, y: 14 },
   animate: { opacity: 1, y: 0 },
   transition: { delay: d },
 });
 
-/* ── Stat Card ────────────────────────────────────────────── */
+/* ── Stat Card ──────────────────────────────────────────────── */
 function StatCard({ delay, iconBg, icon: Icon, iconColor, label, value, sub, subColor }) {
   return (
     <motion.div {...cardAnim(delay)} className="card-soft p-4 sm:p-5">
@@ -52,7 +52,7 @@ function StatCard({ delay, iconBg, icon: Icon, iconColor, label, value, sub, sub
   );
 }
 
-/* ── Chart Card ────────────────────────────────────────────── */
+/* ── Chart Card ─────────────────────────────────────────────── */
 function ChartCard({ delay, title, badge, children }) {
   return (
     <motion.div {...cardAnim(delay)} className="card-soft p-5 sm:p-6">
@@ -65,7 +65,7 @@ function ChartCard({ delay, title, badge, children }) {
   );
 }
 
-/* ── Recent Item ───────────────────────────────────────────── */
+/* ── Recent Item ─────────────────────────────────────────────── */
 function RecentItem({ iconBg, icon: Icon, iconColor, title, sub, right }) {
   return (
     <div className="card-inner flex items-center gap-3 p-3">
@@ -81,14 +81,14 @@ function RecentItem({ iconBg, icon: Icon, iconColor, title, sub, right }) {
   );
 }
 
-/* ── Empty State ───────────────────────────────────────────── */
+/* ── Empty State ─────────────────────────────────────────────── */
 const Empty = ({ msg }) => (
   <p className="t-muted text-sm text-center py-8">{msg}</p>
 );
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    DashboardPage
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const DashboardPage = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -223,7 +223,8 @@ const DashboardPage = () => {
           title={<><FaChartLine className="text-amber-500" /> Propiedades por mes</>}
           badge="Últimos 6 meses"
         >
-          <div className="h-[240px] sm:h-[300px]">
+          {/* w-full + display:block aseguran que ResponsiveContainer mida bien */}
+          <div className="w-full block" style={{ height: 300, minHeight: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" />
@@ -239,7 +240,7 @@ const DashboardPage = () => {
         </ChartCard>
 
         <ChartCard delay={0.30} title="Propiedades por tipo" badge="Distribución">
-          <div className="h-[240px] sm:h-[300px]">
+          <div className="w-full block" style={{ height: 300, minHeight: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" outerRadius={100} dataKey="value">
