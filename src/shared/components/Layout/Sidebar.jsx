@@ -4,14 +4,11 @@ import {
   FaChartLine, FaBuilding, FaUsers, FaFolder, FaUserCog,
   FaEnvelope, FaCalendar, FaSignOutAlt, FaTimes,
   FaChevronLeft, FaChevronRight, FaShieldAlt, FaEye, FaUser,
-  FaFileContract,
+  FaFileContract, FaCalendarCheck, FaUserTie,
 } from "react-icons/fa";
 import { useAuth } from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
 import { hasPermission, USER_ROLES } from "../../../modules/users/types/user.types";
-
-// El sidebar siempre es oscuro (contrasta con logo dorado y con el fondo claro)
-// Sus colores vienen de las variables --color-sidebar-* del index.css
 
 const SB = {
   bg:        "var(--color-sidebar-bg)",
@@ -31,28 +28,36 @@ const Sidebar = ({
   onRequestCloseOverlay = () => {},
 }) => {
   const location = useLocation();
-  const { signOut, currentUser } = useAuth();
-  const role = currentUser?.role;
 
+  // FIX — role viene de userData (Firestore), NO de currentUser (Firebase Auth).
+  // currentUser es el objeto nativo de Firebase Auth; role vive en Firestore.
+  // Usar currentUser?.role era incorrecto: resultaba undefined para viewers/agents.
+  const { signOut, currentUser, userData } = useAuth();
+  const role = userData?.role;
+
+  // FIX — rol AGENT añadido con su badge y ícono correcto
   const roleMeta = {
     [USER_ROLES.ADMIN]:  { label: "Administrador",      color: "text-red-400",   bg: "bg-red-500/15",   icon: FaShieldAlt },
-    [USER_ROLES.MEMBER]: { label: "Miembro del equipo",  color: "text-yellow-400", bg: "bg-yellow-500/15", icon: FaUsers     },
+    [USER_ROLES.MEMBER]: { label: "Miembro del equipo",  color: "text-blue-400",  bg: "bg-blue-500/15",  icon: FaUsers     },
+    [USER_ROLES.AGENT]:  { label: "Agente inmobiliario", color: "text-green-400", bg: "bg-green-500/15", icon: FaUserTie   },
     [USER_ROLES.VIEWER]: { label: "Solo lectura",        color: "text-slate-400", bg: "bg-slate-500/15", icon: FaEye       },
   };
   const currentRoleMeta = roleMeta[role] || roleMeta[USER_ROLES.VIEWER];
   const RoleIcon = currentRoleMeta.icon;
 
   const allMenuItems = [
-    { icon: FaChartLine,    label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
-    { icon: FaBuilding,     label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
-    { icon: FaUsers,        label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients", "read") },
-    { icon: FaFileContract, label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "clients", "read") },
-    { icon: FaCalendar,     label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
-    { icon: FaEnvelope,     label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
-    { icon: FaFolder,       label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
-    { icon: FaUserCog,      label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users", "read") },
-    { icon: FaUserCog,      label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users", "create") },
-    { icon: FaUser,         label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
+    { icon: FaChartLine,     label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
+    { icon: FaBuilding,      label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
+    { icon: FaUsers,         label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients",    "read") },
+    // FIX — contratos verificaba permisos de 'clients' en lugar de 'contracts'
+    { icon: FaFileContract,  label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts",  "read") },
+    { icon: FaCalendarCheck, label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits",     "read") },
+    { icon: FaCalendar,      label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
+    { icon: FaEnvelope,      label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
+    { icon: FaFolder,        label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents", "read") },
+    { icon: FaUserCog,       label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users",     "read") },
+    { icon: FaUserCog,       label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users",     "create") },
+    { icon: FaUser,          label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
   ];
 
   const menuItems = allMenuItems.filter((item) => item.visible);
@@ -72,7 +77,6 @@ const Sidebar = ({
     </div>
   );
 
-  // ── Partes reutilizables ──────────────────────────────
   const SidebarHeader = ({ showClose = false }) => (
     <div
       className="px-4 sm:px-6 h-20 flex items-center justify-between shrink-0 border-b"
@@ -108,7 +112,7 @@ const Sidebar = ({
         {!mini && (
           <div className="overflow-hidden flex-1 min-w-0">
             <p className="text-sm font-bold truncate" style={{ color: "#f1f0ed" }}>
-              {currentUser?.displayName || "Usuario"}
+              {userData?.displayName || currentUser?.displayName || "Usuario"}
             </p>
             <p className="text-xs truncate" style={{ color: SB.muted }}>{currentUser?.email}</p>
             <RoleBadge />
@@ -170,7 +174,6 @@ const Sidebar = ({
 
   return (
     <>
-      {/* ── Overlay móvil ── */}
       <AnimatePresence>
         {showMobile && isOpen && (
           <motion.div
@@ -182,7 +185,6 @@ const Sidebar = ({
         )}
       </AnimatePresence>
 
-      {/* ── Overlay desktop ── */}
       <AnimatePresence>
         {showDesktopOverlay && (
           <motion.div
@@ -195,7 +197,6 @@ const Sidebar = ({
         )}
       </AnimatePresence>
 
-      {/* ── SIDEBAR MINI (desktop) ── */}
       <aside
         className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-20 flex-col h-[100dvh] max-h-[100dvh] border-r"
         style={{ backgroundColor: SB.bg, borderColor: SB.border }}
@@ -214,7 +215,6 @@ const Sidebar = ({
         <SignOutBtn compact />
       </aside>
 
-      {/* ── PANEL EXPANDIDO (desktop hover) ── */}
       <AnimatePresence>
         {showDesktopOverlay && (
           <motion.aside
@@ -232,7 +232,6 @@ const Sidebar = ({
         )}
       </AnimatePresence>
 
-      {/* ── SIDEBAR MÓVIL ── */}
       <motion.aside
         initial={false}
         animate={{ x: isOpen ? 0 : -320 }}
