@@ -1,81 +1,114 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaEnvelope, FaLock, FaShieldAlt, FaArrowLeft, FaUser, FaPhone } from 'react-icons/fa';
+import {
+  FaEnvelope, FaLock, FaShieldAlt, FaArrowLeft
+} from 'react-icons/fa';
+import {
+  sendPasswordResetEmail
+} from 'firebase/auth';
+import { auth } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
-import { requestService } from '../../users/services/request.service';
 import toast from 'react-hot-toast';
 
+// ─── Límite de intentos fallidos (en memoria, sin localStorage) ──────────────
+const MAX_ATTEMPTS  = 5;
+const BLOCK_TIME_MS = 30_000; // 30 segundos
+
+let failedAttempts = 0;
+let blockedUntil   = 0;
+
 const AuthPage = () => {
-  const [email, setEmail] = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showRequestAccess, setShowRequestAccess] = useState(false);
-  
-  // ✅ DATOS DEL FORMULARIO DE SOLICITUD - ACTUALIZADO
-  const [requestData, setRequestData] = useState({
-    email: '',
-    name: '',
-    phone: '', // ✅ NUEVO
-    message: '' // ✅ RENOMBRADO (antes era 'reason')
-  });
+  const [loading,  setLoading]  = useState(false);
+
+  // Estado local para el bloqueo — fuerza re-render cuando cambia
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockSecondsLeft, setBlockSecondsLeft] = useState(0);
 
   const { signIn } = useAuth();
-  const navigate = useNavigate();
+  const navigate   = useNavigate();
 
+  // ── Contador regresivo durante el bloqueo ──────────────────────────────────
+  const startBlockCountdown = () => {
+    setIsBlocked(true);
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((blockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        setIsBlocked(false);
+        setBlockSecondsLeft(0);
+        failedAttempts = 0;
+      } else {
+        setBlockSecondsLeft(remaining);
+      }
+    }, 500);
+  };
+
+  // ── Login ──────────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
+    // Bloqueo activo
+    if (Date.now() < blockedUntil) {
+      const remaining = Math.ceil((blockedUntil - Date.now()) / 1000);
+      toast.error(`Demasiados intentos. Espera ${remaining}s antes de reintentar.`);
+      return;
+    }
+
+    setLoading(true);
     try {
       await signIn(email, password);
-      toast.success('Acceso autorizado');
+      failedAttempts = 0;
       navigate('/dashboard');
     } catch (error) {
+      failedAttempts++;
       console.error('Error de autenticación:', error);
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        toast.error('Usuario no autorizado o credenciales incorrectas');
-      } else if (error.code === 'auth/invalid-credential') {
-        toast.error('Credenciales inválidas');
+
+      if (failedAttempts >= MAX_ATTEMPTS) {
+        blockedUntil = Date.now() + BLOCK_TIME_MS;
+        startBlockCountdown();
+        toast.error(`Bloqueado por ${BLOCK_TIME_MS / 1000}s tras ${MAX_ATTEMPTS} intentos fallidos.`);
       } else {
-        toast.error('Error al iniciar sesión');
+        const left = MAX_ATTEMPTS - failedAttempts;
+        toast.error(
+          error.message || `Credenciales incorrectas. Te quedan ${left} intento${left !== 1 ? 's' : ''}.`
+        );
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ ACTUALIZADO PARA USAR EL SERVICIO NUEVO
-  const handleRequestAccess = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
+  // ── Recuperar contraseña ───────────────────────────────────────────────────
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error('Escribe tu correo en el campo de arriba y luego haz clic aquí.');
+      return;
+    }
     try {
-      // ✅ USAR EL SERVICIO NUEVO
-      await requestService.createRequest({
-        email: requestData.email,
-        name: requestData.name,
-        phone: requestData.phone,
-        message: requestData.message
-      });
-
-      toast.success('¡Solicitud enviada! Un administrador revisará tu petición.');
-      setShowRequestAccess(false);
-      setRequestData({ email: '', name: '', phone: '', message: '' });
+      await sendPasswordResetEmail(auth, email.trim());
+      toast.success('Revisa tu correo: te enviamos el enlace de recuperación.');
     } catch (error) {
-      console.error('Error enviando solicitud:', error);
-      toast.error(error.message || 'Error al enviar solicitud. Intenta de nuevo.');
-    } finally {
-      setLoading(false);
+      const messages = {
+        'auth/user-not-found': 'No encontramos una cuenta con ese correo.',
+        'auth/invalid-email':  'El correo no tiene un formato válido.',
+      };
+      toast.error(messages[error.code] || 'Error al enviar el correo. Intenta de nuevo.');
     }
   };
 
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 relative overflow-hidden">
       {/* Decoración de fondo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-yellow-600/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-20 right-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+        <div
+          className="absolute bottom-20 left-20 w-96 h-96 bg-yellow-600/10 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        />
       </div>
 
       <motion.div
@@ -98,191 +131,102 @@ const AuthPage = () => {
             Acceso Autorizado
           </h1>
           <p className="text-slate-400 text-sm">
-            Solo para agentes y personal de Rincón Bedoya & Asociados
+            Solo para agentes y personal de Rincón Bedoya &amp; Asociados
           </p>
         </div>
 
         {/* Formulario de Login */}
-        {!showRequestAccess ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-slate-800/50 rounded-3xl p-8 shadow-2xl"
-          >
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Correo electrónico
-                </label>
-                <div className="relative group">
-                  <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3.5 
-                               focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                               placeholder:text-slate-600"
-                    placeholder="tu@correo.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Contraseña
-                </label>
-                <div className="relative group">
-                  <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3.5 
-                               focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                               placeholder:text-slate-600"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-yellow-400 via-primary to-yellow-600 text-slate-950 font-bold 
-                           rounded-xl py-3.5 hover:shadow-xl hover:shadow-primary/40 
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300
-                           hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {loading ? 'Verificando acceso...' : 'Ingresar al panel'}
-              </button>
-            </form>
-
-            <div className="mt-6 pt-6 border-t border-slate-800/50 text-center">
-              <button
-                onClick={() => setShowRequestAccess(true)}
-                className="text-sm text-slate-400 hover:text-primary transition-colors font-medium"
-              >
-                ¿No tienes acceso? <span className="text-primary">Solicitar autorización →</span>
-              </button>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-slate-800/50 rounded-3xl p-8 shadow-2xl"
+        >
+          {/* Banner de bloqueo */}
+          {isBlocked && (
+            <div className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-800/60 text-red-300 text-sm text-center">
+              ⚠️ Demasiados intentos. Espera{' '}
+              <span className="font-bold">{blockSecondsLeft}s</span>{' '}
+              para volver a intentarlo.
             </div>
-          </motion.div>
-        ) : (
-          // ✅ FORMULARIO DE SOLICITUD - ACTUALIZADO CON TELÉFONO
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-slate-800/50 rounded-3xl p-8 shadow-2xl"
-          >
-            <h2 className="text-2xl font-bold text-light mb-6 flex items-center gap-2">
-              <FaUser className="text-primary" />
-              Solicitar acceso
-            </h2>
-            
-            <form onSubmit={handleRequestAccess} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Correo electrónico <span className="text-red-500">*</span>
-                </label>
-                <div className="relative group">
-                  <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
-                  <input
-                    type="email"
-                    value={requestData.email}
-                    onChange={(e) => setRequestData({...requestData, email: e.target.value})}
-                    className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3 
-                               focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                               placeholder:text-slate-600"
-                    placeholder="tu@correo.com"
-                    required
-                  />
-                </div>
-              </div>
+          )}
 
-              {/* Nombre */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Nombre completo <span className="text-red-500">*</span>
-                </label>
-                <div className="relative group">
-                  <FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
-                  <input
-                    type="text"
-                    value={requestData.name}
-                    onChange={(e) => setRequestData({...requestData, name: e.target.value})}
-                    className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3 
-                               focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                               placeholder:text-slate-600"
-                    placeholder="Juan Pérez"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* ✅ TELÉFONO - NUEVO */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Teléfono (opcional)
-                </label>
-                <div className="relative group">
-                  <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
-                  <input
-                    type="tel"
-                    value={requestData.phone}
-                    onChange={(e) => setRequestData({...requestData, phone: e.target.value})}
-                    className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3 
-                               focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                               placeholder:text-slate-600"
-                    placeholder="310 123 4567"
-                  />
-                </div>
-              </div>
-
-              {/* Motivo */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-2">
-                  Motivo de la solicitud <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={requestData.message}
-                  onChange={(e) => setRequestData({...requestData, message: e.target.value})}
-                  className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl px-4 py-3 
+          <form onSubmit={handleLogin} className="space-y-5">
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">
+                Correo electrónico
+              </label>
+              <div className="relative group">
+                <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3.5
                              focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
-                             placeholder:text-slate-600 resize-none"
-                  rows="4"
-                  placeholder="Cuéntanos por qué necesitas acceso..."
+                             placeholder:text-slate-600"
+                  placeholder="tu@correo.com"
                   required
+                  autoComplete="email"
                 />
               </div>
+            </div>
 
-              {/* Botones */}
-              <div className="flex gap-3 pt-2">
+            {/* Contraseña */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-slate-300">
+                  Contraseña
+                </label>
                 <button
                   type="button"
-                  onClick={() => setShowRequestAccess(false)}
-                  disabled={loading}
-                  className="flex-1 bg-slate-800 text-slate-300 font-semibold rounded-xl py-3 
-                             hover:bg-slate-700 transition-all disabled:opacity-50"
+                  onClick={handleForgotPassword}
+                  className="text-xs text-slate-400 hover:text-primary transition-colors"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-gradient-to-r from-yellow-400 via-primary to-yellow-600 text-slate-950 font-bold 
-                             rounded-xl py-3 hover:shadow-xl hover:shadow-primary/40 transition-all disabled:opacity-50
-                             hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  {loading ? 'Enviando...' : 'Enviar solicitud'}
+                  ¿Olvidé mi contraseña?
                 </button>
               </div>
-            </form>
-          </motion.div>
-        )}
+              <div className="relative group">
+                <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-12 pr-4 py-3.5
+                             focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all
+                             placeholder:text-slate-600"
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading || isBlocked}
+              className="w-full bg-gradient-to-r from-yellow-400 via-primary to-yellow-600 text-slate-950 font-bold
+                         rounded-xl py-3.5 hover:shadow-xl hover:shadow-primary/40
+                         disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300
+                         hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {loading ? 'Verificando acceso...' : isBlocked ? `Bloqueado (${blockSecondsLeft}s)` : 'Ingresar al panel'}
+            </button>
+          </form>
+
+          {/* Solicitar acceso — link directo a /solicitar-acceso */}
+          <div className="mt-6 pt-6 border-t border-slate-800/50 text-center">
+            <Link
+              to="/solicitar-acceso"
+              className="text-sm text-slate-400 hover:text-primary transition-colors font-medium"
+            >
+              ¿No tienes acceso?{' '}
+              <span className="text-primary">Solicitar autorización →</span>
+            </Link>
+          </div>
+        </motion.div>
 
         {/* Volver al inicio */}
         <motion.div
@@ -291,13 +235,13 @@ const AuthPage = () => {
           transition={{ delay: 0.5 }}
           className="mt-6 text-center"
         >
-          <a
-            href="/"
+          <Link
+            to="/"
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-primary transition-colors font-medium"
           >
             <FaArrowLeft className="text-xs" />
             Volver al inicio
-          </a>
+          </Link>
         </motion.div>
       </motion.div>
     </div>
