@@ -17,32 +17,19 @@ const ref = (id) => doc(db, COLLECTION, id);
 export const visitService = {
 
   // ── Tiempo real ───────────────────────────────────────────
-  //
-  // NOTA: orderBy('createdAt','desc') sobre la colección completa requiere
-  // un índice compuesto en Firestore.  Si el listener falla con un error
-  // de índice, Firebase imprime en consola el link directo para crearlo
-  // en un solo clic.  Como fallback usamos getDocs sin orderBy si
-  // el índice aún no existe.
   subscribeAll(onData, onError) {
     const q = query(col(), orderBy('createdAt', 'desc'));
-
     const unsub = onSnapshot(
       q,
       { includeMetadataChanges: false },
-      (snap) => {
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        onData(data);
-      },
+      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => {
-        // Si el error es de índice faltante, hacemos un fetch puntual sin orden
-        // y mostramos un warning en consola con el link al índice.
         if (err?.code === 'failed-precondition' || err?.message?.includes('index')) {
           console.warn(
             '⚠️  visitService: falta índice compuesto en Firestore.\n' +
-            'Abre el link que aparece arriba para crearlo en un clic.\n' +
+            'Abre el link de arriba para crearlo en un clic.\n' +
             'Mientras tanto se carga sin ordenar.',
           );
-          // fallback: getDocs sin orderBy
           getDocs(col())
             .then((snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
             .catch((e) => onError?.(e));
@@ -51,12 +38,22 @@ export const visitService = {
         }
       },
     );
-
     return unsub;
   },
 
-  // ── Solicitar visita (escribe en /visits + espejo en /appointments) ──
+  // ── Solicitar visita (formulario público — usuario NO autenticado) ──────
+  //
+  // REGLAS de Firestore:
+  //   /visits        → allow create: if true;               ✅ siempre funciona
+  //   /appointments  → allow write: if isSignedIn();         ❌ usuario anónimo FALLA
+  //   /users         → allow read: if isSignedIn();          ❌ usuario anónimo FALLA
+  //   /notifications → allow create: if isSignedIn();        ❌ usuario anónimo FALLA
+  //
+  // Las tres operaciones posteriores son "best-effort": si fallan solo
+  // emiten un console.warn y NO relanzar el error, de modo que el visitante
+  // siempre ve la pantalla de "¡Solicitud enviada!" aunque no esté autenticado.
   async requestVisit(payload) {
+    // 1. Escritura principal — la única que DEBE funcionar
     const visitRef = await addDoc(col(), {
       ...payload,
       sourceCollection: 'visits',
@@ -64,7 +61,7 @@ export const visitService = {
       updatedAt: serverTimestamp(),
     });
 
-    // Espejo en /appointments (best-effort)
+    // 2. Espejo en /appointments (best-effort)
     try {
       await addDoc(collection(db, 'appointments'), {
         visitId:          visitRef.id,
@@ -85,11 +82,11 @@ export const visitService = {
         createdAt:        serverTimestamp(),
         updatedAt:        serverTimestamp(),
       });
-    } catch (_) {
-      console.warn('visitService: no se pudo crear espejo en appointments');
+    } catch (e) {
+      console.warn('visitService: espejo en /appointments omitido (usuario no autenticado):', e.code);
     }
 
-    // Notificar admins
+    // 3. Notificar admins (best-effort — requiere isSignedIn para leer /users)
     try {
       const adminsSnap = await getDocs(
         query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)),
@@ -105,12 +102,14 @@ export const visitService = {
           }),
         ),
       );
-    } catch (_) {}
+    } catch (e) {
+      console.warn('visitService: notificaciones a admins omitidas (usuario no autenticado):', e.code);
+    }
 
     return visitRef.id;
   },
 
-  // ── Lecturas puntuales ────────────────────────────────────
+  // ── Lecturas puntuales ────────────────────────────────────────────────
   async getAllVisits() {
     const snap = await getDocs(query(col(), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -130,7 +129,7 @@ export const visitService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  // ── Actualización genérica de estado ─────────────────────
+  // ── Actualización genérica de estado ─────────────────────────────────
   async updateStatus(visitId, newStatus, adminNotes = '') {
     await updateDoc(ref(visitId), {
       status:    newStatus,
@@ -139,7 +138,7 @@ export const visitService = {
     });
   },
 
-  // ── Sincronizar espejo en /appointments ───────────────────
+  // ── Sincronizar espejo en /appointments ───────────────────────────────
   async syncAppointmentStatus(visitId, newStatus, adminNotes = '') {
     try {
       const snap = await getDocs(
@@ -153,7 +152,7 @@ export const visitService = {
     } catch (_) {}
   },
 
-  // ── Actualización genérica de campos ─────────────────────
+  // ── Actualización genérica de campos ─────────────────────────────────
   async updateVisit(visitId, data) {
     await updateDoc(ref(visitId), { ...data, updatedAt: serverTimestamp() });
     if (data.agentId || data.agentName || data.agentEmail) {
@@ -179,7 +178,7 @@ export const visitService = {
     await deleteDoc(ref(visitId));
   },
 
-  // ── Aprobar visita ────────────────────────────────────────
+  // ── Aprobar visita ────────────────────────────────────────────────────
   async approveVisit(visit, adminNotes = '', agentData = {}) {
     const updatePayload = {
       status:     VISIT_STATUS.APPROVED,
@@ -192,7 +191,6 @@ export const visitService = {
     };
     await updateDoc(ref(visit.id), updatePayload);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.APPROVED, adminNotes);
-
     if (visit.clientEmail) {
       await notificationService.createNotification({
         userId:    visit.clientEmail,
@@ -214,7 +212,7 @@ export const visitService = {
     }
   },
 
-  // ── Rechazar visita ───────────────────────────────────────
+  // ── Rechazar visita ───────────────────────────────────────────────────
   async rejectVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
@@ -229,13 +227,13 @@ export const visitService = {
     }
   },
 
-  // ── Completar visita ──────────────────────────────────────
+  // ── Completar visita ──────────────────────────────────────────────────
   async completeVisit(visitId, adminNotes = '') {
     await this.updateStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
   },
 
-  // ── Proponer nueva hora / reagendar ───────────────────────
+  // ── Proponer nueva hora / reagendar ───────────────────────────────────
   async rescheduleVisit(visit, proposedDate, proposedTime, adminNotes = '') {
     const updatePayload = {
       status:        VISIT_STATUS.RESCHEDULED,
@@ -246,11 +244,7 @@ export const visitService = {
       rescheduledAt: serverTimestamp(),
     };
     await updateDoc(ref(visit.id ?? visit), updatePayload);
-    await this.syncAppointmentStatus(
-      visit.id ?? visit,
-      VISIT_STATUS.RESCHEDULED,
-      adminNotes,
-    );
+    await this.syncAppointmentStatus(visit.id ?? visit, VISIT_STATUS.RESCHEDULED, adminNotes);
     const clientEmail = typeof visit === 'object' ? visit.clientEmail : null;
     if (clientEmail) {
       await notificationService.createNotification({
@@ -263,7 +257,7 @@ export const visitService = {
     }
   },
 
-  // ── Calendario (suscripción en tiempo real) ───────────────
+  // ── Calendario (suscripción en tiempo real) ───────────────────────────
   subscribeCalendar(onData, onError) {
     const q = query(
       col(),
@@ -282,7 +276,7 @@ export const visitService = {
     );
   },
 
-  // ── Calendario appointments (sin espejo de visits) ────────
+  // ── Calendario appointments (sin espejo de visits) ────────────────────
   subscribeCalendarAppointments(onData, onError) {
     const q = query(
       collection(db, 'appointments'),
