@@ -6,15 +6,29 @@ import toast from 'react-hot-toast';
 /**
  * useVisits — hook para la página de administración de visitas.
  *
- * Comportamiento por rol:
- *   admin  → ve TODAS las visitas (subscribeAll)
- *   member → ve SOLO las visitas donde agentEmail == su email (subscribeByAgent)
+ * LÓGICA DE VISIBILIDAD POR ROL:
  *
- * API pública:
- * { visits, loading, error, counts, approve, reject, complete, reschedule, remove, reload }
+ *  ┌──────────────────────────────────────────────────────────────────┐
+ *  │ admin   → ve TODAS las visitas siempre.                          │
+ *  │                                                                  │
+ *  │ member  → ve DOS grupos:                                         │
+ *  │   1. Visitas PENDIENTES (todos los members las ven para poder    │
+ *  │      "tomarlas" aprobándolas).                                   │
+ *  │   2. Visitas asignadas a ÉL (agentEmail == su email), sin        │
+ *  │      importar el estado.                                         │
+ *  │                                                                  │
+ *  │   En cuanto un member aprueba una visita → se guarda su email    │
+ *  │   como agentEmail → esa visita desaparece de la lista de         │
+ *  │   PENDIENTES para todos los demás, y aparece solo en la lista    │
+ *  │   del agente asignado.                                           │
+ *  └──────────────────────────────────────────────────────────────────┘
+ *
+ * Cuando el member aprueba, el hook pasa su propio usuario como agentData
+ * para que el servicio lo guarde en el documento.
  */
 export function useVisits() {
   const { user, role } = useAuth();
+
   const [visits,  setVisits]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
@@ -24,36 +38,58 @@ export function useVisits() {
     if (!user) return;
     isMounted.current = true;
 
-    let unsub = () => {};
+    const safeSet = (fn) => (...args) => { if (isMounted.current) fn(...args); };
 
-    const onData = (data) => {
-      if (!isMounted.current) return;
-      setVisits(data);
-      setLoading(false);
-      setError(null);
-    };
-
-    const onError = (err) => {
-      if (!isMounted.current) return;
-      console.error('useVisits error:', err);
+    const onError = safeSet((err) => {
+      console.error('useVisits:', err);
       setError(err);
       setLoading(false);
       toast.error('Error al cargar las visitas');
-    };
+    });
+
+    let unsub = () => {};
 
     try {
-      // Admin ve todo — member ve solo sus visitas asignadas
       if (role === 'admin') {
-        unsub = visitService.subscribeAll(onData, onError);
+        // Admin: suscripción única a todo
+        unsub = visitService.subscribeAll(
+          safeSet((data) => { setVisits(data); setLoading(false); setError(null); }),
+          onError,
+        );
       } else {
-        // member: filtra por su propio email
-        unsub = visitService.subscribeByAgent(user.email, onData, onError);
+        // Member: combina pendientes + sus visitas asignadas (sin duplicados)
+        let pending  = [];
+        let assigned = [];
+
+        const merge = () => {
+          // Pendientes sin agente asignado + las propias (ya asignadas a él)
+          const pendingWithoutAgent = pending.filter((v) => !v.agentEmail);
+          const byId = new Map();
+          [...pendingWithoutAgent, ...assigned].forEach((v) => byId.set(v.id, v));
+          const merged = Array.from(byId.values()).sort(
+            (a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
+          );
+          if (isMounted.current) {
+            setVisits(merged);
+            setLoading(false);
+            setError(null);
+          }
+        };
+
+        const unsubPending = visitService.subscribePending(
+          (data) => { pending = data; merge(); },
+          onError,
+        );
+        const unsubAssigned = visitService.subscribeByAgent(
+          user.email,
+          (data) => { assigned = data; merge(); },
+          onError,
+        );
+
+        unsub = () => { unsubPending(); unsubAssigned(); };
       }
     } catch (err) {
-      if (isMounted.current) {
-        setError(err);
-        setLoading(false);
-      }
+      if (isMounted.current) { setError(err); setLoading(false); }
     }
 
     return () => {
@@ -68,53 +104,57 @@ export function useVisits() {
     [visits],
   );
 
+  // ── approve ──────────────────────────────────────────────────────────
+  // Si es member, se auto-asigna como agente al aprobar.
   const approve = useCallback(async (visit, adminNotes = '', agentData = {}) => {
     try {
-      await visitService.approveVisit(visit, adminNotes, agentData);
+      let finalAgentData = agentData;
+
+      // Si el que aprueba es un member y no se eligió otro agente,
+      // se asigna a sí mismo automáticamente.
+      if (role === 'member' && !agentData.agentId && user) {
+        finalAgentData = {
+          agentId:    user.uid,
+          agentName:  user.displayName || user.email,
+          agentEmail: user.email,
+        };
+      }
+
+      await visitService.approveVisit(visit, adminNotes, finalAgentData);
       toast.success('Visita aprobada ✅');
     } catch (e) {
       console.error(e);
       toast.error('Error al aprobar la visita');
     }
-  }, []);
+  }, [user, role]);
 
   const reject = useCallback(async (visit, adminNotes = '') => {
     try {
       await visitService.rejectVisit(visit, adminNotes);
       toast.success('Visita rechazada');
-    } catch {
-      toast.error('Error al rechazar la visita');
-    }
+    } catch { toast.error('Error al rechazar la visita'); }
   }, []);
 
   const complete = useCallback(async (visitId, adminNotes = '') => {
     try {
       await visitService.completeVisit(visitId, adminNotes);
       toast.success('Visita marcada como completada 🏁');
-    } catch {
-      toast.error('Error al completar la visita');
-    }
+    } catch { toast.error('Error al completar la visita'); }
   }, []);
 
   const reschedule = useCallback(async (visit, proposedDate, proposedTime, adminNotes = '') => {
     try {
       await visitService.rescheduleVisit(visit, proposedDate, proposedTime, adminNotes);
       toast.success('Nueva fecha enviada al cliente 📅');
-    } catch {
-      toast.error('Error al proponer nueva fecha');
-    }
+    } catch { toast.error('Error al proponer nueva fecha'); }
   }, []);
 
   const remove = useCallback(async (visitId) => {
     try {
       await visitService.deleteVisit(visitId);
       toast.success('Visita eliminada');
-    } catch {
-      toast.error('Error al eliminar la visita');
-    }
+    } catch { toast.error('Error al eliminar la visita'); }
   }, []);
 
-  const reload = useCallback(() => {}, []);
-
-  return { visits, loading, error, counts, approve, reject, complete, reschedule, remove, reload };
+  return { visits, loading, error, counts, approve, reject, complete, reschedule, remove };
 }
