@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaCalendarCheck, FaFilter, FaSync } from 'react-icons/fa';
+import { FaCalendarCheck } from 'react-icons/fa';
 import { useVisits } from '../hooks/useVisits';
 import VisitCard from '../components/VisitCard';
 import { VISIT_STATUS, VISIT_STATUS_LABELS } from '../types/visit.types';
 import { db } from '../../../core/config/firebase.config';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
-// ── Carga agentes (admin + member) una sola vez ───────────────
+// ── Cargar agentes (admin + member) una sola vez ──────────────────────────
 async function fetchAgents() {
   const [admins, members] = await Promise.all([
     getDocs(query(collection(db, 'users'), where('role', '==', 'admin'))),
@@ -19,20 +19,29 @@ async function fetchAgents() {
   ];
 }
 
+// Filtros disponibles (incluye reagendadas)
 const STATUS_FILTERS = [
-  { label: 'Todas',      value: 'all' },
-  { label: 'Pendientes', value: VISIT_STATUS.PENDING },
-  { label: 'Aprobadas',  value: VISIT_STATUS.APPROVED },
-  { label: 'Completadas',value: VISIT_STATUS.COMPLETED },
-  { label: 'Rechazadas', value: VISIT_STATUS.REJECTED },
+  { label: 'Todas',             value: 'all' },
+  { label: 'Pendientes',        value: VISIT_STATUS.PENDING },
+  { label: 'Aprobadas',         value: VISIT_STATUS.APPROVED },
+  { label: 'Nueva hora prop.',  value: VISIT_STATUS.RESCHEDULED },
+  { label: 'Completadas',       value: VISIT_STATUS.COMPLETED },
+  { label: 'Rechazadas',        value: VISIT_STATUS.REJECTED },
+];
+
+// KPIs en el encabezado (sin rescheduled — se muestra en filtros)
+const KPI_STATUSES = [
+  VISIT_STATUS.PENDING,
+  VISIT_STATUS.APPROVED,
+  VISIT_STATUS.RESCHEDULED,
+  VISIT_STATUS.COMPLETED,
 ];
 
 export default function VisitsPage() {
-  const { visits, loading, counts, approve, reject, complete, remove } = useVisits();
-  const [filter,  setFilter]  = useState('all');
-  const [agents,  setAgents]  = useState([]);
+  const { visits, loading, counts, approve, reject, complete, reschedule, remove } = useVisits();
+  const [filter, setFilter] = useState('all');
+  const [agents, setAgents] = useState([]);
 
-  // 3B: cargar agentes al montar
   useEffect(() => {
     fetchAgents().then(setAgents).catch(console.error);
   }, []);
@@ -43,7 +52,8 @@ export default function VisitsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+
+      {/* ── Header ────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--color-text)' }}>
@@ -55,9 +65,9 @@ export default function VisitsPage() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* ── KPIs ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[VISIT_STATUS.PENDING, VISIT_STATUS.APPROVED, VISIT_STATUS.COMPLETED, VISIT_STATUS.REJECTED].map((s) => (
+        {KPI_STATUSES.map((s) => (
           <button
             key={s}
             onClick={() => setFilter(filter === s ? 'all' : s)}
@@ -73,7 +83,7 @@ export default function VisitsPage() {
         ))}
       </div>
 
-      {/* Filtros */}
+      {/* ── Filtros ────────────────────────────────────────────────── */}
       <div className="flex gap-2 flex-wrap">
         {STATUS_FILTERS.map((f) => (
           <button
@@ -91,10 +101,10 @@ export default function VisitsPage() {
         ))}
       </div>
 
-      {/* Lista */}
+      {/* ── Lista ──────────────────────────────────────────────────── */}
       {loading ? (
         <div className="space-y-3">
-          {[1,2,3].map((i) => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-32 rounded-2xl" />
           ))}
         </div>
@@ -111,10 +121,18 @@ export default function VisitsPage() {
                 key={visit.id}
                 visit={visit}
                 agents={agents}
-                onApprove={approve}
-                onReject={reject}
-                onComplete={complete}
-                onDelete={remove}
+                onApprove={(v, notes, agentData) => approve(v, notes, agentData)}
+                onReject={(v, notes)              => reject(v, notes)}
+                onComplete={(visitId, notes)       => complete(visitId, notes)}
+                onReschedule={(visitId, date, time, notes) =>
+                  reschedule(
+                    visits.find((v) => v.id === visitId) ?? { id: visitId },
+                    date,
+                    time,
+                    notes,
+                  )
+                }
+                onDelete={(visitId) => remove(visitId)}
               />
             ))}
           </div>
