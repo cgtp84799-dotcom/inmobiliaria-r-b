@@ -764,6 +764,11 @@ const PropertyDetailPage = () => {
     { label: property.title || "Detalle de propiedad" },
   ];
 
+  // ✔ La propiedad solo acepta visitas si su status lo permite
+  const acceptsVisits = ![
+    "vendida", "sold", "inactiva", "draft", "eliminada",
+  ].includes(String(property?.status || "").toLowerCase());
+
   return (
     <div className="min-h-screen bg-dark">
       <Helmet>
@@ -1085,13 +1090,44 @@ const PropertyDetailPage = () => {
             </motion.div>
           </div>
 
+          {/* ─ Panel lateral sticky ─ */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
             className="lg:col-span-1"
           >
-            <div className="lg:sticky lg:top-6">
+            <div className="lg:sticky lg:top-6 space-y-4">
+
+              {/* Botón Agendar Visita — solo si la propiedad sigue disponible */}
+              {acceptsVisits && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className="bg-slate-900 border border-primary/40 rounded-xl p-4 sm:p-5"
+                >
+                  <p className="text-slate-400 text-xs mb-3 text-center">
+                    ¿Te interesa esta propiedad?
+                  </p>
+                  <Link
+                    to={`/agendar-visita?propertyId=${property.id}`}
+                    className="w-full flex items-center justify-center gap-2.5
+                      py-3.5 px-5 rounded-xl font-bold text-slate-950
+                      bg-primary hover:bg-primary/90 transition-all duration-200
+                      shadow-lg shadow-primary/20 hover:shadow-primary/40
+                      text-sm sm:text-base"
+                  >
+                    <FaCalendarAlt size={16} />
+                    Agendar visita
+                  </Link>
+                  <p className="text-slate-600 text-xs text-center mt-2.5">
+                    Gratis · Sin compromiso · Te confirmamos en horas
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Formulario de contacto rápido */}
               <PropertyContactForm
                 propertyTitle={property.title}
                 propertyId={property.id}
