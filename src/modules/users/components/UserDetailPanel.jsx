@@ -15,7 +15,7 @@ import {
   FaToggleOn, FaToggleOff, FaKey, FaHome,
   FaCalendarCheck, FaFileContract, FaChartBar,
   FaHistory, FaCheckCircle, FaClock, FaTimesCircle as FaX,
-  FaWifi,
+  FaWifi, FaCircle,
 } from 'react-icons/fa';
 import {
   USER_ROLES, USER_ROLE_LABELS, USER_ROLE_BADGE_CLASSES,
@@ -24,7 +24,7 @@ import {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (ts) => {
-  if (!ts) return 'Nunca';
+  if (!ts) return null;
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
 };
@@ -42,54 +42,65 @@ const fmtShort = (ts) => {
 };
 
 const ROLE_ICONS = {
-  [USER_ROLES.ADMIN]:  <FaUserShield className="text-red-400" />,
-  [USER_ROLES.MEMBER]: <FaUsers      className="text-green-400" />,
+  [USER_ROLES.ADMIN]:  <FaUserShield className="text-rose-400" />,
+  [USER_ROLES.MEMBER]: <FaUsers      className="text-emerald-400" />,
   [USER_ROLES.VIEWER]: <FaEye        className="text-slate-400" />,
 };
 
 const CONTRACT_STATUS_STYLES = {
-  vigente:   'bg-green-500/10 text-green-400 border-green-500/30',
-  borrador:  'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  vencido:   'bg-red-500/10   text-red-400   border-red-500/30',
-  cancelado: 'bg-red-500/10   text-red-400   border-red-500/30',
+  vigente:   'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  borrador:  'bg-slate-500/15   text-slate-400   border-slate-500/25',
+  vencido:   'bg-rose-500/15    text-rose-400    border-rose-500/25',
+  cancelado: 'bg-rose-500/15    text-rose-400    border-rose-500/25',
 };
 
 const ACTIVITY_ICONS = {
-  visit_approved:  <FaCheckCircle   className="text-green-400 text-xs" />,
-  visit_rejected:  <FaX             className="text-red-400 text-xs" />,
+  visit_approved:  <FaCheckCircle   className="text-emerald-400 text-xs" />,
+  visit_rejected:  <FaX             className="text-rose-400 text-xs" />,
   visit_created:   <FaCalendarCheck className="text-blue-400 text-xs" />,
   contract_signed: <FaFileContract  className="text-primary text-xs" />,
-  property_added:  <FaHome          className="text-yellow-400 text-xs" />,
-  default:         <FaHistory       className="text-slate-400 text-xs" />,
+  property_added:  <FaHome          className="text-amber-400 text-xs" />,
+  default:         <FaHistory       className="text-slate-500 text-xs" />,
+};
+
+const VISIT_STATUS = {
+  approved: { label: 'Aprobada',  cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
+  pending:  { label: 'Pendiente', cls: 'bg-amber-500/15   text-amber-400   border-amber-500/25' },
+  rejected: { label: 'Rechazada', cls: 'bg-rose-500/15    text-rose-400    border-rose-500/25' },
 };
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-const KpiCard = ({ icon: Icon, value, label, color = 'primary', sublabel }) => (
-  <div className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60 flex flex-col items-center text-center gap-1">
-    <div className={`w-9 h-9 rounded-xl bg-${color}/10 flex items-center justify-center mb-1`}>
-      <Icon className={`text-${color}`} />
+const KpiCard = ({ icon: Icon, iconBgClass, iconClass, value, label, sublabel }) => (
+  <div className="rounded-2xl p-4 border border-white/[0.06] bg-white/[0.04] flex flex-col items-center text-center gap-1.5 hover:bg-white/[0.07] transition-colors">
+    <div className={`w-10 h-10 rounded-xl ${iconBgClass} flex items-center justify-center mb-0.5`}>
+      <Icon className={`${iconClass} text-base`} />
     </div>
-    <p className={`text-xl font-bold text-${color} tabular-nums`}>{value ?? '–'}</p>
-    <p className="text-xs text-slate-400 font-medium leading-tight">{label}</p>
+    <p className={`text-2xl font-bold tabular-nums ${iconClass}`}>{value ?? '–'}</p>
+    <p className="text-xs text-slate-300 font-semibold leading-tight">{label}</p>
     {sublabel && <p className="text-xs text-slate-500">{sublabel}</p>}
   </div>
 );
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 const InfoRow = ({ icon: Icon, label, value }) => {
-  if (!value || value === 'Nunca') return null;
+  if (!value) return null;
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-slate-800 last:border-0">
-      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+    <div className="flex items-center gap-3 py-3 border-b border-white/[0.05] last:border-0">
+      <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center flex-shrink-0">
         <Icon className="text-slate-400 text-xs" />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-[11px] text-slate-500 font-medium">{label}</p>
         <p className="text-sm text-slate-200 font-medium truncate">{value}</p>
       </div>
     </div>
   );
 };
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+const SectionLabel = ({ children }) => (
+  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">{children}</p>
+);
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const UserDetailPanel = ({
@@ -134,7 +145,8 @@ const UserDetailPanel = ({
         snap => {
           setVisits(snap.docs.map(d => ({ id: d.id, ...d.data() })));
           setStats(prev => ({ ...prev, visits: snap.size }));
-        }
+        },
+        (err) => console.warn('visits snapshot:', err.code)
       );
 
       const unsubContracts = onSnapshot(
@@ -143,12 +155,14 @@ const UserDetailPanel = ({
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           setContracts(data);
           setStats(prev => ({ ...prev, contracts: snap.size, contractsActive: data.filter(c => c.status === 'vigente').length }));
-        }
+        },
+        (err) => console.warn('contracts snapshot:', err.code)
       );
 
       const unsubActivity = onSnapshot(
         query(collection(db, 'notifications'), where('userId', '==', user.email), orderBy('createdAt', 'desc'), limit(15)),
-        snap => setActivity(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        snap => setActivity(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        (err) => console.warn('activity snapshot:', err.code)
       );
 
       setLoading(false);
@@ -167,10 +181,17 @@ const UserDetailPanel = ({
 
   const TABS = [
     { id: 'profile',     label: 'Perfil',      icon: <FaUsers          className="text-xs" /> },
-    { id: 'performance', label: 'Rendimiento', icon: <FaChartBar        className="text-xs" /> },
+    { id: 'performance', label: 'Métricas',    icon: <FaChartBar        className="text-xs" /> },
     { id: 'activity',    label: 'Actividad',   icon: <FaHistory         className="text-xs" /> },
     { id: 'contracts',   label: 'Contratos',   icon: <FaFileContract    className="text-xs" /> },
   ];
+
+  // Colores de rol para el gradiente del header
+  const roleGradient = {
+    [USER_ROLES.ADMIN]:  'from-rose-500/20 via-rose-500/5 to-transparent',
+    [USER_ROLES.MEMBER]: 'from-emerald-500/20 via-emerald-500/5 to-transparent',
+    [USER_ROLES.VIEWER]: 'from-slate-500/15 via-slate-500/5 to-transparent',
+  }[user.role] ?? 'from-slate-500/10 to-transparent';
 
   return (
     <AnimatePresence>
@@ -182,7 +203,7 @@ const UserDetailPanel = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
             onClick={onClose}
           />
 
@@ -192,57 +213,81 @@ const UserDetailPanel = ({
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md bg-slate-950 border-l border-slate-800 z-50 flex flex-col shadow-2xl"
+            transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+            className="fixed right-0 top-0 h-full w-full max-w-[420px] bg-[#0d1117] border-l border-white/[0.07] z-50 flex flex-col shadow-2xl"
           >
 
             {/* ─── Header ─── */}
-            <div className="relative flex-shrink-0 border-b border-slate-800">
-              {/* fondo degradado muy sutil */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/8 to-transparent pointer-events-none" />
+            <div className="relative flex-shrink-0">
+              {/* Gradiente según rol */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${roleGradient} pointer-events-none`} />
+              {/* Línea inferior sutil */}
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
 
-              {/* Fila superior: avatar + nombre + cerrar */}
-              <div className="relative flex items-center gap-4 px-5 pt-5 pb-4">
+              {/* Fila principal: avatar + datos + cerrar */}
+              <div className="relative flex items-start gap-4 px-5 pt-6 pb-5">
+                {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   {user.photoURL ? (
-                    <img src={user.photoURL} alt={displayName}
-                      className="w-14 h-14 rounded-2xl object-cover border-2 border-primary/30"
+                    <img
+                      src={user.photoURL}
+                      alt={displayName}
+                      className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/10"
                     />
                   ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/25 to-blue-500/15 flex items-center justify-center text-2xl font-bold text-primary border-2 border-primary/20">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/30 to-blue-600/20 flex items-center justify-center text-2xl font-bold text-white ring-2 ring-white/10">
                       {initial}
                     </div>
                   )}
+                  {/* Indicador online */}
                   {user.online && (
-                    <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-slate-950" />
+                    <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0d1117] shadow-lg shadow-emerald-500/40" />
                   )}
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-base font-bold text-white truncate leading-tight">{displayName}</h2>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{user.email}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${roleBadge}`}>
+                {/* Nombre + email + badges */}
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <h2 className="text-base font-bold text-white truncate leading-tight tracking-tight">
+                    {displayName}
+                  </h2>
+                  <p className="text-xs text-slate-400 truncate mt-0.5 mb-2.5">{user.email}</p>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {/* Badge rol */}
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${roleBadge}`}>
                       {ROLE_ICONS[user.role] ?? ROLE_ICONS[USER_ROLES.VIEWER]}
                       {USER_ROLE_LABELS[user.role] ?? 'Sin rol'}
                     </span>
-                    {user.online
-                      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/30">
-                          <FaWifi className="text-xs" /> En línea
-                        </span>
-                      : user.lastSeen && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs text-slate-400 border border-slate-700">
-                            {fmtShort(user.lastSeen)}
-                          </span>
-                        )
-                    }
+
+                    {/* Badge presencia */}
+                    {user.online ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                        <FaCircle className="text-[6px]" /> En línea
+                      </span>
+                    ) : user.lastSeen ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-slate-400 border border-white/[0.07] bg-white/[0.04]">
+                        {fmtShort(user.lastSeen)}
+                      </span>
+                    ) : null}
+
+                    {/* Badge estado activo/inactivo */}
+                    {user.status && (
+                      <span className={`inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border ${
+                        user.status === 'active'
+                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      }`}>
+                        {user.status === 'active' ? 'Activo' : 'Inactivo'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
+                {/* Cerrar */}
                 <button
                   onClick={onClose}
                   aria-label="Cerrar panel"
-                  className="w-8 h-8 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex items-center justify-center flex-shrink-0 self-start"
+                  className="w-8 h-8 rounded-xl hover:bg-white/[0.08] text-slate-500 hover:text-white transition-colors flex items-center justify-center flex-shrink-0"
                 >
                   <FaTimes className="text-sm" />
                 </button>
@@ -250,34 +295,34 @@ const UserDetailPanel = ({
 
               {/* Acciones rápidas */}
               {(onEdit || onChangeStatus || onResetPassword) && (
-                <div className="relative flex gap-2 px-5 pb-4">
+                <div className="relative flex gap-2 px-5 pb-5">
                   {onEdit && (
                     <button
                       onClick={() => onEdit(user)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-semibold transition-all border border-primary/20"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-semibold transition-all border border-primary/20 hover:border-primary/40"
                     >
-                      <FaEdit className="text-xs" /> Editar
+                      <FaEdit className="text-xs" /> Editar perfil
                     </button>
                   )}
                   {onChangeStatus && (
                     <button
                       onClick={() => onChangeStatus(user)}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all border ${
                         user.status === 'active'
-                          ? 'bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border-yellow-500/20'
-                          : 'bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/20'
+                          ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/20 hover:border-amber-500/40'
+                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40'
                       }`}
                     >
                       {user.status === 'active'
-                        ? <><FaToggleOff className="text-xs" /> Desactivar</>
-                        : <><FaToggleOn  className="text-xs" /> Activar</>}
+                        ? <><FaToggleOff className="text-sm" /> Desactivar</>
+                        : <><FaToggleOn  className="text-sm" /> Activar</>}
                     </button>
                   )}
                   {onResetPassword && (
                     <button
                       onClick={() => onResetPassword(user)}
                       title="Resetear contraseña"
-                      className="w-9 inline-flex items-center justify-center py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all border border-slate-700"
+                      className="w-10 inline-flex items-center justify-center py-2.5 bg-white/[0.05] hover:bg-white/[0.09] text-slate-400 hover:text-white rounded-xl text-xs transition-all border border-white/[0.07]"
                     >
                       <FaKey className="text-xs" />
                     </button>
@@ -287,13 +332,15 @@ const UserDetailPanel = ({
             </div>
 
             {/* ─── Tabs ─── */}
-            <div className="flex border-b border-slate-800 flex-shrink-0">
+            <div className="flex border-b border-white/[0.06] flex-shrink-0 bg-black/20">
               {TABS.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition-colors relative ${
-                    activeTab === tab.id ? 'text-primary' : 'text-slate-500 hover:text-slate-300'
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors relative ${
+                    activeTab === tab.id
+                      ? 'text-white'
+                      : 'text-slate-600 hover:text-slate-400'
                   }`}
                 >
                   {tab.icon}
@@ -301,7 +348,7 @@ const UserDetailPanel = ({
                   {activeTab === tab.id && (
                     <motion.div
                       layoutId="tab-indicator"
-                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full"
+                      className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-t-full"
                     />
                   )}
                 </button>
@@ -309,99 +356,133 @@ const UserDetailPanel = ({
             </div>
 
             {/* ─── Contenido ─── */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               <AnimatePresence mode="wait">
 
-                {/* PERFIL */}
+                {/* ══ PERFIL ══ */}
                 {activeTab === 'profile' && (
                   <motion.div
                     key="profile"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="p-5 space-y-5"
+                    className="p-5 space-y-6"
                   >
                     {/* Rol */}
                     <section>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rol y permisos</p>
-                      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                        <div className="flex items-center gap-2 mb-1.5">
+                      <SectionLabel>Rol y acceso</SectionLabel>
+                      <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                        <div className="flex items-center gap-2.5 mb-2">
                           {ROLE_ICONS[user.role] ?? ROLE_ICONS[USER_ROLES.VIEWER]}
-                          <span className="text-white font-semibold text-sm">{USER_ROLE_LABELS[user.role] ?? 'Sin rol'}</span>
+                          <span className="text-white font-bold text-sm">{USER_ROLE_LABELS[user.role] ?? 'Sin rol'}</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">{USER_ROLE_DESCRIPTIONS[user.role]}</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          {USER_ROLE_DESCRIPTIONS[user.role] ?? 'Sin descripción de rol'}
+                        </p>
                       </div>
                     </section>
 
                     {/* Contacto */}
                     <section>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Información de contacto</p>
-                      <div className="bg-slate-900 rounded-xl border border-slate-800 px-4 py-1">
-                        <InfoRow icon={FaEnvelope}    label="Correo"         value={user.email} />
-                        <InfoRow icon={FaPhone}       label="Teléfono"       value={user.phone} />
-                        <InfoRow icon={FaCalendarAlt} label="Miembro desde"  value={fmt(user.createdAt)} />
-                        <InfoRow icon={FaCalendarAlt} label="Última sesión"  value={fmt(user.lastSeen)} />
+                      <SectionLabel>Información de contacto</SectionLabel>
+                      <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] px-4 py-1">
+                        <InfoRow icon={FaEnvelope}    label="Correo electrónico" value={user.email} />
+                        <InfoRow icon={FaPhone}       label="Teléfono"           value={user.phone} />
+                        <InfoRow icon={FaCalendarAlt} label="Miembro desde"      value={fmt(user.createdAt)} />
+                        <InfoRow icon={FaCalendarAlt} label="Última sesión"      value={fmt(user.lastSeen)} />
                       </div>
                     </section>
 
                     {/* Visitas rápidas */}
                     {visits.length > 0 && (
                       <section>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Visitas recientes</p>
+                        <SectionLabel>Visitas recientes</SectionLabel>
                         <div className="space-y-2">
-                          {visits.slice(0, 4).map(v => (
-                            <div key={v.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-200 truncate">{v.propertyName || 'Propiedad'}</p>
-                                <p className="text-xs text-slate-500 truncate">{v.clientName || v.clientEmail || '–'}</p>
+                          {visits.slice(0, 4).map(v => {
+                            const st = VISIT_STATUS[v.status] ?? { label: v.status || '–', cls: 'bg-slate-700/40 text-slate-400 border-slate-700/50' };
+                            return (
+                              <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-200 truncate">{v.propertyName || 'Propiedad'}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">{v.clientName || v.clientEmail || '–'}</p>
+                                </div>
+                                <span className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex-shrink-0 ${st.cls}`}>
+                                  {st.label}
+                                </span>
                               </div>
-                              <span className={`text-xs px-2 py-0.5 rounded-md border font-medium flex-shrink-0 ${
-                                v.status === 'approved' ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                                : v.status === 'pending'  ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
-                                : v.status === 'rejected' ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                                : 'bg-slate-700/50 text-slate-400 border-slate-700'
-                              }`}>
-                                {v.status === 'approved' ? 'Aprobada'
-                                  : v.status === 'pending'  ? 'Pendiente'
-                                  : v.status === 'rejected' ? 'Rechazada'
-                                  : v.status || '–'}
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </section>
+                    )}
+
+                    {loading && (
+                      <div className="text-center py-6">
+                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                      </div>
                     )}
                   </motion.div>
                 )}
 
-                {/* RENDIMIENTO */}
+                {/* ══ MÉTRICAS ══ */}
                 {activeTab === 'performance' && (
                   <motion.div
                     key="performance"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="p-5 space-y-5"
+                    className="p-5 space-y-6"
                   >
-                    <div className="grid grid-cols-2 gap-3">
-                      <KpiCard icon={FaHome}          value={stats.properties}      label="Propiedades"        color="yellow-400" sublabel="asignadas" />
-                      <KpiCard icon={FaCalendarCheck} value={stats.visits}          label="Visitas totales"    color="blue-400"   sublabel="registradas" />
-                      <KpiCard icon={FaFileContract}  value={stats.contracts}       label="Contratos"         color="primary"   sublabel="creados" />
-                      <KpiCard icon={FaCheckCircle}   value={stats.contractsActive} label="Vigentes"          color="green-400"  sublabel="activos hoy" />
-                    </div>
+                    <section>
+                      <SectionLabel>Resumen de actividad</SectionLabel>
+                      <div className="grid grid-cols-2 gap-3">
+                        <KpiCard
+                          icon={FaHome}
+                          iconBgClass="bg-amber-500/15"
+                          iconClass="text-amber-400"
+                          value={stats.properties}
+                          label="Propiedades"
+                          sublabel="asignadas"
+                        />
+                        <KpiCard
+                          icon={FaCalendarCheck}
+                          iconBgClass="bg-blue-500/15"
+                          iconClass="text-blue-400"
+                          value={stats.visits}
+                          label="Visitas"
+                          sublabel="registradas"
+                        />
+                        <KpiCard
+                          icon={FaFileContract}
+                          iconBgClass="bg-primary/15"
+                          iconClass="text-primary"
+                          value={stats.contracts}
+                          label="Contratos"
+                          sublabel="creados"
+                        />
+                        <KpiCard
+                          icon={FaCheckCircle}
+                          iconBgClass="bg-emerald-500/15"
+                          iconClass="text-emerald-400"
+                          value={stats.contractsActive}
+                          label="Vigentes"
+                          sublabel="activos hoy"
+                        />
+                      </div>
+                    </section>
 
                     {visits.length > 0 && (
                       <section>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Visitas por estado</p>
+                        <SectionLabel>Visitas por estado</SectionLabel>
                         <div className="grid grid-cols-3 gap-2">
                           {[
-                            { label: 'Aprobadas',  count: visits.filter(v => v.status === 'approved').length, color: 'text-green-400',  bg: 'bg-green-500/10 border-green-900'  },
-                            { label: 'Pendientes', count: visits.filter(v => v.status === 'pending').length,  color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-900' },
-                            { label: 'Rechazadas', count: visits.filter(v => v.status === 'rejected').length, color: 'text-red-400',    bg: 'bg-red-500/10 border-red-900'    },
-                          ].map(({ label, count, color, bg }) => (
-                            <div key={label} className={`${bg} rounded-xl p-3 text-center border`}>
-                              <p className={`text-lg font-bold tabular-nums ${color}`}>{count}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+                            { label: 'Aprobadas',  count: visits.filter(v => v.status === 'approved').length, cls: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-900/50' },
+                            { label: 'Pendientes', count: visits.filter(v => v.status === 'pending').length,  cls: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-900/50' },
+                            { label: 'Rechazadas', count: visits.filter(v => v.status === 'rejected').length, cls: 'text-rose-400',    bg: 'bg-rose-500/10 border-rose-900/50' },
+                          ].map(({ label, count, cls, bg }) => (
+                            <div key={label} className={`${bg} rounded-xl p-3.5 text-center border`}>
+                              <p className={`text-xl font-bold tabular-nums ${cls}`}>{count}</p>
+                              <p className="text-xs text-slate-400 mt-1">{label}</p>
                             </div>
                           ))}
                         </div>
@@ -411,13 +492,13 @@ const UserDetailPanel = ({
                     {loading && (
                       <div className="text-center py-8">
                         <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Calculando estadísticas...</p>
+                        <p className="text-slate-500 text-xs">Calculando estadísticas...</p>
                       </div>
                     )}
                   </motion.div>
                 )}
 
-                {/* ACTIVIDAD */}
+                {/* ══ ACTIVIDAD ══ */}
                 {activeTab === 'activity' && (
                   <motion.div
                     key="activity"
@@ -427,31 +508,31 @@ const UserDetailPanel = ({
                     className="p-5"
                   >
                     {activity.length === 0 ? (
-                      <div className="text-center py-16">
-                        <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-slate-900 flex items-center justify-center">
-                          <FaHistory className="text-slate-600 text-xl" />
+                      <div className="text-center py-20">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                          <FaHistory className="text-slate-600 text-2xl" />
                         </div>
-                        <p className="text-slate-500 text-sm font-medium">Sin actividad registrada</p>
-                        <p className="text-slate-600 text-xs mt-1">Las notificaciones aparecerán aquí</p>
+                        <p className="text-slate-400 text-sm font-semibold">Sin actividad registrada</p>
+                        <p className="text-slate-600 text-xs mt-1.5">Las notificaciones aparecerán aquí</p>
                       </div>
                     ) : (
                       <div className="relative space-y-3">
-                        <div className="absolute left-4 top-0 bottom-0 w-px bg-slate-800" />
+                        <div className="absolute left-4 top-4 bottom-4 w-px bg-white/[0.06]" />
                         {activity.map((item, i) => (
                           <motion.div
                             key={item.id}
-                            initial={{ opacity: 0, x: -10 }}
+                            initial={{ opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.03 }}
                             className="flex gap-4 items-start pl-10 relative"
                           >
-                            <div className="absolute left-0 w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center">
+                            <div className="absolute left-0 w-8 h-8 rounded-full bg-[#0d1117] border border-white/[0.08] flex items-center justify-center shadow-sm">
                               {ACTIVITY_ICONS[item.type] ?? ACTIVITY_ICONS.default}
                             </div>
-                            <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-3">
+                            <div className="flex-1 bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:bg-white/[0.05] transition-colors">
                               <p className="text-xs font-semibold text-slate-200">{item.title || 'Notificación'}</p>
-                              {item.message && <p className="text-xs text-slate-500 mt-0.5">{item.message}</p>}
-                              <p className="text-xs text-slate-600 mt-1">{fmtShort(item.createdAt)}</p>
+                              {item.message && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.message}</p>}
+                              <p className="text-[11px] text-slate-600 mt-1.5">{fmtShort(item.createdAt)}</p>
                             </div>
                           </motion.div>
                         ))}
@@ -460,59 +541,59 @@ const UserDetailPanel = ({
                   </motion.div>
                 )}
 
-                {/* CONTRATOS */}
+                {/* ══ CONTRATOS ══ */}
                 {activeTab === 'contracts' && (
                   <motion.div
                     key="contracts"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="p-5 space-y-3"
+                    className="p-5 space-y-4"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contratos del agente</p>
-                      <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                      <SectionLabel>Contratos del agente</SectionLabel>
+                      <span className="text-xs text-primary font-bold bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20">
                         {stats.contracts} total · {stats.contractsActive} vigentes
                       </span>
                     </div>
 
                     {contracts.length === 0 ? (
-                      <div className="text-center py-16">
-                        <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-slate-900 flex items-center justify-center">
-                          <FaFileContract className="text-slate-600 text-xl" />
+                      <div className="text-center py-20">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                          <FaFileContract className="text-slate-600 text-2xl" />
                         </div>
-                        <p className="text-slate-500 text-sm font-medium">Sin contratos registrados</p>
-                        <p className="text-slate-600 text-xs mt-1">Los contratos asignados a este agente aparecerán aquí</p>
+                        <p className="text-slate-400 text-sm font-semibold">Sin contratos registrados</p>
+                        <p className="text-slate-600 text-xs mt-1.5">Los contratos asignados aparecerán aquí</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-2.5">
                         {contracts.map((c, i) => (
                           <motion.div
                             key={c.id}
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.03 }}
-                            className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-primary/30 transition-colors"
+                            transition={{ delay: i * 0.04 }}
+                            className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] hover:border-primary/20 transition-all"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-200 truncate">{c.propertyName || 'Propiedad'}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-100 truncate">{c.propertyName || 'Propiedad'}</p>
                                 <p className="text-xs text-slate-500 mt-0.5">Cliente: {c.clientName || c.clientEmail || '–'}</p>
                                 {c.value && (
-                                  <p className="text-xs text-primary font-bold mt-1">
+                                  <p className="text-sm text-primary font-bold mt-1.5">
                                     {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(c.value)}
                                   </p>
                                 )}
                               </div>
-                              <span className={`text-xs px-2 py-0.5 rounded-md border font-medium flex-shrink-0 ${
+                              <span className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex-shrink-0 ${
                                 CONTRACT_STATUS_STYLES[c.status] ?? CONTRACT_STATUS_STYLES.borrador
                               }`}>
-                                {c.status || 'Borrador'}
+                                {c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : 'Borrador'}
                               </span>
                             </div>
                             {c.endDate && (
-                              <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-800">
-                                <FaClock className="text-slate-600 text-xs" />
+                              <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/[0.05]">
+                                <FaClock className="text-slate-600 text-xs flex-shrink-0" />
                                 <p className="text-xs text-slate-500">Vence: {fmt(c.endDate)}</p>
                               </div>
                             )}

@@ -12,7 +12,6 @@ import { useAuth } from "../../../core/contexts/AuthContext";
 import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "../../../core/config/firebase.config";
 
-/* ── Tooltip semántico para Recharts ──────────────────────────────────── */
 const tooltipStyle = () => ({
   backgroundColor: "var(--color-surface-2, #1e293b)",
   border: "1px solid var(--color-border)",
@@ -20,17 +19,14 @@ const tooltipStyle = () => ({
   color: "var(--color-text)",
 });
 
-/* ── Colores de gráficas ───────────────────────────────────────── */
 const COLORS = ["#F4CA64", "#3B82F6", "#10B981", "#EF4444"];
 
-/* ── Animación helper ────────────────────────────────────────── */
 const cardAnim = (d) => ({
   initial: { opacity: 0, y: 14 },
   animate: { opacity: 1, y: 0 },
   transition: { delay: d },
 });
 
-/* ── Stat Card ──────────────────────────────────────────────── */
 function StatCard({ delay, iconBg, icon: Icon, iconColor, label, value, sub, subColor }) {
   return (
     <motion.div {...cardAnim(delay)} className="card-soft p-4 sm:p-5">
@@ -52,7 +48,6 @@ function StatCard({ delay, iconBg, icon: Icon, iconColor, label, value, sub, sub
   );
 }
 
-/* ── Chart Card ─────────────────────────────────────────────── */
 function ChartCard({ delay, title, badge, children }) {
   return (
     <motion.div {...cardAnim(delay)} className="card-soft p-5 sm:p-6">
@@ -65,7 +60,6 @@ function ChartCard({ delay, title, badge, children }) {
   );
 }
 
-/* ── Recent Item ─────────────────────────────────────────────── */
 function RecentItem({ iconBg, icon: Icon, iconColor, title, sub, right }) {
   return (
     <div className="card-inner flex items-center gap-3 p-3">
@@ -81,16 +75,14 @@ function RecentItem({ iconBg, icon: Icon, iconColor, title, sub, right }) {
   );
 }
 
-/* ── Empty State ─────────────────────────────────────────────── */
 const Empty = ({ msg }) => (
   <p className="t-muted text-sm text-center py-8">{msg}</p>
 );
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   DashboardPage
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const DashboardPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
+  const isAdmin = userProfile?.role === 'admin';
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     properties: 0, clients: 0, users: 0, requests: 0,
@@ -124,22 +116,38 @@ const DashboardPage = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const propertiesSnap = await getDocs(collection(db, "properties"));
-      const properties     = propertiesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const clientsSnap    = await getDocs(collection(db, "clients"));
-      const usersSnap      = await getDocs(collection(db, "users"));
-      const requestsSnap   = await getDocs(query(collection(db, "accessRequests"), where("status", "==", "pending")));
+      const [propertiesSnap, clientsSnap, usersSnap] = await Promise.all([
+        getDocs(collection(db, "properties")),
+        getDocs(collection(db, "clients")),
+        getDocs(collection(db, "users")),
+      ]);
 
-      const recentPropsSnap   = await getDocs(query(collection(db, "properties"), orderBy("createdAt", "desc"), limit(5)));
-      const recentClientsSnap = await getDocs(query(collection(db, "clients"),    orderBy("createdAt", "desc"), limit(5)));
+      const properties = propertiesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-      const mapDoc = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.() ?? null }));
+      // ✅ accessRequests solo lo pide admin — member no tiene permiso
+      let requestsCount = 0;
+      if (isAdmin) {
+        const requestsSnap = await getDocs(
+          query(collection(db, "accessRequests"), where("status", "==", "pending"))
+        );
+        requestsCount = requestsSnap.size;
+      }
+
+      const [recentPropsSnap, recentClientsSnap] = await Promise.all([
+        getDocs(query(collection(db, "properties"), orderBy("createdAt", "desc"), limit(5))),
+        getDocs(query(collection(db, "clients"),    orderBy("createdAt", "desc"), limit(5))),
+      ]);
+
+      const mapDoc = (snap) => snap.docs.map((d) => ({
+        id: d.id, ...d.data(),
+        createdAt: d.data().createdAt?.toDate?.() ?? null,
+      }));
 
       setStats({
         properties:          properties.length,
         clients:             clientsSnap.size,
         users:               usersSnap.size,
-        requests:            requestsSnap.size,
+        requests:            requestsCount,
         propertiesForSale:   properties.filter((p) => p.transactionType === "venta").length,
         propertiesForRent:   properties.filter((p) => p.transactionType === "arriendo").length,
         availableProperties: properties.filter((p) => p.status === "disponible").length,
@@ -209,11 +217,14 @@ const DashboardPage = () => {
           icon={FaUserClock} iconBg="bg-green-500/10" iconColor="text-green-400"
           sub="Del sistema" subColor="t-muted"
         />
-        <StatCard
-          delay={0.20} label="Solicitudes" value={stats.requests}
-          icon={FaEnvelope}  iconBg="bg-yellow-500/10" iconColor="text-yellow-400"
-          sub={<><FaClock className="text-yellow-400" /> Pendientes</>} subColor="text-yellow-500"
-        />
+        {/* Solicitudes solo visible para admin */}
+        {isAdmin && (
+          <StatCard
+            delay={0.20} label="Solicitudes" value={stats.requests}
+            icon={FaEnvelope}  iconBg="bg-yellow-500/10" iconColor="text-yellow-400"
+            sub={<><FaClock className="text-yellow-400" /> Pendientes</>} subColor="text-yellow-500"
+          />
+        )}
       </div>
 
       {/* Charts */}
@@ -223,8 +234,8 @@ const DashboardPage = () => {
           title={<><FaChartLine className="text-amber-500" /> Propiedades por mes</>}
           badge="Últimos 6 meses"
         >
-          {/* w-full + display:block aseguran que ResponsiveContainer mida bien */}
-          <div className="w-full block" style={{ height: 300, minHeight: 240 }}>
+          {/* ✅ position:relative + height explícito resuelve width(-1) de Recharts */}
+          <div style={{ position: 'relative', width: '100%', height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" />
@@ -240,7 +251,7 @@ const DashboardPage = () => {
         </ChartCard>
 
         <ChartCard delay={0.30} title="Propiedades por tipo" badge="Distribución">
-          <div className="w-full block" style={{ height: 300, minHeight: 240 }}>
+          <div style={{ position: 'relative', width: '100%', height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" outerRadius={100} dataKey="value">
