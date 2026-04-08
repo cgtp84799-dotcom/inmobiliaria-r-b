@@ -1,6 +1,6 @@
 import {
   collection, addDoc, updateDoc, deleteDoc,
-  doc, getDocs, query, where, orderBy,
+  doc, getDocs, query, where, orderBy, limit,
   serverTimestamp, onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
@@ -17,18 +17,46 @@ const ref = (id) => doc(db, COLLECTION, id);
 export const visitService = {
 
   // ── Tiempo real ───────────────────────────────────────────
+  //
+  // NOTA: orderBy('createdAt','desc') sobre la colección completa requiere
+  // un índice compuesto en Firestore.  Si el listener falla con un error
+  // de índice, Firebase imprime en consola el link directo para crearlo
+  // en un solo clic.  Como fallback usamos getDocs sin orderBy si
+  // el índice aún no existe.
   subscribeAll(onData, onError) {
     const q = query(col(), orderBy('createdAt', 'desc'));
-    return onSnapshot(
+
+    const unsub = onSnapshot(
       q,
-      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      (err)  => onError?.(err),
+      { includeMetadataChanges: false },
+      (snap) => {
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        onData(data);
+      },
+      (err) => {
+        // Si el error es de índice faltante, hacemos un fetch puntual sin orden
+        // y mostramos un warning en consola con el link al índice.
+        if (err?.code === 'failed-precondition' || err?.message?.includes('index')) {
+          console.warn(
+            '⚠️  visitService: falta índice compuesto en Firestore.\n' +
+            'Abre el link que aparece arriba para crearlo en un clic.\n' +
+            'Mientras tanto se carga sin ordenar.',
+          );
+          // fallback: getDocs sin orderBy
+          getDocs(col())
+            .then((snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+            .catch((e) => onError?.(e));
+        } else {
+          onError?.(err);
+        }
+      },
     );
+
+    return unsub;
   },
 
   // ── Solicitar visita (escribe en /visits + espejo en /appointments) ──
   async requestVisit(payload) {
-    // 1. Fuente principal
     const visitRef = await addDoc(col(), {
       ...payload,
       sourceCollection: 'visits',
@@ -36,7 +64,7 @@ export const visitService = {
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Espejo en /appointments para historial de cliente (best-effort)
+    // Espejo en /appointments (best-effort)
     try {
       await addDoc(collection(db, 'appointments'), {
         visitId:          visitRef.id,
@@ -61,10 +89,10 @@ export const visitService = {
       console.warn('visitService: no se pudo crear espejo en appointments');
     }
 
-    // 3. Notificar admins
+    // Notificar admins
     try {
       const adminsSnap = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'admin')),
+        query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)),
       );
       await Promise.allSettled(
         adminsSnap.docs.map((d) =>
@@ -128,7 +156,6 @@ export const visitService = {
   // ── Actualización genérica de campos ─────────────────────
   async updateVisit(visitId, data) {
     await updateDoc(ref(visitId), { ...data, updatedAt: serverTimestamp() });
-    // Sincronizar datos de agente en el espejo
     if (data.agentId || data.agentName || data.agentEmail) {
       try {
         const snap = await getDocs(
@@ -209,25 +236,21 @@ export const visitService = {
   },
 
   // ── Proponer nueva hora / reagendar ───────────────────────
-  // El Cloud Function onVisitStatusChanged detecta status === 'rescheduled'
-  // y envía el email de nueva propuesta al cliente automáticamente.
   async rescheduleVisit(visit, proposedDate, proposedTime, adminNotes = '') {
     const updatePayload = {
-      status:          VISIT_STATUS.RESCHEDULED,
+      status:        VISIT_STATUS.RESCHEDULED,
       proposedDate,
       proposedTime,
       adminNotes,
-      updatedAt:       serverTimestamp(),
-      rescheduledAt:   serverTimestamp(),
+      updatedAt:     serverTimestamp(),
+      rescheduledAt: serverTimestamp(),
     };
     await updateDoc(ref(visit.id ?? visit), updatePayload);
-    // Sincronizar espejo con nueva fecha propuesta
     await this.syncAppointmentStatus(
       visit.id ?? visit,
       VISIT_STATUS.RESCHEDULED,
       adminNotes,
     );
-    // Notificación in-app al cliente
     const clientEmail = typeof visit === 'object' ? visit.clientEmail : null;
     if (clientEmail) {
       await notificationService.createNotification({
@@ -253,6 +276,7 @@ export const visitService = {
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'visits' }))),
       (err)  => onError?.(err),
     );
@@ -268,6 +292,7 @@ export const visitService = {
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'appointments' }))),
       (err)  => onError?.(err),
     );

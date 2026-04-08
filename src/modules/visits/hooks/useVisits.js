@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
-import { VISIT_STATUS } from '../types/visit.types';
 import toast from 'react-hot-toast';
 
 /**
@@ -8,27 +7,57 @@ import toast from 'react-hot-toast';
  *
  * API pública:
  * { visits, loading, error, counts, approve, reject, complete, reschedule, remove, reload }
+ *
+ * Fix: isMounted ref evita que el callback de onSnapshot actualice estado
+ * después del desmontaje, lo que provocaba el crash interno del SDK de
+ * Firestore (INTERNAL ASSERTION FAILED: Unexpected state ID ca9 / b815).
  */
 export function useVisits() {
   const [visits,  setVisits]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    const unsub = visitService.subscribeAll(
-      (data) => { setVisits(data); setLoading(false); },
-      (err)  => { setError(err);   setLoading(false); toast.error('Error al cargar las visitas'); },
-    );
-    return () => unsub();
+    isMounted.current = true;
+
+    let unsub = () => {};
+
+    try {
+      unsub = visitService.subscribeAll(
+        (data) => {
+          if (!isMounted.current) return;
+          setVisits(data);
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          if (!isMounted.current) return;
+          console.error('useVisits error:', err);
+          setError(err);
+          setLoading(false);
+          toast.error('Error al cargar las visitas');
+        },
+      );
+    } catch (err) {
+      if (isMounted.current) {
+        setError(err);
+        setLoading(false);
+      }
+    }
+
+    return () => {
+      isMounted.current = false;
+      try { unsub(); } catch (_) {}
+    };
   }, []);
 
-  // Contadores por estado (incluye rescheduled)
+  // Contadores por estado
   const counts = useMemo(
     () => visits.reduce((acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }), {}),
     [visits],
   );
 
-  // ── Acciones ───────────────────────────────────────────────────────────────
   const approve = useCallback(async (visit, adminNotes = '', agentData = {}) => {
     try {
       await visitService.approveVisit(visit, adminNotes, agentData);
@@ -74,7 +103,6 @@ export function useVisits() {
     }
   }, []);
 
-  // reload mantenido por compatibilidad — con onSnapshot es no-op
   const reload = useCallback(() => {}, []);
 
   return { visits, loading, error, counts, approve, reject, complete, reschedule, remove, reload };

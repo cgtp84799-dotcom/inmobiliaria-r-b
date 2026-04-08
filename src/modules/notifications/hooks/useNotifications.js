@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { notificationService } from '../services/notification.service';
 import { useAuth } from '../../../core/contexts/AuthContext';
 
 /**
  * Hook centralizado para el sistema de notificaciones.
- * Usa el servicio (onSnapshot) — la lógica NO vive en el componente.
+ *
+ * Fix: isMounted ref evita actualizaciones de estado tras desmontaje,
+ * que causaban el crash de Firestore SDK (ca9 / b815 INTERNAL ASSERTION).
  *
  * Retorna:
  *   notifications   — array completo, ordenado desc por createdAt
@@ -16,35 +18,48 @@ import { useAuth } from '../../../core/contexts/AuthContext';
  */
 export function useNotifications() {
   const { currentUser } = useAuth();
-  const userId = currentUser?.email ?? null;
+  const userId   = currentUser?.email ?? null;
+  const isMounted = useRef(true);
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(true);
 
   useEffect(() => {
+    isMounted.current = true;
+
     if (!userId) {
       setNotifications([]);
       setLoading(false);
       return;
     }
 
-    // subscribeToNotifications devuelve el unsubscribe de onSnapshot
-    const unsubscribe = notificationService.subscribeToNotifications(
-      userId,
-      (data) => {
-        setNotifications(data);
-        setLoading(false);
-      }
-    );
+    let unsub = () => {};
 
-    return () => unsubscribe();
+    try {
+      unsub = notificationService.subscribeToNotifications(
+        userId,
+        (data) => {
+          if (!isMounted.current) return;
+          setNotifications(data);
+          setLoading(false);
+        },
+      );
+    } catch (err) {
+      console.error('useNotifications error:', err);
+      if (isMounted.current) setLoading(false);
+    }
+
+    return () => {
+      isMounted.current = false;
+      try { unsub(); } catch (_) {}
+    };
   }, [userId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const markAsRead  = (id)  => notificationService.markAsRead(id);
-  const markAllRead = ()    => userId && notificationService.markAllAsRead(userId);
-  const deleteOne   = (id)  => notificationService.deleteNotification(id);
+  const markAsRead  = (id) => notificationService.markAsRead(id);
+  const markAllRead = ()   => userId && notificationService.markAllAsRead(userId);
+  const deleteOne   = (id) => notificationService.deleteNotification(id);
 
   return { notifications, unreadCount, loading, markAsRead, markAllRead, deleteOne };
 }
