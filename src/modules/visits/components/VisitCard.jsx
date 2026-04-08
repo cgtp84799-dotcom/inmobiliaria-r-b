@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaCalendarCheck, FaUser, FaPhone, FaEnvelope,
   FaBuilding, FaClock, FaCheckCircle, FaTimes,
-  FaFlag, FaChevronDown, FaChevronUp, FaTrash, FaUserTie,
+  FaFlag, FaChevronDown, FaChevronUp, FaTrash,
+  FaUserTie, FaCalendarAlt, FaRedoAlt,
 } from 'react-icons/fa';
 import { VISIT_STATUS, VISIT_STATUS_LABELS, VISIT_STATUS_COLORS } from '../types/visit.types';
 import { formatShort } from '../../../shared/utils/formatDate';
@@ -11,41 +12,71 @@ import { formatShort } from '../../../shared/utils/formatDate';
 /**
  * VisitCard
  *
- * 3B: al aprobar, muestra selector de agente antes de confirmar.
- *
  * Props:
- *   visit      — documento Firestore normalizado
- *   agents     — array de { uid, displayName, email } para selector (3B)
- *   onApprove  — (visit, notes, agentData) => void
- *   onReject   — (visit, notes) => void
- *   onComplete — (visitId, notes) => void
- *   onDelete   — (visitId) => void
+ *   visit        — documento Firestore normalizado
+ *   agents       — array de { uid, displayName, email } para selector
+ *   onApprove    — (visit, notes, agentData) => void
+ *   onReject     — (visit, notes) => void
+ *   onComplete   — (visitId, notes) => void
+ *   onReschedule — (visitId, proposedDate, proposedTime, notes) => void
+ *   onDelete     — (visitId) => void
  */
-export default function VisitCard({ visit, agents = [], onApprove, onReject, onComplete, onDelete }) {
-  const [expanded,       setExpanded]       = useState(false);
-  const [noteInput,      setNoteInput]      = useState('');
-  const [selectedAgent,  setSelectedAgent]  = useState('');
-  const [action,         setAction]         = useState(null);
+export default function VisitCard({
+  visit,
+  agents = [],
+  onApprove,
+  onReject,
+  onComplete,
+  onReschedule,
+  onDelete,
+}) {
+  const [expanded,      setExpanded]      = useState(false);
+  const [noteInput,     setNoteInput]     = useState('');
+  const [selectedAgent, setSelectedAgent] = useState('');
+  const [action,        setAction]        = useState(null);
+
+  // Campos para reagendar
+  const [proposedDate, setProposedDate] = useState('');
+  const [proposedTime, setProposedTime] = useState('');
 
   const colors = VISIT_STATUS_COLORS[visit.status] ?? VISIT_STATUS_COLORS[VISIT_STATUS.PENDING];
   const label  = VISIT_STATUS_LABELS[visit.status] ?? visit.status;
 
+  const closeAction = () => {
+    setAction(null);
+    setNoteInput('');
+    setSelectedAgent('');
+    setProposedDate('');
+    setProposedTime('');
+  };
+
   const handleAction = async () => {
     if (action === 'approve') {
-      const agentObj = agents.find((a) => a.uid === selectedAgent) ?? {};
+      const agentObj  = agents.find((a) => a.uid === selectedAgent) ?? {};
       const agentData = selectedAgent ? {
         agentId:    agentObj.uid,
         agentName:  agentObj.displayName || agentObj.email,
         agentEmail: agentObj.email,
       } : {};
-      await onApprove(visit, noteInput, agentData);
+      await onApprove?.(visit, noteInput, agentData);
     }
-    if (action === 'reject')   await onReject(visit, noteInput);
-    if (action === 'complete') await onComplete(visit.id, noteInput);
-    setAction(null);
-    setNoteInput('');
-    setSelectedAgent('');
+    if (action === 'reject')     await onReject?.(visit, noteInput);
+    if (action === 'complete')   await onComplete?.(visit.id, noteInput);
+    if (action === 'reschedule') await onReschedule?.(visit.id, proposedDate, proposedTime, noteInput);
+    closeAction();
   };
+
+  // ¿El botón de confirmar está habilitado?
+  const canConfirm =
+    action === 'reschedule'
+      ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
+      : true;
+
+  // Determina qué botones de acción mostrar según el estado actual
+  const canApprove    = visit.status === VISIT_STATUS.PENDING;
+  const canReject     = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED;
+  const canReschedule = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED;
+  const canComplete   = visit.status === VISIT_STATUS.APPROVED || visit.status === VISIT_STATUS.RESCHEDULED;
 
   return (
     <motion.div
@@ -55,7 +86,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
       className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-colors"
     >
-      {/* Cabecera */}
+      {/* ═══ Cabecera ═══════════════════════════════════════════════════════ */}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
@@ -67,6 +98,12 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
               <span className="text-slate-500 text-xs">
                 {visit.requestedDate} — {visit.requestedTime}
               </span>
+              {/* Nueva hora propuesta */}
+              {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
+                <span className="text-blue-400 text-xs font-semibold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                  📅 Propuesta: {visit.proposedDate} {visit.proposedTime}
+                </span>
+              )}
             </div>
             <h3 className="text-white font-bold text-sm sm:text-base truncate">
               {visit.propertyName ?? 'Propiedad sin nombre'}
@@ -82,7 +119,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
           </button>
         </div>
 
-        {/* Datos del cliente */}
+        {/* ── Datos del cliente ───────────────────────────────────────────── */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <FaUser className="text-slate-500 flex-shrink-0" size={11} />
@@ -98,33 +135,35 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
           </div>
         </div>
 
-        {/* Botones de acción */}
+        {/* ── Botones de acción ───────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
-          {visit.status === VISIT_STATUS.PENDING && (
-            <>
-              <button
-                onClick={() => setAction(action === 'approve' ? null : 'approve')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
-                  action === 'approve'
-                    ? 'bg-green-500/25 border-green-500/50 text-green-300'
-                    : 'bg-green-500/10 border-green-500/25 text-green-400 hover:bg-green-500/20'
-                }`}
-              >
-                <FaCheckCircle size={11} /> Aprobar
-              </button>
-              <button
-                onClick={() => setAction(action === 'reject' ? null : 'reject')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
-                  action === 'reject'
-                    ? 'bg-red-500/25 border-red-500/50 text-red-300'
-                    : 'bg-red-500/10 border-red-500/25 text-red-400 hover:bg-red-500/20'
-                }`}
-              >
-                <FaTimes size={11} /> Rechazar
-              </button>
-            </>
+          {canApprove && (
+            <button
+              onClick={() => setAction(action === 'approve' ? null : 'approve')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
+                action === 'approve'
+                  ? 'bg-green-500/25 border-green-500/50 text-green-300'
+                  : 'bg-green-500/10 border-green-500/25 text-green-400 hover:bg-green-500/20'
+              }`}
+            >
+              <FaCheckCircle size={11} /> Aprobar
+            </button>
           )}
-          {visit.status === VISIT_STATUS.APPROVED && (
+
+          {canReschedule && onReschedule && (
+            <button
+              onClick={() => setAction(action === 'reschedule' ? null : 'reschedule')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
+                action === 'reschedule'
+                  ? 'bg-blue-500/25 border-blue-500/50 text-blue-300'
+                  : 'bg-blue-500/10 border-blue-500/25 text-blue-400 hover:bg-blue-500/20'
+              }`}
+            >
+              <FaRedoAlt size={10} /> Proponer nueva hora
+            </button>
+          )}
+
+          {canComplete && (
             <button
               onClick={() => setAction(action === 'complete' ? null : 'complete')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
@@ -136,6 +175,20 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
               <FaFlag size={11} /> Marcar completada
             </button>
           )}
+
+          {canReject && (
+            <button
+              onClick={() => setAction(action === 'reject' ? null : 'reject')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
+                action === 'reject'
+                  ? 'bg-red-500/25 border-red-500/50 text-red-300'
+                  : 'bg-red-500/10 border-red-500/25 text-red-400 hover:bg-red-500/20'
+              }`}
+            >
+              <FaTimes size={11} /> Rechazar
+            </button>
+          )}
+
           {onDelete && (
             <button
               onClick={() => onDelete(visit.id)}
@@ -146,7 +199,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
           )}
         </div>
 
-        {/* Panel de acción expandible */}
+        {/* ── Panel de acción expandible ──────────────────────────────────── */}
         <AnimatePresence>
           {action && (
             <motion.div
@@ -155,7 +208,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden space-y-2"
             >
-              {/* 3B: selector de agente solo al aprobar */}
+              {/* Selector de agente (solo al aprobar) */}
               {action === 'approve' && agents.length > 0 && (
                 <div>
                   <label className="block text-slate-400 text-xs font-semibold mb-1">
@@ -177,26 +230,82 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
                 </div>
               )}
 
+              {/* Campos de fecha/hora para reagendar */}
+              {action === 'reschedule' && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 space-y-2">
+                  <p className="text-blue-400 text-xs font-semibold flex items-center gap-1.5">
+                    <FaCalendarAlt size={10} /> Nueva fecha y hora propuesta
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">Fecha</label>
+                      <input
+                        type="date"
+                        value={proposedDate}
+                        onChange={(e) => setProposedDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">Hora</label>
+                      <input
+                        type="time"
+                        value={proposedTime}
+                        onChange={(e) => setProposedTime(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <textarea
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
                 placeholder={
-                  action === 'approve'  ? 'Notas para el cliente (opcional)...' :
-                  action === 'reject'   ? 'Motivo del rechazo (recomendado)...' :
-                                         'Notas de cierre (opcional)...'
+                  action === 'approve'    ? 'Notas para el cliente (opcional)...' :
+                  action === 'reject'     ? 'Motivo del rechazo (recomendado)...' :
+                  action === 'reschedule' ? 'Motivo del cambio o indicaciones (opcional)...' :
+                                           'Notas de cierre (opcional)...'
                 }
                 rows={2}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none"
               />
+
               <div className="flex gap-2">
                 <button
                   onClick={handleAction}
-                  className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-slate-950 hover:bg-primary/90 transition-colors"
+                  disabled={!canConfirm}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: canConfirm ? '' : undefined,
+                  }}
+                  data-action={action}
+                  style={{
+                    backgroundColor:
+                      action === 'reschedule' ? (canConfirm ? '#3b82f6' : undefined) :
+                      action === 'reject'     ? '#ef4444' :
+                      undefined,
+                    color: (action === 'reschedule' || action === 'reject') ? '#fff' : undefined,
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    action === 'reschedule'
+                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                      : action === 'reject'
+                        ? 'bg-red-600 text-white hover:bg-red-500'
+                        : 'bg-primary text-slate-950 hover:bg-primary/90'
+                  }`}
                 >
-                  Confirmar
+                  {
+                    action === 'approve'    ? '✓ Confirmar aprobación' :
+                    action === 'reject'     ? '✗ Confirmar rechazo' :
+                    action === 'reschedule' ? '📅 Enviar propuesta' :
+                                             '✓ Confirmar'
+                  }
                 </button>
                 <button
-                  onClick={() => { setAction(null); setNoteInput(''); setSelectedAgent(''); }}
+                  onClick={closeAction}
                   className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:bg-slate-800 transition-colors"
                 >
                   Cancelar
@@ -207,7 +316,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
         </AnimatePresence>
       </div>
 
-      {/* Sección expandida */}
+      {/* ═══ Sección expandida ═══════════════════════════════════════════════ */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -216,6 +325,14 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
             exit={{ opacity: 0, height: 0 }}
             className="border-t border-slate-800 px-4 sm:px-5 py-3 space-y-2 overflow-hidden"
           >
+            {/* Nueva hora propuesta (si aplica) */}
+            {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
+              <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+                <p className="text-blue-400 text-xs font-semibold uppercase tracking-wider mb-1">Nueva hora propuesta</p>
+                <p className="text-blue-300 text-sm font-bold">{visit.proposedDate} — {visit.proposedTime}</p>
+              </div>
+            )}
+
             {visit.notes && (
               <div>
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Notas del cliente</p>
@@ -228,7 +345,7 @@ export default function VisitCard({ visit, agents = [], onApprove, onReject, onC
                 <p className="text-slate-300 text-xs leading-relaxed">{visit.adminNotes}</p>
               </div>
             )}
-            {/* 3B: mostrar agente asignado con hora de autorización */}
+
             {visit.agentName && (
               <div className="flex items-center gap-2 pt-1">
                 <FaUserTie className="text-yellow-500" size={11} />
