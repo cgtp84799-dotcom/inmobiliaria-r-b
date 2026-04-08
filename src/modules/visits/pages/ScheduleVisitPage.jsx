@@ -4,72 +4,93 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaCalendarAlt, FaClock, FaUser, FaPhone,
   FaEnvelope, FaStickyNote, FaCheckCircle, FaArrowLeft,
-  FaArrowRight, FaHome, FaShieldAlt,
+  FaArrowRight, FaHome, FaShieldAlt, FaMapMarkerAlt,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { visitService } from '../services/visit.service';
 import { createVisitPayload } from '../types/visit.types';
 import propertyService from '../../properties/services/property.service';
 
-// ──────────────────────────────────────────────────────────────
-// Helpers de animación
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+// Animación de deslizamiento entre pasos
+// ─────────────────────────────────────────────────────
 const slideVariants = {
-  enter:  (dir) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
+  enter:  (dir) => ({ x: dir > 0 ? 56 : -56, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit:   (dir) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
+  exit:   (dir) => ({ x: dir > 0 ? -56 : 56, opacity: 0 }),
 };
 
-// Etiquetas de cada paso
 const STEPS = [
   { id: 1, label: 'Tus datos',    icon: FaUser        },
   { id: 2, label: 'Fecha y hora', icon: FaCalendarAlt },
   { id: 3, label: 'Confirmar',    icon: FaCheckCircle },
 ];
 
-// Franjas horarias disponibles
 const TIME_SLOTS = [
   '08:00','08:30','09:00','09:30','10:00','10:30',
   '11:00','11:30','14:00','14:30','15:00','15:30',
   '16:00','16:30','17:00',
 ];
 
-// ──────────────────────────────────────────────────────────────
-// Sub-componentes
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+// Indicador de pasos (usa variables semánticas inline)
+// ─────────────────────────────────────────────────────
 function StepIndicator({ current }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
       {STEPS.map((step, i) => {
-        const done    = current > step.id;
-        const active  = current === step.id;
-        const Icon    = step.icon;
+        const done   = current > step.id;
+        const active = current === step.id;
+        const Icon   = step.icon;
         return (
           <div key={step.id} className="flex items-center">
             <div className="flex flex-col items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center
-                  font-bold text-sm transition-all duration-300 border-2
-                  ${ done
-                    ? 'bg-primary border-primary text-slate-950'
+                style={{
+                  width: 40, height: 40, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: 13,
+                  border: `2px solid ${ done || active ? 'var(--tw-primary)' : 'var(--color-border)' }`,
+                  background: done
+                    ? 'var(--tw-primary)'
                     : active
-                      ? 'bg-primary/20 border-primary text-primary'
-                      : 'bg-slate-900 border-slate-700 text-slate-500'
-                  }`}
+                      ? 'var(--tw-primary-15)'
+                      : 'var(--color-surface)',
+                  color: done
+                    ? '#111827'
+                    : active
+                      ? 'var(--tw-primary)'
+                      : 'var(--color-text-faint)',
+                  transition: 'all 0.3s ease',
+                }}
               >
                 {done ? <FaCheckCircle size={14} /> : <Icon size={13} />}
               </div>
               <span
-                className={`text-xs mt-1.5 font-medium transition-colors duration-300
-                  ${active ? 'text-primary' : done ? 'text-slate-400' : 'text-slate-600'}`}
+                style={{
+                  fontSize: 11, marginTop: 6, fontWeight: 600,
+                  color: active
+                    ? 'var(--tw-primary)'
+                    : done
+                      ? 'var(--color-text-muted)'
+                      : 'var(--color-text-faint)',
+                  transition: 'color 0.3s ease',
+                }}
               >
                 {step.label}
               </span>
             </div>
             {i < STEPS.length - 1 && (
               <div
-                className={`h-0.5 w-12 sm:w-20 mx-2 mb-4 rounded transition-colors duration-500
-                  ${current > step.id ? 'bg-primary' : 'bg-slate-700'}`}
+                style={{
+                  height: 2,
+                  width: 56,
+                  marginInline: 8,
+                  marginBottom: 16,
+                  borderRadius: 9999,
+                  background: current > step.id ? 'var(--tw-primary)' : 'var(--color-border)',
+                  transition: 'background 0.5s ease',
+                }}
               />
             )}
           </div>
@@ -79,47 +100,138 @@ function StepIndicator({ current }) {
   );
 }
 
-function InputField({ label, icon: Icon, error, children }) {
+// ─────────────────────────────────────────────────────
+// Campo de formulario genérico
+// ─────────────────────────────────────────────────────
+function InputField({ label, icon: Icon, error, hint, children }) {
   return (
     <div>
-      <label className="block text-slate-300 text-sm font-semibold mb-1.5">
-        {Icon && <Icon className="inline mr-1.5 text-slate-500" size={12} />}
+      <label
+        style={{
+          display: 'block',
+          fontSize: 13,
+          fontWeight: 600,
+          marginBottom: 6,
+          color: 'var(--color-text)',
+        }}
+      >
+        {Icon && <Icon style={{ display:'inline', marginRight:5, color:'var(--color-text-faint)', verticalAlign:'middle' }} size={12} />}
         {label}
       </label>
       {children}
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+      {hint && !error && (
+        <p style={{ fontSize: 11, marginTop: 4, color: 'var(--color-text-faint)' }}>{hint}</p>
+      )}
+      {error && (
+        <p style={{ fontSize: 11, marginTop: 4, color: '#f87171', display:'flex', alignItems:'center', gap:4 }}>
+          ⚠ {error}
+        </p>
+      )}
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────
+// Badge de propiedad
+// ─────────────────────────────────────────────────────
 function PropertyBadge({ property }) {
   if (!property) return null;
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800/60
-      border border-slate-700 mb-6">
-      <FaHome className="text-primary flex-shrink-0" size={14} />
-      <div className="min-w-0">
-        <p className="text-white text-sm font-semibold truncate">{property.title}</p>
-        <p className="text-slate-400 text-xs">{property.city}</p>
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 16px', borderRadius: 12, marginBottom: 24,
+        background: 'var(--tw-primary-10)',
+        border: '1px solid var(--tw-primary-20)',
+      }}
+    >
+      <FaHome style={{ color: 'var(--tw-primary)', flexShrink: 0 }} size={14} />
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text)', marginBottom: 1 }}>
+          {property.title}
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', display:'flex', alignItems:'center', gap:4 }}>
+          <FaMapMarkerAlt size={10} /> {property.city}
+        </p>
       </div>
     </div>
   );
 }
 
-// ──────────────────────────────────────────────────────────────
-// Página principal
-// ──────────────────────────────────────────────────────────────
-export default function ScheduleVisitPage() {
-  const [params]    = useSearchParams();
-  const propertyId  = params.get('propertyId');
+// ─────────────────────────────────────────────────────
+// Botón primario (dorado)
+// ─────────────────────────────────────────────────────
+function BtnPrimary({ onClick, disabled, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="button-gold"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '12px 24px', fontSize: 14, fontWeight: 700,
+        borderRadius: 12, cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
-  const [property,   setProperty]   = useState(null);
-  const [loading,    setLoading]    = useState(!!propertyId);
-  const [submitting, setSubmitting] = useState(false);
-  const [success,    setSuccess]    = useState(false);
-  const [step,       setStep]       = useState(1);
-  const [direction,  setDirection]  = useState(1);
-  const [errors,     setErrors]     = useState({});
+// ─────────────────────────────────────────────────────
+// Botón secundario (neutro)
+// ─────────────────────────────────────────────────────
+function BtnSecondary({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        padding: '12px 20px', fontSize: 14, fontWeight: 600,
+        borderRadius: 12, cursor: 'pointer',
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        color: 'var(--color-text)',
+        transition: 'background 0.2s, border-color 0.2s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--tw-primary)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// Fila del resumen (paso 3)
+// ─────────────────────────────────────────────────────
+function SummaryRow({ icon: Icon, value }) {
+  if (!value) return null;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:14 }}>
+      <Icon style={{ color:'var(--tw-primary)', flexShrink:0 }} size={12} />
+      <span style={{ color:'var(--color-text)' }}>{value}</span>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// PÁGINA PRINCIPAL
+// ═════════════════════════════════════════════════════
+export default function ScheduleVisitPage() {
+  const [params]   = useSearchParams();
+  const propertyId = params.get('propertyId');
+
+  const [property,        setProperty]        = useState(null);
+  const [loading,         setLoading]         = useState(!!propertyId);
+  const [submitting,      setSubmitting]      = useState(false);
+  const [success,         setSuccess]         = useState(false);
+  const [step,            setStep]            = useState(1);
+  const [direction,       setDirection]       = useState(1);
+  const [errors,          setErrors]          = useState({});
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
 
   const [form, setForm] = useState({
@@ -131,12 +243,12 @@ export default function ScheduleVisitPage() {
     notes:         '',
   });
 
-  // Fecha mínima: mañana
+  // Fecha mínima = mañana
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
 
-  // Cargar propiedad
+  // Cargar datos de propiedad si viene desde una ficha
   useEffect(() => {
     if (!propertyId) { setLoading(false); return; }
     propertyService
@@ -152,27 +264,28 @@ export default function ScheduleVisitPage() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
-  // Seleccionar hora con click
   const selectTime = (time) => {
     setForm((prev) => ({ ...prev, requestedTime: time }));
     if (errors.requestedTime) setErrors((prev) => ({ ...prev, requestedTime: '' }));
   };
 
-  // Validaciones por paso
   const validateStep = (s) => {
     const errs = {};
     if (s === 1) {
-      if (!form.clientName.trim())  errs.clientName  = 'Tu nombre es obligatorio';
-      if (!form.clientEmail.trim()) errs.clientEmail = 'El email es obligatorio';
+      if (!form.clientName.trim())
+        errs.clientName = 'Tu nombre es obligatorio';
+      if (!form.clientEmail.trim())
+        errs.clientEmail = 'El correo es obligatorio';
       else if (!/\S+@\S+\.\S+/.test(form.clientEmail))
-        errs.clientEmail = 'Ingresa un email válido';
+        errs.clientEmail = 'Ingresa un correo válido';
     }
     if (s === 2) {
       if (!form.requestedDate) errs.requestedDate = 'Elige una fecha';
       if (!form.requestedTime) errs.requestedTime = 'Elige una hora';
     }
     if (s === 3) {
-      if (!acceptedPrivacy) errs.privacy = 'Debes aceptar la política de privacidad para continuar';
+      if (!acceptedPrivacy)
+        errs.privacy = 'Debes aceptar la política de privacidad para continuar';
     }
     return errs;
   };
@@ -202,84 +315,107 @@ export default function ScheduleVisitPage() {
       });
       await visitService.requestVisit(payload);
       setSuccess(true);
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       toast.error('Error al enviar la solicitud. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Formatear fecha para mostrar
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-');
-    const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    return `${parseInt(d)} de ${months[parseInt(m) - 1]} de ${y}`;
+  const formatDate = (d) => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    const months = ['enero','febrero','marzo','abril','mayo','junio',
+                    'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    return `${parseInt(day)} de ${months[parseInt(m) - 1]} de ${y}`;
   };
 
-  // ── Pantalla de éxito ──────────────────────────────────────
+  // ── Inputs compartidos ────────────────────────────────
+  const inputStyle = (hasError) => ({
+    width: '100%',
+    background: 'var(--color-input-bg)',
+    border: `1px solid ${hasError ? '#f87171' : 'var(--color-input-border)'}`,
+    borderRadius: 12,
+    padding: '12px 16px',
+    fontSize: 14,
+    color: 'var(--color-input-text)',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+  });
+
+  // ═══════════════════════════════════════════════════
+  // PANTALLA DE ÉXITO
+  // ═══════════════════════════════════════════════════
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4"
-        style={{ backgroundColor: 'var(--color-bg)' }}>
+      <div
+        style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', padding: '2rem 1rem',
+          background: 'var(--color-bg)',
+        }}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="max-w-md w-full text-center p-8 rounded-2xl border border-slate-700 bg-slate-900"
+          className="card-soft"
+          style={{
+            maxWidth: 440, width: '100%', textAlign: 'center',
+            padding: '2.5rem 2rem',
+          }}
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 260, damping: 20 }}
-            className="w-20 h-20 rounded-full bg-green-500/15 flex items-center justify-center mx-auto mb-5"
+            style={{
+              width: 80, height: 80, borderRadius: '50%',
+              background: 'rgba(34,197,94,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.25rem',
+            }}
           >
-            <FaCheckCircle className="text-green-400 text-4xl" />
+            <FaCheckCircle style={{ color: '#22c55e', fontSize: 36 }} />
           </motion.div>
-          <h2 className="text-2xl font-bold text-white mb-2">¡Solicitud enviada!</h2>
-          <p className="text-slate-400 mb-2">
+
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', marginBottom: 8 }}>
+            ¡Solicitud enviada!
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 6 }}>
             Tu solicitud de visita para{' '}
-            <strong className="text-white">{property?.title ?? 'la propiedad'}</strong>
-            {' '}fue recibida correctamente.
+            <strong style={{ color: 'var(--color-text)' }}>{property?.title ?? 'la propiedad'}</strong>{' '}
+            fue recibida correctamente.
           </p>
-          <p className="text-slate-500 text-sm mb-6">
+          <p style={{ fontSize: 13, color: 'var(--color-text-faint)', marginBottom: 24 }}>
             Un asesor se pondrá en contacto contigo al correo{' '}
-            <span className="text-primary">{form.clientEmail}</span>{' '}
+            <span style={{ color: 'var(--tw-primary)', fontWeight: 600 }}>{form.clientEmail}</span>{' '}
             en las próximas horas.
           </p>
-          {/* Resumen rápido */}
-          <div className="bg-slate-800/60 rounded-xl p-4 text-sm text-left mb-6 space-y-2 border border-slate-700">
-            <div className="flex items-center gap-2 text-slate-300">
-              <FaCalendarAlt className="text-primary flex-shrink-0" size={12} />
-              <span>{formatDate(form.requestedDate)}</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-300">
-              <FaClock className="text-primary flex-shrink-0" size={12} />
-              <span>{form.requestedTime} horas</span>
-            </div>
+
+          {/* Mini-resumen */}
+          <div
+            className="card-inner"
+            style={{ padding: '12px 16px', marginBottom: 24, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8 }}
+          >
+            <SummaryRow icon={FaCalendarAlt} value={formatDate(form.requestedDate)} />
+            <SummaryRow icon={FaClock}       value={`${form.requestedTime} horas`} />
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              to="/catalogo"
-              className="px-6 py-3 rounded-xl bg-primary text-slate-950
-                font-semibold hover:bg-primary/90 transition-colors text-sm"
-            >
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Link to="/catalogo" className="button-gold" style={{ justifyContent:'center', borderRadius:12 }}>
               Ver más propiedades
             </Link>
             {propertyId && (
-              <button
-                onClick={() => {
-                  setSuccess(false);
-                  setStep(1);
-                  setForm({ clientName:'',clientEmail:'',clientPhone:'',requestedDate:'',requestedTime:'',notes:'' });
-                  setAcceptedPrivacy(false);
-                }}
-                className="px-6 py-3 rounded-xl bg-slate-800 text-slate-200
-                  hover:bg-slate-700 transition-colors text-sm"
-              >
+              <BtnSecondary onClick={() => {
+                setSuccess(false); setStep(1);
+                setForm({ clientName:'',clientEmail:'',clientPhone:'',
+                          requestedDate:'',requestedTime:'',notes:'' });
+                setAcceptedPrivacy(false);
+              }}>
                 Nueva solicitud
-              </button>
+              </BtnSecondary>
             )}
           </div>
         </motion.div>
@@ -287,32 +423,53 @@ export default function ScheduleVisitPage() {
     );
   }
 
-  // ── Layout principal ───────────────────────────────────────
+  // ═══════════════════════════════════════════════════
+  // LAYOUT PRINCIPAL
+  // ═══════════════════════════════════════════════════
   return (
-    <div className="min-h-screen py-8 px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
-      <div className="max-w-lg mx-auto">
+    <div style={{ minHeight: '100vh', padding: '2rem 1rem', background: 'var(--color-bg)' }}>
+      <div style={{ maxWidth: 520, margin: '0 auto' }}>
 
-        {/* Back */}
+        {/* Volver atrás */}
         <Link
           to={propertyId ? `/propiedades/${propertyId}` : '/catalogo'}
-          className="inline-flex items-center gap-2 text-slate-400 hover:text-white
-            text-sm mb-6 transition-colors"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontSize: 13, fontWeight: 500,
+            color: 'var(--color-text-muted)',
+            marginBottom: 24, textDecoration: 'none',
+            transition: 'color 0.2s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--tw-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
         >
           <FaArrowLeft size={12} />
           {property ? `Volver a ${property.title}` : 'Volver al catálogo'}
         </Link>
 
-        {/* Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8">
-
-          {/* Header */}
-          <div className="mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center
-              justify-center mb-3">
-              <FaCalendarAlt className="text-primary text-xl" />
+        {/* Tarjeta principal */}
+        <div
+          className="card-soft"
+          style={{ padding: '2rem 1.75rem' }}
+        >
+          {/* Header de la tarjeta */}
+          <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                width: 48, height: 48, borderRadius: 14,
+                background: 'var(--tw-primary-15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <FaCalendarAlt style={{ color: 'var(--tw-primary)', fontSize: 20 }} />
             </div>
-            <h1 className="text-2xl font-extrabold text-white">Agendar visita</h1>
-            <p className="text-slate-400 text-sm mt-1">Completa el formulario en 3 pasos sencillos</p>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>
+              Agendar visita
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              Completa los 3 pasos para solicitar tu cita. Es muy rápido.
+            </p>
           </div>
 
           {/* Badge propiedad */}
@@ -322,24 +479,37 @@ export default function ScheduleVisitPage() {
           <StepIndicator current={step} />
 
           {/* Contenido animado */}
-          <div className="overflow-hidden">
+          <div style={{ overflow: 'hidden' }}>
             <AnimatePresence mode="wait" custom={direction}>
-              {/* ── PASO 1: Tus datos ──────────────────────── */}
+
+              {/* ══ PASO 1: Tus datos ══════════════════════════════ */}
               {step === 1 && (
                 <motion.div
                   key="step1"
                   custom={direction}
                   variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-5"
+                  initial="enter" animate="center" exit="exit"
+                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
                 >
-                  <div className="text-center mb-5">
-                    <FaUser className="text-primary text-3xl mx-auto mb-2" />
-                    <h2 className="text-lg font-bold text-white">¿Quién eres?</h2>
-                    <p className="text-slate-400 text-sm">Necesitamos tus datos para confirmar la cita</p>
+                  {/* Encabezado del paso */}
+                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                    <div
+                      style={{
+                        width: 56, height: 56, borderRadius: '50%',
+                        background: 'var(--tw-primary-10)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 12px',
+                      }}
+                    >
+                      <FaUser style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                    </div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
+                      ¿Quién eres?
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      Necesitamos tus datos básicos para confirmar la visita.
+                    </p>
                   </div>
 
                   <InputField label="Nombre completo *" icon={FaUser} error={errors.clientName}>
@@ -348,70 +518,72 @@ export default function ScheduleVisitPage() {
                       value={form.clientName} onChange={handleChange}
                       placeholder="Ej: María González"
                       autoComplete="name"
-                      className={`w-full bg-slate-950 border rounded-xl px-4 py-3
-                        text-sm text-slate-200 placeholder-slate-500 outline-none
-                        transition-all duration-200
-                        focus:ring-2 focus:ring-primary/40 focus:border-primary
-                        ${ errors.clientName ? 'border-red-500' : 'border-slate-700' }`}
+                      style={inputStyle(errors.clientName)}
                     />
                   </InputField>
 
-                  <InputField label="Correo electrónico *" icon={FaEnvelope} error={errors.clientEmail}>
+                  <InputField
+                    label="Correo electrónico *" icon={FaEnvelope}
+                    error={errors.clientEmail}
+                    hint="Te enviaremos la confirmación a este correo"
+                  >
                     <input
                       type="email" name="clientEmail"
                       value={form.clientEmail} onChange={handleChange}
                       placeholder="tu@correo.com"
                       autoComplete="email"
-                      className={`w-full bg-slate-950 border rounded-xl px-4 py-3
-                        text-sm text-slate-200 placeholder-slate-500 outline-none
-                        transition-all duration-200
-                        focus:ring-2 focus:ring-primary/40 focus:border-primary
-                        ${ errors.clientEmail ? 'border-red-500' : 'border-slate-700' }`}
+                      style={inputStyle(errors.clientEmail)}
                     />
                   </InputField>
 
-                  <InputField label="Teléfono (opcional)" icon={FaPhone}>
+                  <InputField
+                    label="Teléfono (opcional)" icon={FaPhone}
+                    hint="Si lo tienes, podemos llamarte para confirmar"
+                  >
                     <input
                       type="tel" name="clientPhone"
                       value={form.clientPhone} onChange={handleChange}
                       placeholder="310 000 0000"
                       autoComplete="tel"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl
-                        px-4 py-3 text-sm text-slate-200 placeholder-slate-500 outline-none
-                        transition-all duration-200
-                        focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                      style={inputStyle(false)}
                     />
                   </InputField>
 
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      onClick={goNext}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl
-                        bg-primary text-slate-950 font-bold text-sm
-                        hover:bg-primary/90 active:scale-95 transition-all duration-200"
-                    >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+                    <BtnPrimary onClick={goNext}>
                       Continuar <FaArrowRight size={12} />
-                    </button>
+                    </BtnPrimary>
                   </div>
                 </motion.div>
               )}
 
-              {/* ── PASO 2: Fecha y hora ───────────────────── */}
+              {/* ══ PASO 2: Fecha y hora ═══════════════════════════ */}
               {step === 2 && (
                 <motion.div
                   key="step2"
                   custom={direction}
                   variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-5"
+                  initial="enter" animate="center" exit="exit"
+                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
                 >
-                  <div className="text-center mb-5">
-                    <FaCalendarAlt className="text-primary text-3xl mx-auto mb-2" />
-                    <h2 className="text-lg font-bold text-white">¿Cuándo quieres ir?</h2>
-                    <p className="text-slate-400 text-sm">Elige la fecha y la franja horaria que prefieras</p>
+                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                    <div
+                      style={{
+                        width: 56, height: 56, borderRadius: '50%',
+                        background: 'var(--tw-primary-10)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 12px',
+                      }}
+                    >
+                      <FaCalendarAlt style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                    </div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
+                      ¿Cuándo quieres ir?
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      Elige la fecha y la franja horaria que más te convenga.
+                    </p>
                   </div>
 
                   <InputField label="Fecha deseada *" icon={FaCalendarAlt} error={errors.requestedDate}>
@@ -419,120 +591,125 @@ export default function ScheduleVisitPage() {
                       type="date" name="requestedDate"
                       value={form.requestedDate} onChange={handleChange}
                       min={minDate}
-                      className={`w-full bg-slate-950 border rounded-xl px-4 py-3
-                        text-sm text-slate-200 outline-none transition-all duration-200
-                        focus:ring-2 focus:ring-primary/40 focus:border-primary
-                        ${ errors.requestedDate ? 'border-red-500' : 'border-slate-700' }`}
+                      style={inputStyle(errors.requestedDate)}
                     />
                   </InputField>
 
                   {/* Selector visual de hora */}
                   <div>
-                    <label className="block text-slate-300 text-sm font-semibold mb-2">
-                      <FaClock className="inline mr-1.5 text-slate-500" size={12} />
+                    <label
+                      style={{
+                        display: 'block', fontSize: 13, fontWeight: 600,
+                        marginBottom: 10, color: 'var(--color-text)',
+                      }}
+                    >
+                      <FaClock style={{ display:'inline', marginRight:5, color:'var(--color-text-faint)', verticalAlign:'middle' }} size={12} />
                       Hora preferida *
                     </label>
-                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                      {TIME_SLOTS.map((time) => (
-                        <button
-                          key={time}
-                          type="button"
-                          onClick={() => selectTime(time)}
-                          className={`py-2 rounded-xl text-xs font-semibold transition-all
-                            duration-150 border active:scale-95
-                            ${ form.requestedTime === time
-                              ? 'bg-primary text-slate-950 border-primary shadow-lg shadow-primary/20'
-                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-primary/50 hover:text-white'
-                            }`}
-                        >
-                          {time}
-                        </button>
-                      ))}
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 8,
+                      }}
+                    >
+                      {TIME_SLOTS.map((time) => {
+                        const selected = form.requestedTime === time;
+                        return (
+                          <button
+                            key={time}
+                            type="button"
+                            onClick={() => selectTime(time)}
+                            style={{
+                              padding: '9px 4px', borderRadius: 10,
+                              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                              border: `1.5px solid ${ selected ? 'var(--tw-primary)' : 'var(--color-border)' }`,
+                              background: selected ? 'var(--tw-primary)' : 'var(--color-surface)',
+                              color: selected ? '#111827' : 'var(--color-text)',
+                              boxShadow: selected ? '0 2px 12px var(--tw-primary-30)' : 'none',
+                              transition: 'all 0.15s ease',
+                              transform: selected ? 'scale(1.04)' : 'scale(1)',
+                            }}
+                          >
+                            {time}
+                          </button>
+                        );
+                      })}
                     </div>
+
                     {errors.requestedTime && (
-                      <p className="text-red-400 text-xs mt-1.5">{errors.requestedTime}</p>
+                      <p style={{ fontSize: 11, marginTop: 6, color: '#f87171' }}>
+                        ⚠ {errors.requestedTime}
+                      </p>
                     )}
-                    <p className="text-slate-600 text-xs mt-2">
-                      Horario de atención: lunes a sábado · Sujeto a disponibilidad
+                    <p style={{ fontSize: 11, marginTop: 8, color: 'var(--color-text-faint)' }}>
+                      Lunes a sábado · Sujeto a disponibilidad del asesor
                     </p>
                   </div>
 
-                  <div className="pt-2 flex items-center justify-between gap-3">
-                    <button
-                      onClick={goBack}
-                      className="flex items-center gap-2 px-5 py-3 rounded-xl
-                        bg-slate-800 text-slate-200 font-semibold text-sm
-                        hover:bg-slate-700 active:scale-95 transition-all duration-200"
-                    >
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, paddingTop:4 }}>
+                    <BtnSecondary onClick={goBack}>
                       <FaArrowLeft size={12} /> Atrás
-                    </button>
-                    <button
-                      onClick={goNext}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl
-                        bg-primary text-slate-950 font-bold text-sm
-                        hover:bg-primary/90 active:scale-95 transition-all duration-200"
-                    >
+                    </BtnSecondary>
+                    <BtnPrimary onClick={goNext}>
                       Continuar <FaArrowRight size={12} />
-                    </button>
+                    </BtnPrimary>
                   </div>
                 </motion.div>
               )}
 
-              {/* ── PASO 3: Confirmar ──────────────────────── */}
+              {/* ══ PASO 3: Confirmar ══════════════════════════════ */}
               {step === 3 && (
                 <motion.div
                   key="step3"
                   custom={direction}
                   variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-5"
+                  initial="enter" animate="center" exit="exit"
+                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
                 >
-                  <div className="text-center mb-5">
-                    <FaCheckCircle className="text-primary text-3xl mx-auto mb-2" />
-                    <h2 className="text-lg font-bold text-white">Confirma tu solicitud</h2>
-                    <p className="text-slate-400 text-sm">Revisa los datos antes de enviar</p>
+                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                    <div
+                      style={{
+                        width: 56, height: 56, borderRadius: '50%',
+                        background: 'var(--tw-primary-10)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 12px',
+                      }}
+                    >
+                      <FaCheckCircle style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                    </div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
+                      Confirma tu solicitud
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      Revisa que todo esté bien antes de enviar.
+                    </p>
                   </div>
 
-                  {/* Resumen */}
-                  <div className="bg-slate-800/60 border border-slate-700 rounded-xl
-                    p-4 space-y-3">
-                    <h3 className="text-white font-semibold text-sm mb-1">Resumen de tu visita</h3>
+                  {/* Tarjeta resumen */}
+                  <div
+                    className="card-inner"
+                    style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}
+                  >
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
+                      Resumen de tu visita
+                    </p>
                     {property && (
-                      <div className="flex items-start gap-2.5 text-sm">
-                        <FaHome className="text-primary mt-0.5 flex-shrink-0" size={12} />
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:10, paddingBottom:10, borderBottom:'1px solid var(--color-divider)' }}>
+                        <FaHome style={{ color:'var(--tw-primary)', marginTop:2, flexShrink:0 }} size={13} />
                         <div>
-                          <p className="text-white font-medium">{property.title}</p>
-                          <p className="text-slate-400 text-xs">{property.city}</p>
+                          <p style={{ fontWeight:700, fontSize:14, color:'var(--color-text)' }}>{property.title}</p>
+                          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:1 }}>{property.city}</p>
                         </div>
                       </div>
                     )}
-                    <div className="border-t border-slate-700 pt-3 space-y-2.5">
-                      <div className="flex items-center gap-2.5 text-sm">
-                        <FaUser className="text-primary flex-shrink-0" size={11} />
-                        <span className="text-slate-300">{form.clientName}</span>
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm">
-                        <FaEnvelope className="text-primary flex-shrink-0" size={11} />
-                        <span className="text-slate-300">{form.clientEmail}</span>
-                      </div>
-                      {form.clientPhone && (
-                        <div className="flex items-center gap-2.5 text-sm">
-                          <FaPhone className="text-primary flex-shrink-0" size={11} />
-                          <span className="text-slate-300">{form.clientPhone}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2.5 text-sm">
-                        <FaCalendarAlt className="text-primary flex-shrink-0" size={11} />
-                        <span className="text-slate-300">{formatDate(form.requestedDate)}</span>
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm">
-                        <FaClock className="text-primary flex-shrink-0" size={11} />
-                        <span className="text-slate-300">{form.requestedTime} horas</span>
-                      </div>
-                    </div>
+                    <SummaryRow icon={FaUser}        value={form.clientName} />
+                    <SummaryRow icon={FaEnvelope}    value={form.clientEmail} />
+                    <SummaryRow icon={FaPhone}       value={form.clientPhone} />
+                    <SummaryRow icon={FaCalendarAlt} value={formatDate(form.requestedDate)} />
+                    <SummaryRow icon={FaClock}       value={form.requestedTime ? `${form.requestedTime} horas` : ''} />
                   </div>
 
                   {/* Notas opcionales */}
@@ -540,18 +717,21 @@ export default function ScheduleVisitPage() {
                     <textarea
                       name="notes"
                       value={form.notes} onChange={handleChange}
-                      placeholder="Cuéntanos algo sobre tu interés o preguntas que tengas..."
+                      placeholder="¿Tienes alguna pregunta o comentario para el asesor?"
                       rows={3}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl
-                        px-4 py-3 text-sm text-slate-200 placeholder-slate-500
-                        outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                        transition-all duration-200 resize-none"
+                      style={{ ...inputStyle(false), resize: 'none' }}
                     />
                   </InputField>
 
                   {/* Política de privacidad */}
-                  <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4">
-                    <label className="flex items-start gap-3 cursor-pointer">
+                  <div
+                    style={{
+                      background: 'var(--tw-primary-10)',
+                      border: `1px solid ${errors.privacy ? '#f87171' : 'var(--tw-primary-20)'}`,
+                      borderRadius: 12, padding: '14px 16px',
+                    }}
+                  >
+                    <label style={{ display:'flex', alignItems:'flex-start', gap:12, cursor:'pointer' }}>
                       <input
                         type="checkbox"
                         checked={acceptedPrivacy}
@@ -560,72 +740,68 @@ export default function ScheduleVisitPage() {
                           if (e.target.checked)
                             setErrors((prev) => ({ ...prev, privacy: '' }));
                         }}
-                        className="mt-0.5 w-4 h-4 accent-primary flex-shrink-0"
+                        style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--tw-primary)', flexShrink: 0 }}
                       />
-                      <span className="text-slate-300 text-sm leading-relaxed">
+                      <span style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.6 }}>
                         He leído y acepto la{' '}
                         <Link
                           to="/politica-privacidad"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary hover:underline font-semibold"
+                          style={{ color: 'var(--tw-primary)', fontWeight: 700 }}
                         >
                           Política de Privacidad y Uso de Datos
-                        </Link>
-                        {' '}de Inmobiliaria Rincón Bedoya y Asociados.
-                        Entiendo que mis datos serán usados para gestionar mi solicitud de visita.
+                        </Link>{' '}
+                        de Inmobiliaria Rincón Bedoya y Asociados. Entiendo que mis datos serán
+                        usados únicamente para gestionar mi solicitud de visita.
                       </span>
                     </label>
                     {errors.privacy && (
-                      <p className="text-red-400 text-xs mt-2 flex items-center gap-1.5">
+                      <p style={{ fontSize: 11, marginTop: 8, color: '#f87171', display:'flex', alignItems:'center', gap:4 }}>
                         <FaShieldAlt size={10} /> {errors.privacy}
                       </p>
                     )}
                   </div>
 
-                  <div className="pt-2 flex items-center justify-between gap-3">
-                    <button
-                      onClick={goBack}
-                      className="flex items-center gap-2 px-5 py-3 rounded-xl
-                        bg-slate-800 text-slate-200 font-semibold text-sm
-                        hover:bg-slate-700 active:scale-95 transition-all duration-200"
-                    >
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, paddingTop:4 }}>
+                    <BtnSecondary onClick={goBack}>
                       <FaArrowLeft size={12} /> Atrás
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl
-                        bg-primary text-slate-950 font-bold text-sm
-                        hover:bg-primary/90 active:scale-95 transition-all duration-200
-                        disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
+                    </BtnSecondary>
+                    <BtnPrimary onClick={handleSubmit} disabled={submitting}>
                       {submitting ? (
-                        <><span className="w-4 h-4 border-2 border-slate-950
-                          border-t-transparent rounded-full animate-spin" />
-                          Enviando...</>
+                        <>
+                          <span
+                            style={{
+                              width:16, height:16, borderRadius:'50%',
+                              border:'2px solid #111827',
+                              borderTopColor:'transparent',
+                              display:'inline-block',
+                              animation:'spin 0.7s linear infinite',
+                            }}
+                          />
+                          Enviando...
+                        </>
                       ) : (
                         <><FaCalendarAlt size={13} /> Enviar solicitud</>
                       )}
-                    </button>
+                    </BtnPrimary>
                   </div>
                 </motion.div>
               )}
+
             </AnimatePresence>
           </div>
         </div>
 
         {/* Pie de página */}
-        <p className="text-slate-600 text-xs text-center mt-4">
-          ¿Tienes dudas? Escríbenos al{' '}
+        <p style={{ fontSize: 12, textAlign: 'center', marginTop: 16, color: 'var(--color-text-faint)' }}>
+          ¿Tienes dudas?{' '}
           <a
             href="https://wa.me/573105968202"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
+            target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--tw-primary)', fontWeight: 600 }}
           >
-            310 596 8202
+            Escríbenos al 310 596 8202
           </a>
         </p>
       </div>
