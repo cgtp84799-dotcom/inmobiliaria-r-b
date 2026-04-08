@@ -3,11 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── HELPERS DE AUTENTICACIÓN ─────────────────────────────────────────────
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // getUserData() lee por email (el docId en /users es el email del usuario).
+    // El docId en /users es siempre el email del usuario
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data;
     }
@@ -16,163 +17,187 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(request.auth.token.email));
     }
 
+    // ── ROLES ────────────────────────────────────────────────────────────────
+    // admin  → control total del sistema
+    // member → agente inmobiliario: acceso operativo completo (sin gestión de usuarios/config)
+    // viewer → solo lectura sobre contenido operativo
+
     function isAdmin() {
       return isSignedIn() && userExists() && getUserData().role == 'admin';
     }
 
-    function isMemberOrAdmin() {
+    function isMember() {
+      return isSignedIn() && userExists() && getUserData().role == 'member';
+    }
+
+    function isViewer() {
+      return isSignedIn() && userExists() && getUserData().role == 'viewer';
+    }
+
+    // Puede operar (crear, editar): admin + member
+    function canOperate() {
       return isSignedIn() && userExists() && getUserData().role in ['admin', 'member'];
     }
 
-    // userId en /users es siempre el email (docId = email), no el uid de Auth.
+    // Puede leer contenido operativo: admin + member + viewer
+    function canRead() {
+      return isSignedIn() && userExists() && getUserData().role in ['admin', 'member', 'viewer'];
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.token.email == userId;
     }
 
 
-    // ── USUARIOS ────────────────────────────────────────────────────────────
+    // ── USUARIOS ─────────────────────────────────────────────────────────────
+    // Gestión de cuentas: solo admin puede crear/modificar/eliminar otros usuarios.
+    // Cada usuario puede actualizar su propio perfil.
+    // viewer puede leer la lista para ver agentes asignados, etc.
     match /users/{userId} {
-      allow read:   if isSignedIn();
-      allow create: if true;  // registro público + Cloud Function createUserByAdmin
+      allow read:   if canRead();
+      allow create: if true;                    // registro público + Cloud Function admin
       allow update: if isAdmin() || isOwner(userId);
       allow delete: if isAdmin();
     }
 
 
-    // ── SOLICITUDES DE ACCESO ───────────────────────────────────────────────
+    // ── SOLICITUDES DE ACCESO ────────────────────────────────────────────────
+    // Solo admin gestiona quién entra al sistema.
     match /accessRequests/{requestId} {
-      allow create: if true;  // usuarios sin cuenta pueden solicitar acceso
-      allow read:   if isSignedIn();
+      allow create: if true;                    // cualquiera puede solicitar acceso
+      allow read:   if isAdmin();
       allow update, delete: if isAdmin();
     }
 
 
-    // ── PRESENCIA ───────────────────────────────────────────────────────────
+    // ── PRESENCIA ────────────────────────────────────────────────────────────
     match /presence/{userId} {
-      allow read:  if isSignedIn();
+      allow read:  if canRead();
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
 
-    // ── PROPIEDADES ─────────────────────────────────────────────────────────
+    // ── PROPIEDADES ──────────────────────────────────────────────────────────
+    // Catálogo público: cualquiera puede ver propiedades (portal web).
+    // Crear/editar: admin y member (agente inmobiliario trabaja propiedades).
+    // Eliminar: solo admin.
     match /properties/{propertyId} {
-      allow read:            if true;  // catálogo público
-      allow create, update:  if isMemberOrAdmin();
-      allow delete:          if isAdmin();
+      allow read:           if true;            // catálogo público
+      allow create, update: if canOperate();
+      allow delete:         if isAdmin();
     }
 
 
-    // ── CLIENTES ────────────────────────────────────────────────────────────
+    // ── CLIENTES ─────────────────────────────────────────────────────────────
+    // Agentes inmobiliarios gestionan clientes diariamente.
+    // viewer puede consultar el CRM sin modificar.
     match /clients/{clientId} {
-      allow read:           if isMemberOrAdmin();
-      allow create, update: if isMemberOrAdmin();
+      allow read:           if canRead();
+      allow create, update: if canOperate();
       allow delete:         if isAdmin();
 
-      // Historial de actividad del cliente (visitas, contratos, etc.)
-      // Se crea automáticamente al aprobar/completar una visita.
       match /history/{historyId} {
-        allow read:   if isMemberOrAdmin();
-        allow create: if isMemberOrAdmin();
+        allow read:   if canRead();
+        allow create: if canOperate();
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
     }
 
 
-    // ── CONTRATOS ───────────────────────────────────────────────────────────
+    // ── CONTRATOS ────────────────────────────────────────────────────────────
+    // Agentes firman y gestionan contratos.
     match /contracts/{contractId} {
-      allow read:           if isSignedIn();
-      allow create, update: if isMemberOrAdmin();
+      allow read:           if canRead();
+      allow create, update: if canOperate();
       allow delete:         if isAdmin();
     }
 
 
-    // ── DOCUMENTOS ──────────────────────────────────────────────────────────
+    // ── DOCUMENTOS ───────────────────────────────────────────────────────────
     match /documents/{documentId} {
-      allow read:           if isSignedIn();
-      allow create, update: if isMemberOrAdmin();
+      allow read:           if canRead();
+      allow create, update: if canOperate();
       allow delete:         if isAdmin();
     }
 
 
-    // ── CONTACTOS (formulario público de la web) ────────────────────────────
+    // ── CONTACTOS (formulario público web) ───────────────────────────────────
     match /contacts/{contactId} {
-      allow create:               if true;
-      allow read, update, delete: if isSignedIn();
+      allow create:         if true;            // formulario público sin login
+      allow read:           if canRead();
+      allow update, delete: if canOperate();
     }
 
 
-    // ── VISITAS ─────────────────────────────────────────────────────────────
-    // • create: if true  → cualquier visitante puede agendar (formulario público sin login)
-    // • read:   autenticados  → admin ve todas; member ve las suyas (filtrado en el hook)
-    // • update: member o admin → aprobar, reagendar, completar
-    // • delete: solo admin
+    // ── VISITAS ───────────────────────────────────────────────────────────────
+    // create: público — cualquier visitante agenda desde el portal
+    // read: todos los roles autenticados (viewer puede ver el historial)
+    // update: agente y admin (aprobar, rechazar, reagendar, completar)
+    // delete: solo admin
     match /visits/{visitId} {
-      allow create: if true;
-      allow read:   if isSignedIn();
-      allow update: if isMemberOrAdmin();
+      allow create: if true;                    // formulario público sin login
+      allow read:   if canRead();
+      allow update: if canOperate();
       allow delete: if isAdmin();
     }
 
 
-    // ── CONSENTIMIENTO DE PRIVACIDAD (formulario público) ───────────────────
-    // Se guarda cuando el usuario acepta la política al agendar una visita.
+    // ── CONSENTIMIENTO DE PRIVACIDAD ─────────────────────────────────────────
     match /privacyConsents/{consentId} {
-      allow create: if true;           // formulario público, sin login
-      allow read:   if isAdmin();      // solo admin puede consultar consentimientos
+      allow create: if true;                    // formulario público sin login
+      allow read:   if isAdmin();
       allow delete: if isAdmin();
     }
 
 
-    // ── EMAILS AUTOMÁTICOS (extensión Trigger Email) ────────────────────────
-    // La extensión "Trigger Email from Firestore" lee esta colección y envía
-    // los correos. Solo usuarios autenticados (admin/member) pueden crear emails.
-    // El servidor (extensión) escribe los campos de estado (delivery, state).
+    // ── EMAILS AUTOMÁTICOS (extensión Trigger Email) ─────────────────────────
     match /mail/{mailId} {
-      allow create: if isSignedIn();   // solo código interno autenticado encola emails
-      allow read:   if isAdmin();      // admin puede ver el log de envíos
-      allow update: if false;          // solo la extensión Firebase actualiza el estado
+      allow create: if canOperate();            // solo código interno autenticado encola emails
+      allow read:   if isAdmin();
+      allow update: if false;                   // solo la extensión Firebase actualiza estado
       allow delete: if isAdmin();
     }
 
 
-    // ── CHAT ────────────────────────────────────────────────────────────────
+    // ── CHAT ─────────────────────────────────────────────────────────────────
+    // viewer no tiene acceso al chat (comunicación operativa interna)
     match /conversations/{conversationId} {
-      allow read:           if isSignedIn();
-      allow create, update: if isMemberOrAdmin();
+      allow read:           if canOperate();
+      allow create, update: if canOperate();
       allow delete:         if isAdmin();
       match /messages/{messageId} {
-        allow read:   if isSignedIn();
-        allow create: if isMemberOrAdmin();
-        allow update: if isSignedIn() && request.auth.token.email == resource.data.senderEmail;
-        allow delete: if isAdmin();
+        allow read:         if canOperate();
+        allow create:       if canOperate();
+        allow update:       if canOperate() && request.auth.token.email == resource.data.senderEmail;
+        allow delete:       if isAdmin();
       }
     }
 
     match /groupChat/{document=**} {
-      allow read:  if isSignedIn();
-      allow write: if isMemberOrAdmin();
+      allow read:  if canOperate();
+      allow write: if canOperate();
     }
 
     match /chatMessages/{messageId} {
-      allow read:           if isSignedIn();
-      allow create:         if isMemberOrAdmin();
+      allow read:           if canOperate();
+      allow create:         if canOperate();
       allow update, delete: if isAdmin();
     }
 
     match /chatRooms/{roomId} {
-      allow read:  if isSignedIn();
-      allow write: if isMemberOrAdmin();
+      allow read:  if canOperate();
+      allow write: if canOperate();
     }
 
 
-    // ── NOTIFICACIONES ──────────────────────────────────────────────────────
-    // Un usuario solo ve y gestiona sus propias notificaciones.
+    // ── NOTIFICACIONES ────────────────────────────────────────────────────────
+    // Cada usuario solo gestiona sus propias notificaciones.
     match /notifications/{notificationId} {
       allow read: if isSignedIn() &&
                      (resource.data.userId == request.auth.uid ||
                       resource.data.userId == request.auth.token.email);
-      allow create: if isSignedIn();
+      allow create: if canOperate();
       allow update: if isSignedIn() &&
                        (resource.data.userId == request.auth.uid ||
                         resource.data.userId == request.auth.token.email);
@@ -183,42 +208,50 @@ service cloud.firestore {
     }
 
 
-    // ── CALENDARIO ──────────────────────────────────────────────────────────
+    // ── CALENDARIO ────────────────────────────────────────────────────────────
+    // Agentes crean y gestionan eventos de su agenda.
     match /events/{eventId} {
-      allow read, write: if isSignedIn();
+      allow read:   if canRead();
+      allow write:  if canOperate();
     }
 
     match /appointments/{appointmentId} {
-      allow read, write: if isSignedIn();
+      allow create:         if true;            // espejo de visits (formulario público)
+      allow read:           if canRead();
+      allow update, delete: if canOperate();
     }
 
 
-    // ── ANALYTICS Y STATS ───────────────────────────────────────────────────
+    // ── ANALYTICS Y STATS ─────────────────────────────────────────────────────
+    // Todos los roles autenticados ven las gráficas y métricas del dashboard.
     match /analytics/{document=**} {
-      allow read:  if isSignedIn();
+      allow read:  if canRead();
       allow write: if isAdmin();
     }
 
     match /activity/{document=**} {
-      allow read, write: if isSignedIn();
+      allow read:  if canRead();
+      allow write: if canOperate();
     }
 
     match /stats/{document=**} {
-      allow read:  if isSignedIn();
+      allow read:  if canRead();
       allow write: if isAdmin();
     }
 
 
-    // ── CONTADORES ──────────────────────────────────────────────────────────
+    // ── CONTADORES ────────────────────────────────────────────────────────────
+    // Los agentes necesitan leer contadores para el dashboard y KPIs.
     match /counters/{document=**} {
-      allow read:  if isSignedIn();
+      allow read:  if canRead();
       allow write: if isAdmin();
     }
 
 
-    // ── CONFIGURACIÓN ───────────────────────────────────────────────────────
+    // ── CONFIGURACIÓN DEL SISTEMA ─────────────────────────────────────────────
+    // Solo admin accede a configuración (viewer/member no tocan esto).
     match /settings/{document=**} {
-      allow read:  if isSignedIn();
+      allow read:  if isAdmin();
       allow write: if isAdmin();
     }
   }
