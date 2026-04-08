@@ -6,11 +6,9 @@ import toast from 'react-hot-toast';
 /**
  * useVisits — hook para la página de administración de visitas.
  *
- * Usa onSnapshot (subscribeAll) para recibir actualizaciones
- * en tiempo real sin necesidad de reload manual.
- *
- * La API pública es idéntica a la versión anterior:
- * { visits, loading, error, counts, approve, reject, complete, remove, reload }
+ * Fix StrictMode: usamos un flag `mounted` para evitar que el cleanup
+ * llame unsub() sobre un listener que Firestore aún no terminó de
+ * inicializar (causa del INTERNAL ASSERTION FAILED ca9/b815).
  */
 export function useVisits() {
   const [visits,  setVisits]  = useState([]);
@@ -18,23 +16,34 @@ export function useVisits() {
   const [error,   setError]   = useState(null);
 
   useEffect(() => {
-    // Suscripción real-time — el unsub se devuelve para el cleanup
-    const unsub = visitService.subscribeAll(
-      (data) => { setVisits(data); setLoading(false); },
-      (err)  => { setError(err);   setLoading(false); toast.error('Error al cargar las visitas'); }
-    );
-    return () => unsub();
+    let mounted = true;
+    let unsub = null;
+
+    // Pequeño delay para evitar el race condition de StrictMode:
+    // React desmonta+remonta sincrónicamente en dev, pero Firestore
+    // registra el listener de forma asíncrona. Al esperar un tick,
+    // el segundo mount (el real) ya tiene unsub definido correctamente.
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+
+      unsub = visitService.subscribeAll(
+        (data) => { if (mounted) { setVisits(data); setLoading(false); } },
+        (err)  => { if (mounted) { setError(err); setLoading(false); toast.error('Error al cargar las visitas'); } }
+      );
+    }, 0);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsub) unsub();
+    };
   }, []);
 
-  // Contadores por estado
   const counts = useMemo(
     () => visits.reduce((acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }), {}),
     [visits]
   );
 
-  // --- Acciones ---
-  // Con onSnapshot ya no necesitamos actualización optimista:
-  // Firestore emitirá el cambio automáticamente después del write.
   const approve = useCallback(async (visit, adminNotes = '') => {
     try {
       await visitService.approveVisit(visit, adminNotes);
@@ -71,7 +80,6 @@ export function useVisits() {
     }
   }, []);
 
-  // reload mantenido por compatibilidad — con onSnapshot es no-op
   const reload = useCallback(() => {}, []);
 
   return { visits, loading, error, counts, approve, reject, complete, remove, reload };
