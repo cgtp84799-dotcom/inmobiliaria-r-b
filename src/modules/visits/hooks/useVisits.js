@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
-import { useAuth } from '../../auth/hooks/useAuth';
+import { useAuth } from '../../../core/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 /**
@@ -51,18 +51,15 @@ export function useVisits() {
 
     try {
       if (role === 'admin') {
-        // Admin: suscripción única a todo
         unsub = visitService.subscribeAll(
           safeSet((data) => { setVisits(data); setLoading(false); setError(null); }),
           onError,
         );
       } else {
-        // Member: combina pendientes + sus visitas asignadas (sin duplicados)
         let pending  = [];
         let assigned = [];
 
         const merge = () => {
-          // Pendientes sin agente asignado + las propias (ya asignadas a él)
           const pendingWithoutAgent = pending.filter((v) => !v.agentEmail);
           const byId = new Map();
           [...pendingWithoutAgent, ...assigned].forEach((v) => byId.set(v.id, v));
@@ -98,20 +95,14 @@ export function useVisits() {
     };
   }, [user?.email, role]);
 
-  // Contadores por estado
   const counts = useMemo(
     () => visits.reduce((acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }), {}),
     [visits],
   );
 
-  // ── approve ──────────────────────────────────────────────────────────
-  // Si es member, se auto-asigna como agente al aprobar.
   const approve = useCallback(async (visit, adminNotes = '', agentData = {}) => {
     try {
       let finalAgentData = agentData;
-
-      // Si el que aprueba es un member y no se eligió otro agente,
-      // se asigna a sí mismo automáticamente.
       if (role === 'member' && !agentData.agentId && user) {
         finalAgentData = {
           agentId:    user.uid,
@@ -119,7 +110,6 @@ export function useVisits() {
           agentEmail: user.email,
         };
       }
-
       await visitService.approveVisit(visit, adminNotes, finalAgentData);
       toast.success('Visita aprobada ✅');
     } catch (e) {

@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fa';
 import { VISIT_STATUS, VISIT_STATUS_LABELS, VISIT_STATUS_COLORS } from '../types/visit.types';
 import { formatShort } from '../../../shared/utils/formatDate';
-import { useAuth } from '../../auth/hooks/useAuth';
+import { useAuth } from '../../../core/contexts/AuthContext';
 
 /**
  * VisitCard
@@ -74,9 +74,6 @@ export default function VisitCard({
       ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
       : true;
 
-  // ── Permisos por rol ──────────────────────────────────────────────────
-  // Admin: puede aprobar, rechazar, reagendar, completar, eliminar
-  // Member: solo puede reagendar y marcar como completada (sus visitas asignadas)
   const canApprove    = isAdmin && visit.status === VISIT_STATUS.PENDING;
   const canReject     = isAdmin && (visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED);
   const canReschedule = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED;
@@ -132,7 +129,6 @@ export default function VisitCard({
           </button>
         </div>
 
-        {/* ─── Datos del cliente ────────────────────────────────────────── */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <FaUser className="text-slate-500 flex-shrink-0" size={11} />
@@ -148,7 +144,6 @@ export default function VisitCard({
           </div>
         </div>
 
-        {/* ─── Agente asignado (visible en cabecera si ya tiene) ────────── */}
         {visit.agentName && (
           <div className="mt-2 flex items-center gap-1.5">
             <FaUserTie className="text-yellow-500" size={10} />
@@ -156,7 +151,6 @@ export default function VisitCard({
           </div>
         )}
 
-        {/* ─── Botones de acción ────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
           {canApprove && (
             <button
@@ -220,7 +214,6 @@ export default function VisitCard({
           )}
         </div>
 
-        {/* ─── Panel de acción inline ───────────────────────────────────── */}
         <AnimatePresence>
           {action && (
             <motion.div
@@ -229,7 +222,6 @@ export default function VisitCard({
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden space-y-2"
             >
-              {/* Selector agente (solo admin, solo aprobar) */}
               {action === 'approve' && isAdmin && agents.length > 0 && (
                 <div>
                   <label className="block text-slate-400 text-xs font-semibold mb-1">
@@ -251,7 +243,6 @@ export default function VisitCard({
                 </div>
               )}
 
-              {/* Campos fecha/hora para reagendar */}
               {action === 'reschedule' && (
                 <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 space-y-2">
                   <p className="text-blue-400 text-xs font-semibold flex items-center gap-1.5">
@@ -319,7 +310,6 @@ export default function VisitCard({
         </AnimatePresence>
       </div>
 
-      {/* ─── Sección expandida ────────────────────────────────────────────── */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -357,7 +347,6 @@ export default function VisitCard({
               </div>
             )}
 
-            {/* Quién aprobó — visible solo para admin */}
             {isAdmin && visit.approvedBy && (
               <div className="flex items-center gap-2">
                 <FaShieldAlt className="text-slate-500" size={11} />
