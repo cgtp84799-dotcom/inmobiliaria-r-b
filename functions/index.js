@@ -1,22 +1,20 @@
-// ─── v1 imports (funciones HTTP existentes) ──────────────────────────────────
-const functionsV1 = require("firebase-functions/v1");
-const admin       = require("firebase-admin");
-const cors        = require("cors")({ origin: true });
-const nodemailer  = require("nodemailer");
+// ─── v2 imports ───────────────────────────────────────────────────────────────────────────
+const { onRequest }          = require("firebase-functions/v2/https");
+const { onDocumentWritten }  = require("firebase-functions/v2/firestore");
+const { defineSecret }       = require("firebase-functions/params");
+const { setGlobalOptions }   = require("firebase-functions/v2");
+const admin                  = require("firebase-admin");
+const cors                   = require("cors")({ origin: true });
+const nodemailer             = require("nodemailer");
 
-// ─── v2 imports (trigger Firestore) ──────────────────────────────────────────
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { defineSecret }      = require("firebase-functions/params");
-const { setGlobalOptions }  = require("firebase-functions/v2");
-
-// ─── Opciones globales v2 (solo aplica a funciones v2, no afecta v1) ─────────
-setGlobalOptions({ maxInstances: 10 });
+// ─── Opciones globales v2 ─────────────────────────────────────────────────────────
+setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// ─── Secrets ──────────────────────────────────────────────────────────────────
+// ─── Secrets ─────────────────────────────────────────────────────────────────
 const GMAIL_USER = defineSecret("GMAIL_USER");
 const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
@@ -78,77 +76,73 @@ function toLastMod(value){try{if(!value)return null;if(typeof value?.toDate==="f
 function buildUrlNode(urlData){const images=Array.isArray(urlData.images)?urlData.images:[];const imgBlocks=images.map((img)=>`\n    <image:image>\n      <image:loc>${xmlEscape(img.loc)}</image:loc>\n      <image:title><![CDATA[${img.title||""}]]></image:title>\n      <image:caption><![CDATA[${img.caption||""}]]></image:caption>\n    </image:image>`).join("");const lastmodBlock=urlData.lastmod?`\n    <lastmod>${xmlEscape(urlData.lastmod)}</lastmod>`:"";return`\n  <url>\n    <loc>${xmlEscape(urlData.loc)}</loc>${lastmodBlock}\n    <changefreq>${xmlEscape(urlData.changefreq||"weekly")}</changefreq>\n    <priority>${xmlEscape(urlData.priority||"0.5")}</priority>${imgBlocks}\n  </url>`;}
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 1: deleteUserComplete  (v1 HTTP)
+// FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.deleteUserComplete = functionsV1.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
-    try {
-      if (handlePreflight(req, res)) return;
-      setCorsHeaders(req, res);
-      if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-      await assertAdminFromRequest(req);
-      const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
-      if (!userId) return res.status(400).json({ error: "userId es requerido" });
-      const userDoc = await admin.firestore().collection("users").doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
-      const userUid = userDoc.data()?.uid;
-      if (userUid) await admin.auth().deleteUser(userUid);
-      await admin.firestore().collection("users").doc(userId).delete();
-      if (userUid) {
-        await admin.database().ref(`status/${userUid}`).remove();
-        await admin.database().ref(`presence/${userUid}`).remove();
-      }
-      return res.status(200).json({ result: { success: true, message: `Usuario ${userId} eliminado completamente`, deletedFrom: ["Authentication","Firestore","Realtime Database"] } });
-    } catch (error) {
-      setCorsHeaders(req, res);
-      console.error("deleteUserComplete Error:", error);
-      return res.status(error.status || 500).json({ error: error.message });
+exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
+  try {
+    if (handlePreflight(req, res)) return;
+    setCorsHeaders(req, res);
+    if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
+    await assertAdminFromRequest(req);
+    const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
+    if (!userId) return res.status(400).json({ error: "userId es requerido" });
+    const userDoc = await admin.firestore().collection("users").doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
+    const userUid = userDoc.data()?.uid;
+    if (userUid) await admin.auth().deleteUser(userUid);
+    await admin.firestore().collection("users").doc(userId).delete();
+    if (userUid) {
+      await admin.database().ref(`status/${userUid}`).remove();
+      await admin.database().ref(`presence/${userUid}`).remove();
     }
-  });
+    return res.status(200).json({ result: { success: true, message: `Usuario ${userId} eliminado completamente`, deletedFrom: ["Authentication","Firestore","Realtime Database"] } });
+  } catch (error) {
+    setCorsHeaders(req, res);
+    console.error("deleteUserComplete Error:", error);
+    return res.status(error.status || 500).json({ error: error.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 2: createUserByAdmin  (v1 HTTP)
+// FUNCIÓN 2: createUserByAdmin  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.createUserByAdmin = functionsV1.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
+exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
+  try {
+    if (handlePreflight(req, res)) return;
+    setCorsHeaders(req, res);
+    if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
+    await assertAdminFromRequest(req);
+    const data        = req.body?.data || {};
+    const email       = String(data.email       || "").trim().toLowerCase();
+    const password    = String(data.password    || "");
+    const displayName = String(data.displayName || "").trim();
+    const phone       = String(data.phone       || "").trim();
+    const role        = String(data.role        || "member").trim();
+    const status      = String(data.status      || "active").trim();
+    if (!email || !password) return res.status(400).json({ error: "email y password son requeridos" });
+    let userRecord;
     try {
-      if (handlePreflight(req, res)) return;
-      setCorsHeaders(req, res);
-      if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-      await assertAdminFromRequest(req);
-      const data        = req.body?.data || {};
-      const email       = String(data.email       || "").trim().toLowerCase();
-      const password    = String(data.password    || "");
-      const displayName = String(data.displayName || "").trim();
-      const phone       = String(data.phone       || "").trim();
-      const role        = String(data.role        || "member").trim();
-      const status      = String(data.status      || "active").trim();
-      if (!email || !password) return res.status(400).json({ error: "email y password son requeridos" });
-      let userRecord;
-      try {
-        userRecord = await admin.auth().createUser({ email, password, displayName, disabled: status === "blocked" });
-      } catch (e) {
-        if (e?.code === "auth/email-already-exists") userRecord = await admin.auth().getUserByEmail(email);
-        else throw e;
-      }
-      await admin.firestore().collection("users").doc(email).set(
-        { uid: userRecord.uid, email, displayName, phone, role, status, updatedAt: admin.firestore.FieldValue.serverTimestamp(), createdAt: admin.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-      return res.status(200).json({ result: { success: true, uid: userRecord.uid, email } });
-    } catch (error) {
-      setCorsHeaders(req, res);
-      console.error("createUserByAdmin Error:", error);
-      return res.status(error.status || 500).json({ error: error.message });
+      userRecord = await admin.auth().createUser({ email, password, displayName, disabled: status === "blocked" });
+    } catch (e) {
+      if (e?.code === "auth/email-already-exists") userRecord = await admin.auth().getUserByEmail(email);
+      else throw e;
     }
-  });
+    await admin.firestore().collection("users").doc(email).set(
+      { uid: userRecord.uid, email, displayName, phone, role, status, updatedAt: admin.firestore.FieldValue.serverTimestamp(), createdAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    return res.status(200).json({ result: { success: true, uid: userRecord.uid, email } });
+  } catch (error) {
+    setCorsHeaders(req, res);
+    console.error("createUserByAdmin Error:", error);
+    return res.status(error.status || 500).json({ error: error.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 3: redirectToCustomDomain  (v1 HTTP)
+// FUNCIÓN 3: redirectToCustomDomain  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.redirectToCustomDomain = functionsV1.https.onRequest((req, res) => {
+exports.redirectToCustomDomain = onRequest({ cors: true }, (req, res) => {
   const host = String(req.headers.host || "");
   if (host.includes("web.app") || host.includes("firebaseapp.com")) {
     return res.redirect(301, `${BASE_URL}${req.url}`);
@@ -157,9 +151,9 @@ exports.redirectToCustomDomain = functionsV1.https.onRequest((req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 4: generateSitemap  (v1 HTTP)
+// FUNCIÓN 4: generateSitemap  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
+exports.generateSitemap = onRequest({ cors: true }, async (req, res) => {
   try {
     if (handlePreflight(req, res)) return;
     setCorsHeaders(req, res);
@@ -202,18 +196,8 @@ exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN 5: onVisitStatusChanged  (v2 Firestore trigger)
-//
-// Usa onDocumentWritten para capturar tanto creaciones como actualizaciones.
-//
-// Flujo de emails:
-//   CREACIÓN  (prevStatus = null)   → "pending"   : Email al cliente (solicitud recibida)
-//   UPDATE    pending  → approved   : Email al cliente (confirmación) + al agente
-//   UPDATE    pending  → rejected   : Email al cliente (rechazo con motivo)
-//   UPDATE    pending  → rescheduled: Email al cliente (nueva propuesta de hora)
-//   UPDATE    approved → rescheduled: Email al cliente (cambio de hora confirmada)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── Estilos base compartidos ─────────────────────────────────────────────────
 const CSS_BASE = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; }
@@ -244,7 +228,6 @@ const CSS_BASE = `
   .tip { font-size: 13px; color: #9ca3af; line-height: 1.6; margin: 0; }
 `;
 
-// ─── Wrapper HTML completo ────────────────────────────────────────────────────
 function htmlWrapper(headerBg, content) {
   return `<!DOCTYPE html>
 <html lang="es" xmlns="http://www.w3.org/1999/xhtml">
@@ -259,18 +242,12 @@ function htmlWrapper(headerBg, content) {
 <div class="wrapper">
   <div class="container">
     <div class="card">
-
-      <!-- HEADER -->
       <div class="header" style="background:${headerBg};">
         <img src="${LOGO_URL}" alt="${FROM_NAME}" class="logo" width="auto" height="52"/>
       </div>
-
-      <!-- BODY -->
       <div class="body">
         ${content}
       </div>
-
-      <!-- FOOTER -->
       <div class="footer">
         <p>
           <strong style="color:#374151;">${FROM_NAME}</strong><br/>
@@ -282,7 +259,6 @@ function htmlWrapper(headerBg, content) {
           Este correo fue generado automáticamente. Por favor no respondas a este mensaje.
         </p>
       </div>
-
     </div>
   </div>
 </div>
@@ -290,7 +266,6 @@ function htmlWrapper(headerBg, content) {
 </html>`;
 }
 
-// ─── Fila de info reutilizable ────────────────────────────────────────────────
 function infoRow(label, value, accentColor) {
   if (!value) return "";
   const valueClass = accentColor
@@ -303,9 +278,6 @@ function infoRow(label, value, accentColor) {
     </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 1 — SOLICITUD RECIBIDA (cliente) — al crear la visita con status pending
-// ═══════════════════════════════════════════════════════════════════════════════
 function pendingHtml(d) {
   return htmlWrapper(
     "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
@@ -317,22 +289,18 @@ function pendingHtml(d) {
       recibimos tu solicitud de visita. Nuestro equipo la revisará y te confirmará
       <strong style="color:#b8952a;">en menos de 24 horas</strong>.
     </p>
-
     <div class="info-card">
       ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
       ${infoRow("📅 Fecha solicitada", d.requestedDate)}
       ${infoRow("🕐 Hora solicitada", d.requestedTime)}
       ${d.notes ? infoRow("💬 Tu mensaje", d.notes) : ""}
     </div>
-
     <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
       <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">¿Qué sigue?</p>
       <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
         Un asesor revisará tu solicitud y te enviará un correo de confirmación con los detalles de la visita.
-        Si tienes alguna pregunta, no dudes en contactarnos.
       </p>
     </div>
-
     <div class="btn-center">
       <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
         💬 Contactar por WhatsApp
@@ -345,9 +313,6 @@ function pendingHtml(d) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 2 — VISITA APROBADA (cliente)
-// ═══════════════════════════════════════════════════════════════════════════════
 function approvedHtml(d) {
   return htmlWrapper(
     "linear-gradient(135deg, #1a2a1a 0%, #2d4a2d 100%)",
@@ -358,7 +323,6 @@ function approvedHtml(d) {
       Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
       nos alegra informarte que tu solicitud de visita fue <strong style="color:#166534;">aprobada</strong>.
     </p>
-
     <div class="info-card">
       ${infoRow("🏠 Propiedad", d.propertyName, "#166534")}
       ${infoRow("📅 Fecha", d.requestedDate)}
@@ -366,22 +330,16 @@ function approvedHtml(d) {
       ${d.agentName ? infoRow("👤 Agente", d.agentName, "#b8952a") : ""}
       ${d.adminNotes ? infoRow("💬 Nota", d.adminNotes) : ""}
     </div>
-
     ${d.adminNotes ? `
     <div class="note-box" style="background:#f0fdf4; border-left:4px solid #22c55e;">
       <p style="margin:0; font-size:13px; color:#15803d; font-weight:600;">Mensaje del agente</p>
       <p style="margin:6px 0 0; font-size:14px; color:#166534;">${d.adminNotes}</p>
     </div>` : ""}
-
     <div class="divider"></div>
-
     <p style="font-size:14px; color:#374151; line-height:1.7; margin:0 0 8px;">
-      📌 <strong>Recuerda llegar puntualmente</strong> a la hora indicada. Si necesitas reagendar o tienes alguna pregunta, contáctanos con anticipación.
+      📌 <strong>Recuerda llegar puntualmente</strong> a la hora indicada.
     </p>
-    <p class="tip">
-      Lleva contigo tu documento de identidad. El agente te recibirá en la propiedad.
-    </p>
-
+    <p class="tip">Lleva contigo tu documento de identidad. El agente te recibirá en la propiedad.</p>
     <div class="btn-center">
       <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#166534,#15803d); color:#ffffff;">
         💬 Confirmar por WhatsApp
@@ -394,9 +352,6 @@ function approvedHtml(d) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 3 — VISITA RECHAZADA (cliente)
-// ═══════════════════════════════════════════════════════════════════════════════
 function rejectedHtml(d) {
   return htmlWrapper(
     "linear-gradient(135deg, #1a1010 0%, #3d1515 100%)",
@@ -408,28 +363,23 @@ function rejectedHtml(d) {
       lamentamos informarte que tu solicitud de visita para
       <strong style="color:#1f2937;">${d.propertyName}</strong> no pudo ser aprobada en este momento.
     </p>
-
     ${d.adminNotes ? `
     <div class="note-box" style="background:#fef2f2; border-left:4px solid #ef4444;">
       <p style="margin:0; font-size:13px; color:#991b1b; font-weight:600;">Motivo</p>
       <p style="margin:6px 0 0; font-size:14px; color:#7f1d1d;">${d.adminNotes}</p>
     </div>` : ""}
-
     <div class="info-card">
       ${infoRow("🏠 Propiedad", d.propertyName)}
       ${infoRow("📅 Fecha solicitada", d.requestedDate)}
       ${infoRow("🕐 Hora solicitada", d.requestedTime)}
     </div>
-
     <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
       <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">¿Qué puedes hacer?</p>
       <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
         • Escríbenos por WhatsApp para intentar otra fecha.<br/>
-        • Explora nuestras otras propiedades disponibles.<br/>
-        • Nuestro equipo estará encantado de ayudarte.
+        • Explora nuestras otras propiedades disponibles.
       </p>
     </div>
-
     <div class="btn-center">
       <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b45309,#d97706); color:#ffffff;">
         💬 Contactar por WhatsApp
@@ -438,18 +388,12 @@ function rejectedHtml(d) {
         Ver catálogo
       </a>
     </div>
-
     <div class="divider"></div>
-    <p class="tip" style="text-align:center;">
-      Gracias por confiar en nosotros. Seguimos a tu disposición para encontrar la propiedad ideal.
-    </p>
+    <p class="tip" style="text-align:center;">Gracias por confiar en nosotros. Seguimos a tu disposición.</p>
     `
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 4 — NUEVA HORA PROPUESTA / REAGENDADO (cliente)
-// ═══════════════════════════════════════════════════════════════════════════════
 function rescheduledHtml(d) {
   const newDate = d.proposedDate || d.requestedDate;
   const newTime = d.proposedTime || d.requestedTime;
@@ -464,7 +408,6 @@ function rescheduledHtml(d) {
       <strong style="color:#1f2937;">${d.propertyName}</strong>.
       Por favor <strong style="color:#1e40af;">confirma si la nueva fecha te queda bien</strong>.
     </p>
-
     <div class="info-card">
       <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Nueva propuesta</p>
       ${infoRow("🏠 Propiedad", d.propertyName, "#1e40af")}
@@ -472,17 +415,14 @@ function rescheduledHtml(d) {
       ${infoRow("🕐 Nueva hora", newTime, "#1e40af")}
       ${d.agentName ? infoRow("👤 Agente", d.agentName) : ""}
     </div>
-
     ${d.adminNotes ? `
     <div class="note-box" style="background:#eff6ff; border-left:4px solid #3b82f6;">
       <p style="margin:0; font-size:13px; color:#1d4ed8; font-weight:600;">Nota del agente</p>
       <p style="margin:6px 0 0; font-size:14px; color:#1e3a8a;">${d.adminNotes}</p>
     </div>` : ""}
-
     <p style="font-size:14px; color:#374151; line-height:1.7; margin:0 0 24px; text-align:center;">
       Si esta nueva fecha <strong>no te conviene</strong>, contáctanos y buscaremos otra alternativa.
     </p>
-
     <div class="btn-center">
       <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#1e40af,#2563eb); color:#ffffff;">
         ✅ Confirmar nueva fecha
@@ -495,9 +435,6 @@ function rescheduledHtml(d) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 5 — NUEVA VISITA ASIGNADA (agente)
-// ═══════════════════════════════════════════════════════════════════════════════
 function agentHtml(d) {
   return htmlWrapper(
     "linear-gradient(135deg, #1a1f2e 0%, #2d3548 100%)",
@@ -508,7 +445,6 @@ function agentHtml(d) {
       Hola <strong style="color:#1f2937;">${d.agentName}</strong>,<br/>
       tienes una nueva visita confirmada. Revisa todos los detalles a continuación.
     </p>
-
     <div class="info-card" style="border:2px solid #fef3c7;">
       <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Datos del cliente</p>
       ${infoRow("👤 Nombre", d.clientName, "#1f2937")}
@@ -516,7 +452,6 @@ function agentHtml(d) {
       ${infoRow("📱 Teléfono", d.clientPhone || "—")}
       ${d.clientMessage ? infoRow("💬 Mensaje", d.clientMessage) : ""}
     </div>
-
     <div class="info-card">
       <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Detalle de la visita</p>
       ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
@@ -524,7 +459,6 @@ function agentHtml(d) {
       ${infoRow("🕐 Hora", d.requestedTime, "#1e40af")}
       ${d.propertyAddress ? infoRow("📍 Dirección", d.propertyAddress) : ""}
     </div>
-
     <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
       <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">⚠️ Recuerda</p>
       <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
@@ -532,7 +466,6 @@ function agentHtml(d) {
         Confirma la visita con el cliente un día antes.
       </p>
     </div>
-
     <div class="btn-center">
       <a href="${BASE_URL}/usuarios/visitas" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
         📋 Ver panel de visitas
@@ -545,7 +478,6 @@ function agentHtml(d) {
   );
 }
 
-// ─── Helper: crear transporte nodemailer con secrets ya resueltos ─────────────
 function createTransport(gmailUser, gmailPass) {
   return nodemailer.createTransport({
     service: "gmail",
@@ -553,7 +485,6 @@ function createTransport(gmailUser, gmailPass) {
   });
 }
 
-// ─── Helper: enviar un email con manejo de errores ────────────────────────────
 async function sendMail(transporter, gmailUser, { to, subject, html }) {
   if (!to) {
     console.warn(`[onVisitStatusChanged] sendMail: destinatario vacío para "${subject}". Ignorado.`);
@@ -568,9 +499,6 @@ async function sendMail(transporter, gmailUser, { to, subject, html }) {
   console.log(`[onVisitStatusChanged] Email enviado a ${to} — ${subject}`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TRIGGER PRINCIPAL — onVisitStatusChanged
-// ═══════════════════════════════════════════════════════════════════════════════
 exports.onVisitStatusChanged = onDocumentWritten(
   {
     document: "visits/{visitId}",
@@ -578,11 +506,9 @@ exports.onVisitStatusChanged = onDocumentWritten(
     secrets:  [GMAIL_USER, GMAIL_PASS],
   },
   async (event) => {
-    // ── Extraer datos antes/después ──────────────────────────────────────────
     const before = event.data?.before?.data() ?? null;
     const after  = event.data?.after?.data()  ?? null;
 
-    // Documento eliminado — ignorar
     if (!after) {
       console.log("[onVisitStatusChanged] Documento eliminado. Ignorado.");
       return;
@@ -591,7 +517,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
     const prevStatus = before?.status ?? null;
     const nextStatus = String(after.status || "").trim().toLowerCase();
 
-    // Sin cambio de estado relevante
     if (prevStatus === nextStatus) {
       console.log(`[onVisitStatusChanged] Estado sin cambio (${nextStatus}). Ignorado.`);
       return;
@@ -599,7 +524,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
 
     console.log(`[onVisitStatusChanged] ${event.params.visitId}: ${prevStatus ?? "NEW"} → ${nextStatus}`);
 
-    // ── Resolver secrets ─────────────────────────────────────────────────────
     const gmailUser = GMAIL_USER.value();
     const gmailPass = GMAIL_PASS.value();
 
@@ -610,7 +534,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
 
     const transporter = createTransport(gmailUser, gmailPass);
 
-    // ── Datos del documento ──────────────────────────────────────────────────
     const d = {
       clientName:      String(after.clientName      || "Cliente").trim(),
       clientEmail:     String(after.clientEmail     || "").trim(),
@@ -631,9 +554,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
     const clientEmail = d.clientEmail;
     const agentEmail  = d.agentEmail;
 
-    // ── Enrutamiento según transición de estado ──────────────────────────────
-
-    // CREACIÓN — nueva visita con status pending (no había documento antes)
     if (prevStatus === null && nextStatus === "pending") {
       await sendMail(transporter, gmailUser, {
         to:      clientEmail,
@@ -643,18 +563,13 @@ exports.onVisitStatusChanged = onDocumentWritten(
       return;
     }
 
-    // UPDATE pending → approved
     if (nextStatus === "approved") {
       const emails = [];
-
-      // Email al cliente
       emails.push(sendMail(transporter, gmailUser, {
         to:      clientEmail,
         subject: `🎉 ¡Visita confirmada! — ${d.propertyName}`,
         html:    approvedHtml(d),
       }));
-
-      // Email al agente (si tiene email asignado)
       if (agentEmail) {
         emails.push(sendMail(transporter, gmailUser, {
           to:      agentEmail,
@@ -662,12 +577,10 @@ exports.onVisitStatusChanged = onDocumentWritten(
           html:    agentHtml(d),
         }));
       }
-
       await Promise.all(emails);
       return;
     }
 
-    // UPDATE → rejected
     if (nextStatus === "rejected") {
       await sendMail(transporter, gmailUser, {
         to:      clientEmail,
@@ -677,7 +590,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
       return;
     }
 
-    // UPDATE → rescheduled (desde pending o approved)
     if (nextStatus === "rescheduled") {
       await sendMail(transporter, gmailUser, {
         to:      clientEmail,
@@ -687,7 +599,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
       return;
     }
 
-    // completed y cualquier otro estado → sin email
     console.log(`[onVisitStatusChanged] Estado "${nextStatus}" no genera email. Ignorado.`);
   }
 );
