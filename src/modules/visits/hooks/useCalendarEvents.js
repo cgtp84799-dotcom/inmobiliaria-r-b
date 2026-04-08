@@ -4,16 +4,9 @@ import { visitService } from '../services/visit.service';
 /**
  * useCalendarEvents — 3C
  *
- * Combina en tiempo real:
- *   - visits (aprobadas/completadas) de Firestore /visits
- *   - appointments nativos del CRM (excluye espejos sourceCollection='visits')
- *
- * Devuelve un array plano de eventos normalizados:
- *   { id, title, date, time, clientName, propertyName, agentName,
- *     status, source, color }
- *
- * El componente CalendarPage puede usar este hook directamente
- * sin saber nada de las dos colecciones.
+ * Fix StrictMode: flag `mounted` + setTimeout(0) evita el race condition
+ * donde React desmonta el componente antes de que Firestore termine
+ * de registrar el listener (INTERNAL ASSERTION FAILED ca9/b815).
  */
 
 const AGENT_COLORS = [
@@ -31,62 +24,76 @@ function agentColor(agentId, cache) {
 }
 
 export function useCalendarEvents() {
-  const [visitsEvents,       setVisitsEvents]       = useState([]);
-  const [appointmentEvents,  setAppointmentEvents]  = useState([]);
-  const [loading,            setLoading]            = useState(true);
+  const [visitsEvents,      setVisitsEvents]      = useState([]);
+  const [appointmentEvents, setAppointmentEvents] = useState([]);
+  const [loading,           setLoading]           = useState(true);
   const colorCache = {};
 
   useEffect(() => {
+    let mounted = true;
+    let unsubVisits = null;
+    let unsubAppts  = null;
     let loadedA = false;
     let loadedB = false;
-    const check = () => { if (loadedA && loadedB) setLoading(false); };
 
-    const unsubVisits = visitService.subscribeCalendar(
-      (data) => {
-        setVisitsEvents(data.map((v) => ({
-          id:           v.id,
-          title:        v.propertyName ?? 'Visita',
-          date:         v.requestedDate,
-          time:         v.requestedTime,
-          clientName:   v.clientName,
-          propertyName: v.propertyName,
-          agentName:    v.agentName ?? null,
-          status:       v.status,
-          source:       'visits',
-          color:        agentColor(v.agentId, colorCache),
-        })));
-        loadedA = true;
-        check();
-      },
-      () => { loadedA = true; check(); }
-    );
+    const check = () => { if (mounted && loadedA && loadedB) setLoading(false); };
 
-    const unsubAppts = visitService.subscribeCalendarAppointments(
-      (data) => {
-        setAppointmentEvents(data.map((a) => ({
-          id:           a.id,
-          title:        a.propertyName ?? a.title ?? 'Cita',
-          date:         a.date,
-          time:         a.time,
-          clientName:   a.clientName,
-          propertyName: a.propertyName,
-          agentName:    a.agentName ?? null,
-          status:       a.status,
-          source:       'appointments',
-          color:        agentColor(a.agentId, colorCache),
-        })));
-        loadedB = true;
-        check();
-      },
-      () => { loadedB = true; check(); }
-    );
+    const timer = setTimeout(() => {
+      if (!mounted) return;
 
-    return () => { unsubVisits(); unsubAppts(); };
+      unsubVisits = visitService.subscribeCalendar(
+        (data) => {
+          if (!mounted) return;
+          setVisitsEvents(data.map((v) => ({
+            id:           v.id,
+            title:        v.propertyName ?? 'Visita',
+            date:         v.requestedDate,
+            time:         v.requestedTime,
+            clientName:   v.clientName,
+            propertyName: v.propertyName,
+            agentName:    v.agentName ?? null,
+            status:       v.status,
+            source:       'visits',
+            color:        agentColor(v.agentId, colorCache),
+          })));
+          loadedA = true;
+          check();
+        },
+        () => { loadedA = true; check(); }
+      );
+
+      unsubAppts = visitService.subscribeCalendarAppointments(
+        (data) => {
+          if (!mounted) return;
+          setAppointmentEvents(data.map((a) => ({
+            id:           a.id,
+            title:        a.propertyName ?? a.title ?? 'Cita',
+            date:         a.date,
+            time:         a.time,
+            clientName:   a.clientName,
+            propertyName: a.propertyName,
+            agentName:    a.agentName ?? null,
+            status:       a.status,
+            source:       'appointments',
+            color:        agentColor(a.agentId, colorCache),
+          })));
+          loadedB = true;
+          check();
+        },
+        () => { loadedB = true; check(); }
+      );
+    }, 0);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsubVisits) unsubVisits();
+      if (unsubAppts)  unsubAppts();
+    };
   }, []);
 
-  // Combinar y ordenar por fecha+hora
   const events = [...visitsEvents, ...appointmentEvents].sort((a, b) => {
-    const da = `${a.date} ${a.time || '00:00'}`;
+    const da  = `${a.date} ${a.time  || '00:00'}`;
     const db_ = `${b.date} ${b.time || '00:00'}`;
     return da.localeCompare(db_);
   });
