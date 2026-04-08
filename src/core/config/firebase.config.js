@@ -39,10 +39,12 @@ const app = initializeApp(firebaseConfig);
 
 // Exportar servicios
 export const auth = getAuth(app);
-// Fix: experimentalForceLongPolling evita el bug INTERNAL ASSERTION FAILED de Firestore v12+
+// Fix: experimentalAutoDetectLongPolling detecta automáticamente si usar WebSocket o long-polling.
+// NO usar experimentalForceLongPolling — forzar long-polling causa inestabilidad con múltiples
+// listeners onSnapshot simultáneos (INTERNAL ASSERTION FAILED ID: ca9 / b815).
 export const db = initializeFirestore(app, {
   cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: true,
 });
 export const rtdb = getDatabase(app);
 export const storage = getStorage(app);
