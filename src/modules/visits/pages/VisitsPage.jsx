@@ -36,8 +36,9 @@ const KPI_STATUSES = [
 ];
 
 export default function VisitsPage() {
-  const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  // ✅ AuthContext expone isAdmin e isMember directamente
+  const { isAdmin, isMember } = useAuth();
+  const canManage = isAdmin || isMember;
 
   const { visits, loading, counts, approve, reject, complete, reschedule, remove } = useVisits();
   const [filter, setFilter] = useState('all');
@@ -128,14 +129,16 @@ export default function VisitsPage() {
                 key={visit.id}
                 visit={visit}
                 agents={isAdmin ? agents : []}
-                onApprove={(v, notes, agentData) => approve(v, notes, agentData)}
-                onReject={(v, notes)             => reject(v, notes)}
-                onComplete={(visitId, notes)      => complete(visitId, notes)}
-                onReschedule={(visitId, date, time, notes) =>
+                isAdmin={isAdmin}
+                canManage={canManage}
+                onApprove={canManage ? (v, notes, agentData) => approve(v, notes, agentData) : undefined}
+                onReject={canManage  ? (v, notes)             => reject(v, notes)             : undefined}
+                onComplete={canManage ? (visitId, notes)      => complete(visitId, notes)      : undefined}
+                onReschedule={canManage ? (visitId, date, time, notes) =>
                   reschedule(
                     visits.find((v) => v.id === visitId) ?? { id: visitId },
                     date, time, notes,
-                  )
+                  ) : undefined
                 }
                 onDelete={isAdmin ? (visitId) => remove(visitId) : undefined}
               />
