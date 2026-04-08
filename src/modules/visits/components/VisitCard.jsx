@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FaCalendarCheck, FaUser, FaPhone, FaEnvelope,
-  FaBuilding, FaClock, FaCheckCircle, FaTimes,
+  FaUser, FaPhone, FaEnvelope,
+  FaCheckCircle, FaTimes,
   FaFlag, FaChevronDown, FaChevronUp, FaTrash,
   FaUserTie, FaCalendarAlt, FaRedoAlt,
+  FaClock,
 } from 'react-icons/fa';
 import { VISIT_STATUS, VISIT_STATUS_LABELS, VISIT_STATUS_COLORS } from '../types/visit.types';
 import { formatShort } from '../../../shared/utils/formatDate';
@@ -14,7 +15,7 @@ import { formatShort } from '../../../shared/utils/formatDate';
  *
  * Props:
  *   visit        — documento Firestore normalizado
- *   agents       — array de { uid, displayName, email } para selector
+ *   agents       — array de { uid, displayName, email }
  *   onApprove    — (visit, notes, agentData) => void
  *   onReject     — (visit, notes) => void
  *   onComplete   — (visitId, notes) => void
@@ -34,10 +35,8 @@ export default function VisitCard({
   const [noteInput,     setNoteInput]     = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
   const [action,        setAction]        = useState(null);
-
-  // Campos para reagendar
-  const [proposedDate, setProposedDate] = useState('');
-  const [proposedTime, setProposedTime] = useState('');
+  const [proposedDate,  setProposedDate]  = useState('');
+  const [proposedTime,  setProposedTime]  = useState('');
 
   const colors = VISIT_STATUS_COLORS[visit.status] ?? VISIT_STATUS_COLORS[VISIT_STATUS.PENDING];
   const label  = VISIT_STATUS_LABELS[visit.status] ?? visit.status;
@@ -66,17 +65,25 @@ export default function VisitCard({
     closeAction();
   };
 
-  // ¿El botón de confirmar está habilitado?
   const canConfirm =
     action === 'reschedule'
       ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
       : true;
 
-  // Determina qué botones de acción mostrar según el estado actual
+  // Botones disponibles según estado
   const canApprove    = visit.status === VISIT_STATUS.PENDING;
   const canReject     = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED;
   const canReschedule = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED;
   const canComplete   = visit.status === VISIT_STATUS.APPROVED || visit.status === VISIT_STATUS.RESCHEDULED;
+
+  // Clases del botón de confirmar según acción
+  const confirmBtnClass = [
+    'flex-1 py-2 rounded-xl text-sm font-semibold transition-colors',
+    'disabled:opacity-40 disabled:cursor-not-allowed',
+    action === 'reschedule' ? 'bg-blue-600 text-white hover:bg-blue-500' :
+    action === 'reject'     ? 'bg-red-600  text-white hover:bg-red-500'  :
+                              'bg-primary text-slate-950 hover:bg-primary/90',
+  ].join(' ');
 
   return (
     <motion.div
@@ -86,11 +93,12 @@ export default function VisitCard({
       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
       className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-colors"
     >
-      {/* ═══ Cabecera ═══════════════════════════════════════════════════════ */}
+      {/* ─── Cabecera ─────────────────────────────────────────────────────── */}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
+              {/* Badge de estado */}
               <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${colors.text} ${colors.bg} ${colors.border}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${colors.text.replace('text-', 'bg-')}`} />
                 {label}
@@ -98,7 +106,7 @@ export default function VisitCard({
               <span className="text-slate-500 text-xs">
                 {visit.requestedDate} — {visit.requestedTime}
               </span>
-              {/* Nueva hora propuesta */}
+              {/* Fecha propuesta (reagendada) */}
               {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
                 <span className="text-blue-400 text-xs font-semibold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
                   📅 Propuesta: {visit.proposedDate} {visit.proposedTime}
@@ -110,6 +118,8 @@ export default function VisitCard({
             </h3>
             <p className="text-slate-400 text-xs truncate mt-0.5">{visit.propertyAddress}</p>
           </div>
+
+          {/* Toggle expandir */}
           <button
             onClick={() => setExpanded((v) => !v)}
             className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
@@ -119,7 +129,7 @@ export default function VisitCard({
           </button>
         </div>
 
-        {/* ── Datos del cliente ───────────────────────────────────────────── */}
+        {/* ─── Datos del cliente ─────────────────────────────────────────── */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <FaUser className="text-slate-500 flex-shrink-0" size={11} />
@@ -135,7 +145,7 @@ export default function VisitCard({
           </div>
         </div>
 
-        {/* ── Botones de acción ───────────────────────────────────────────── */}
+        {/* ─── Botones de acción ─────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
           {canApprove && (
             <button
@@ -199,7 +209,7 @@ export default function VisitCard({
           )}
         </div>
 
-        {/* ── Panel de acción expandible ──────────────────────────────────── */}
+        {/* ─── Panel de acción (inline expandible) ──────────────────────── */}
         <AnimatePresence>
           {action && (
             <motion.div
@@ -208,7 +218,7 @@ export default function VisitCard({
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden space-y-2"
             >
-              {/* Selector de agente (solo al aprobar) */}
+              {/* Selector agente (solo aprobar) */}
               {action === 'approve' && agents.length > 0 && (
                 <div>
                   <label className="block text-slate-400 text-xs font-semibold mb-1">
@@ -230,7 +240,7 @@ export default function VisitCard({
                 </div>
               )}
 
-              {/* Campos de fecha/hora para reagendar */}
+              {/* Campos fecha/hora para reagendar */}
               {action === 'reschedule' && (
                 <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 space-y-2">
                   <p className="text-blue-400 text-xs font-semibold flex items-center gap-1.5">
@@ -242,8 +252,8 @@ export default function VisitCard({
                       <input
                         type="date"
                         value={proposedDate}
-                        onChange={(e) => setProposedDate(e.target.value)}
                         min={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setProposedDate(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                       />
                     </div>
@@ -260,6 +270,7 @@ export default function VisitCard({
                 </div>
               )}
 
+              {/* Nota de texto */}
               <textarea
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
@@ -277,30 +288,12 @@ export default function VisitCard({
                 <button
                   onClick={handleAction}
                   disabled={!canConfirm}
-                  className="flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    background: canConfirm ? '' : undefined,
-                  }}
-                  data-action={action}
-                  style={{
-                    backgroundColor:
-                      action === 'reschedule' ? (canConfirm ? '#3b82f6' : undefined) :
-                      action === 'reject'     ? '#ef4444' :
-                      undefined,
-                    color: (action === 'reschedule' || action === 'reject') ? '#fff' : undefined,
-                  }}
-                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                    action === 'reschedule'
-                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                      : action === 'reject'
-                        ? 'bg-red-600 text-white hover:bg-red-500'
-                        : 'bg-primary text-slate-950 hover:bg-primary/90'
-                  }`}
+                  className={confirmBtnClass}
                 >
                   {
                     action === 'approve'    ? '✓ Confirmar aprobación' :
-                    action === 'reject'     ? '✗ Confirmar rechazo' :
-                    action === 'reschedule' ? '📅 Enviar propuesta' :
+                    action === 'reject'     ? '✗ Confirmar rechazo'    :
+                    action === 'reschedule' ? '📅 Enviar propuesta'     :
                                              '✓ Confirmar'
                   }
                 </button>
@@ -316,7 +309,7 @@ export default function VisitCard({
         </AnimatePresence>
       </div>
 
-      {/* ═══ Sección expandida ═══════════════════════════════════════════════ */}
+      {/* ─── Sección expandida (detalle completo) ─────────────────────────── */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -325,7 +318,7 @@ export default function VisitCard({
             exit={{ opacity: 0, height: 0 }}
             className="border-t border-slate-800 px-4 sm:px-5 py-3 space-y-2 overflow-hidden"
           >
-            {/* Nueva hora propuesta (si aplica) */}
+            {/* Bloque fecha propuesta */}
             {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
                 <p className="text-blue-400 text-xs font-semibold uppercase tracking-wider mb-1">Nueva hora propuesta</p>
@@ -339,6 +332,7 @@ export default function VisitCard({
                 <p className="text-slate-300 text-xs leading-relaxed">{visit.notes}</p>
               </div>
             )}
+
             {visit.adminNotes && (
               <div>
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Notas internas</p>
@@ -353,6 +347,7 @@ export default function VisitCard({
                 <span className="text-yellow-400 text-xs font-semibold">{visit.agentName}</span>
               </div>
             )}
+
             {visit.approvedAt && (
               <div className="flex items-center gap-2">
                 <FaClock className="text-slate-500" size={11} />
@@ -360,6 +355,7 @@ export default function VisitCard({
                 <span className="text-slate-300 text-xs">{formatShort(visit.approvedAt)}</span>
               </div>
             )}
+
             <p className="text-slate-600 text-xs pt-1">Creada {formatShort(visit.createdAt)}</p>
           </motion.div>
         )}
