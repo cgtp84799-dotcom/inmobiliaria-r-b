@@ -312,6 +312,8 @@ export default function ScheduleVisitPage() {
         propertyName:    property?.title   ?? 'Propiedad no especificada',
         propertyAddress: property?.address ?? property?.city ?? '',
         ...form,
+        // ✅ Guardar evidencia del consentimiento (Ley 1581/2012)
+        privacyAccepted: true,
       });
       await visitService.requestVisit(payload);
       setSuccess(true);
@@ -331,7 +333,7 @@ export default function ScheduleVisitPage() {
     return `${parseInt(day)} de ${months[parseInt(m) - 1]} de ${y}`;
   };
 
-  // ── Inputs compartidos ────────────────────────────────
+  // ── Inputs compartidos ────────────────────────────────────────────
   const inputStyle = (hasError) => ({
     width: '100%',
     background: 'var(--color-input-bg)',
@@ -344,9 +346,9 @@ export default function ScheduleVisitPage() {
     transition: 'border-color 0.2s, box-shadow 0.2s',
   });
 
-  // ═══════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════
   // PANTALLA DE ÉXITO
-  // ═══════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════
   if (success) {
     return (
       <div
@@ -423,9 +425,9 @@ export default function ScheduleVisitPage() {
     );
   }
 
-  // ═══════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════
   // LAYOUT PRINCIPAL
-  // ═══════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════
   return (
     <div style={{ minHeight: '100vh', padding: '2rem 1rem', background: 'var(--color-bg)' }}>
       <div style={{ maxWidth: 520, margin: '0 auto' }}>
@@ -482,7 +484,7 @@ export default function ScheduleVisitPage() {
           <div style={{ overflow: 'hidden' }}>
             <AnimatePresence mode="wait" custom={direction}>
 
-              {/* ══ PASO 1: Tus datos ══════════════════════════════ */}
+              {/* ══ PASO 1: Tus datos ══════════════════════════ */}
               {step === 1 && (
                 <motion.div
                   key="step1"
@@ -557,7 +559,7 @@ export default function ScheduleVisitPage() {
                 </motion.div>
               )}
 
-              {/* ══ PASO 2: Fecha y hora ═══════════════════════════ */}
+              {/* ══ PASO 2: Fecha y hora ═══════════════════════ */}
               {step === 2 && (
                 <motion.div
                   key="step2"
@@ -659,7 +661,7 @@ export default function ScheduleVisitPage() {
                 </motion.div>
               )}
 
-              {/* ══ PASO 3: Confirmar ══════════════════════════════ */}
+              {/* ══ PASO 3: Confirmar ══════════════════════════ */}
               {step === 3 && (
                 <motion.div
                   key="step3"
