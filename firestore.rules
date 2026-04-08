@@ -8,7 +8,6 @@ service cloud.firestore {
     }
 
     // getUserData() lee por email (el docId en /users es el email del usuario).
-    // Si el doc no existe durante el registro, la regla deniega por defecto — comportamiento correcto.
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data;
     }
@@ -65,9 +64,18 @@ service cloud.firestore {
 
     // ── CLIENTES ────────────────────────────────────────────────────────────
     match /clients/{clientId} {
-      allow read:           if isSignedIn();
+      allow read:           if isMemberOrAdmin();
       allow create, update: if isMemberOrAdmin();
       allow delete:         if isAdmin();
+
+      // Historial de actividad del cliente (visitas, contratos, etc.)
+      // Se crea automáticamente al aprobar/completar una visita.
+      match /history/{historyId} {
+        allow read:   if isMemberOrAdmin();
+        allow create: if isMemberOrAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
     }
 
 
@@ -87,26 +95,48 @@ service cloud.firestore {
     }
 
 
-    // ── CONTACTOS (formulario público de la web) ─────────────────────────
+    // ── CONTACTOS (formulario público de la web) ────────────────────────────
     match /contacts/{contactId} {
-      allow create:            if true;
+      allow create:               if true;
       allow read, update, delete: if isSignedIn();
     }
 
 
     // ── VISITAS ─────────────────────────────────────────────────────────────
-    // Cualquier visitante puede solicitar una visita (create: if true).
-    // Solo admin/member gestionan el estado; cualquier usuario autenticado puede leer.
+    // • create: if true  → cualquier visitante puede agendar (formulario público sin login)
+    // • read:   autenticados  → admin ve todas; member ve las suyas (filtrado en el hook)
+    // • update: member o admin → aprobar, reagendar, completar
+    // • delete: solo admin
     match /visits/{visitId} {
-      allow create: if true;   // formulario público de agendar visita
+      allow create: if true;
       allow read:   if isSignedIn();
       allow update: if isMemberOrAdmin();
       allow delete: if isAdmin();
     }
 
 
+    // ── CONSENTIMIENTO DE PRIVACIDAD (formulario público) ───────────────────
+    // Se guarda cuando el usuario acepta la política al agendar una visita.
+    match /privacyConsents/{consentId} {
+      allow create: if true;           // formulario público, sin login
+      allow read:   if isAdmin();      // solo admin puede consultar consentimientos
+      allow delete: if isAdmin();
+    }
+
+
+    // ── EMAILS AUTOMÁTICOS (extensión Trigger Email) ────────────────────────
+    // La extensión "Trigger Email from Firestore" lee esta colección y envía
+    // los correos. Solo usuarios autenticados (admin/member) pueden crear emails.
+    // El servidor (extensión) escribe los campos de estado (delivery, state).
+    match /mail/{mailId} {
+      allow create: if isSignedIn();   // solo código interno autenticado encola emails
+      allow read:   if isAdmin();      // admin puede ver el log de envíos
+      allow update: if false;          // solo la extensión Firebase actualiza el estado
+      allow delete: if isAdmin();
+    }
+
+
     // ── CHAT ────────────────────────────────────────────────────────────────
-    // viewers solo leen; member/admin pueden crear y escribir.
     match /conversations/{conversationId} {
       allow read:           if isSignedIn();
       allow create, update: if isMemberOrAdmin();
@@ -125,8 +155,8 @@ service cloud.firestore {
     }
 
     match /chatMessages/{messageId} {
-      allow read:          if isSignedIn();
-      allow create:        if isMemberOrAdmin();
+      allow read:           if isSignedIn();
+      allow create:         if isMemberOrAdmin();
       allow update, delete: if isAdmin();
     }
 
@@ -163,7 +193,7 @@ service cloud.firestore {
     }
 
 
-    // ── ANALYTICS Y STATS ── solo admin escribe ────────────────────────────
+    // ── ANALYTICS Y STATS ───────────────────────────────────────────────────
     match /analytics/{document=**} {
       allow read:  if isSignedIn();
       allow write: if isAdmin();
@@ -179,7 +209,7 @@ service cloud.firestore {
     }
 
 
-    // ── CONTADORES ── solo admin escribe para evitar manipulación ──────────
+    // ── CONTADORES ──────────────────────────────────────────────────────────
     match /counters/{document=**} {
       allow read:  if isSignedIn();
       allow write: if isAdmin();
