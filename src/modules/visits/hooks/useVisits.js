@@ -3,31 +3,12 @@ import { visitService } from '../services/visit.service';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
-/**
- * useVisits — hook para la página de administración de visitas.
- *
- * LÓGICA DE VISIBILIDAD POR ROL:
- *
- *  ┌──────────────────────────────────────────────────────────────────┐
- *  │ admin   → ve TODAS las visitas siempre.                          │
- *  │                                                                  │
- *  │ member  → ve DOS grupos:                                         │
- *  │   1. Visitas PENDIENTES (todos los members las ven para poder    │
- *  │      "tomarlas" aprobándolas).                                   │
- *  │   2. Visitas asignadas a ÉL (agentEmail == su email), sin        │
- *  │      importar el estado.                                         │
- *  │                                                                  │
- *  │   En cuanto un member aprueba una visita → se guarda su email    │
- *  │   como agentEmail → esa visita desaparece de la lista de         │
- *  │   PENDIENTES para todos los demás, y aparece solo en la lista    │
- *  │   del agente asignado.                                           │
- *  └──────────────────────────────────────────────────────────────────┘
- *
- * Cuando el member aprueba, el hook pasa su propio usuario como agentData
- * para que el servicio lo guarde en el documento.
- */
 export function useVisits() {
-  const { user, role } = useAuth();
+  // AuthContext expone currentUser, userData, isAdmin, isMember
+  const { currentUser, userData, isAdmin, isMember } = useAuth();
+
+  // role derivado del userData para lógica interna
+  const role = userData?.role ?? null;
 
   const [visits,  setVisits]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +16,9 @@ export function useVisits() {
   const isMounted = useRef(true);
 
   useEffect(() => {
-    if (!user) return;
+    // Esperar a que el usuario esté cargado Y tenga rol válido
+    if (!currentUser || !role) return;
+
     isMounted.current = true;
 
     const safeSet = (fn) => (...args) => { if (isMounted.current) fn(...args); };
@@ -50,12 +33,13 @@ export function useVisits() {
     let unsub = () => {};
 
     try {
-      if (role === 'admin') {
+      if (isAdmin) {
         unsub = visitService.subscribeAll(
           safeSet((data) => { setVisits(data); setLoading(false); setError(null); }),
           onError,
         );
       } else {
+        // member: combina pendientes sin agente + visitas asignadas a él
         let pending  = [];
         let assigned = [];
 
@@ -78,7 +62,7 @@ export function useVisits() {
           onError,
         );
         const unsubAssigned = visitService.subscribeByAgent(
-          user.email,
+          currentUser.email,
           (data) => { assigned = data; merge(); },
           onError,
         );
@@ -93,7 +77,7 @@ export function useVisits() {
       isMounted.current = false;
       try { unsub(); } catch (_) {}
     };
-  }, [user?.email, role]);
+  }, [currentUser?.email, role, isAdmin]);
 
   const counts = useMemo(
     () => visits.reduce((acc, v) => ({ ...acc, [v.status]: (acc[v.status] ?? 0) + 1 }), {}),
@@ -103,11 +87,11 @@ export function useVisits() {
   const approve = useCallback(async (visit, adminNotes = '', agentData = {}) => {
     try {
       let finalAgentData = agentData;
-      if (role === 'member' && !agentData.agentId && user) {
+      if (isMember && !agentData.agentId && currentUser) {
         finalAgentData = {
-          agentId:    user.uid,
-          agentName:  user.displayName || user.email,
-          agentEmail: user.email,
+          agentId:    currentUser.uid,
+          agentName:  currentUser.displayName || currentUser.email,
+          agentEmail: currentUser.email,
         };
       }
       await visitService.approveVisit(visit, adminNotes, finalAgentData);
@@ -116,7 +100,7 @@ export function useVisits() {
       console.error(e);
       toast.error('Error al aprobar la visita');
     }
-  }, [user, role]);
+  }, [currentUser, isMember]);
 
   const reject = useCallback(async (visit, adminNotes = '') => {
     try {
