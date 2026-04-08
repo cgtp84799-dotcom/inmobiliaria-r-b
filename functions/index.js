@@ -4,7 +4,7 @@ const admin       = require("firebase-admin");
 const cors        = require("cors")({ origin: true });
 const nodemailer  = require("nodemailer");
 
-// ─── v2 imports (nuevo trigger Firestore) ────────────────────────────────────
+// ─── v2 imports (trigger Firestore) ──────────────────────────────────────────
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { defineSecret }      = require("firebase-functions/params");
 
@@ -12,7 +12,7 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// ─── Secrets (firebase functions:secrets:set GMAIL_USER GMAIL_PASS) ──────────
+// ─── Secrets ──────────────────────────────────────────────────────────────────
 const GMAIL_USER = defineSecret("GMAIL_USER");
 const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
@@ -20,7 +20,7 @@ const GMAIL_PASS = defineSecret("GMAIL_PASS");
 const BASE_URL     = "https://inmobiliaria-ryb-y-asociados.com";
 const WHATSAPP_URL = "https://wa.me/573105968202";
 const LOGO_URL     = `${BASE_URL}/logo.jpg.png`;
-const FROM_NAME    = "Inmobiliaria Rinc\u00f3n Bedoya y Asociados";
+const FROM_NAME    = "Inmobiliaria Rincón Bedoya y Asociados";
 
 const PUBLIC_STATUS = new Set([
   "", "disponible", "reservada", "published", "active", "available",
@@ -69,19 +69,19 @@ function buildPropertySlug(p={}){const parts=[];const tr=mapTransactionSlug(reso
 function buildCityLandingPath(city){const s=normalizeSlug(city);return s?`/propiedades/ciudad/${s}`:null;}
 function buildTypeCityLandingPath(p={}){const ci=normalizeSlug(resolveCity(p));const ty=mapTypeSlug(resolveType(p));const tr=mapTransactionSlug(resolveTransaction(p));if(!ci||!ty)return null;return tr?`/propiedades/zona/${ty}-en-${tr}-${ci}`:`/propiedades/zona/${ty}-en-${ci}`;}
 function normalizeAbsoluteUrl(url,baseUrl=BASE_URL){const v=String(url||"").trim();if(!v)return"";if(/^https?:\/\//i.test(v))return v;return`${baseUrl}${v.startsWith("/")?"":"/"}${v}`;}
-function extractPropertyImages(data,baseUrl=BASE_URL){const raw=Array.isArray(data.images)?data.images:[];const selected=raw.filter(Boolean).slice(0,5);const title=getSafeString(data.title,"Propiedad inmobiliaria");const city=getSafeString(resolveCity(data),"Caldas");const caption=`${title} en ${city} - Inmobiliaria Rinc\u00f3n Bedoya y Asociados`;return selected.map((u)=>normalizeAbsoluteUrl(u,baseUrl)).filter(Boolean).map((loc)=>({loc,title,caption}));}
+function extractPropertyImages(data,baseUrl=BASE_URL){const raw=Array.isArray(data.images)?data.images:[];const selected=raw.filter(Boolean).slice(0,5);const title=getSafeString(data.title,"Propiedad inmobiliaria");const city=getSafeString(resolveCity(data),"Caldas");const caption=`${title} en ${city} - Inmobiliaria Rincón Bedoya y Asociados`;return selected.map((u)=>normalizeAbsoluteUrl(u,baseUrl)).filter(Boolean).map((loc)=>({loc,title,caption}));}
 function toLastMod(value){try{if(!value)return null;if(typeof value?.toDate==="function")return value.toDate().toISOString();if(value instanceof Date)return value.toISOString();const d=new Date(value);return!Number.isNaN(d.getTime())?d.toISOString():null;}catch(_){return null;}}
 function buildUrlNode(urlData){const images=Array.isArray(urlData.images)?urlData.images:[];const imgBlocks=images.map((img)=>`\n    <image:image>\n      <image:loc>${xmlEscape(img.loc)}</image:loc>\n      <image:title><![CDATA[${img.title||""}]]></image:title>\n      <image:caption><![CDATA[${img.caption||""}]]></image:caption>\n    </image:image>`).join("");const lastmodBlock=urlData.lastmod?`\n    <lastmod>${xmlEscape(urlData.lastmod)}</lastmod>`:"";return`\n  <url>\n    <loc>${xmlEscape(urlData.loc)}</loc>${lastmodBlock}\n    <changefreq>${xmlEscape(urlData.changefreq||"weekly")}</changefreq>\n    <priority>${xmlEscape(urlData.priority||"0.5")}</priority>${imgBlocks}\n  </url>`;}
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 1: deleteUserComplete  (v1 HTTP)
+// FUNCIÓN 1: deleteUserComplete  (v1 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.deleteUserComplete = functionsV1.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
       if (handlePreflight(req, res)) return;
       setCorsHeaders(req, res);
-      if (req.method !== "POST") return res.status(405).json({ error: "M\u00e9todo no permitido" });
+      if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
       await assertAdminFromRequest(req);
       const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
       if (!userId) return res.status(400).json({ error: "userId es requerido" });
@@ -104,14 +104,14 @@ exports.deleteUserComplete = functionsV1.https.onRequest((req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 2: createUserByAdmin  (v1 HTTP)
+// FUNCIÓN 2: createUserByAdmin  (v1 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.createUserByAdmin = functionsV1.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
       if (handlePreflight(req, res)) return;
       setCorsHeaders(req, res);
-      if (req.method !== "POST") return res.status(405).json({ error: "M\u00e9todo no permitido" });
+      if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
       await assertAdminFromRequest(req);
       const data        = req.body?.data || {};
       const email       = String(data.email       || "").trim().toLowerCase();
@@ -142,7 +142,7 @@ exports.createUserByAdmin = functionsV1.https.onRequest((req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 3: redirectToCustomDomain  (v1 HTTP)
+// FUNCIÓN 3: redirectToCustomDomain  (v1 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.redirectToCustomDomain = functionsV1.https.onRequest((req, res) => {
   const host = String(req.headers.host || "");
@@ -153,13 +153,13 @@ exports.redirectToCustomDomain = functionsV1.https.onRequest((req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 4: generateSitemap  (v1 HTTP)
+// FUNCIÓN 4: generateSitemap  (v1 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
   try {
     if (handlePreflight(req, res)) return;
     setCorsHeaders(req, res);
-    if (req.method !== "GET") return res.status(405).send("M\u00e9todo no permitido");
+    if (req.method !== "GET") return res.status(405).send("Método no permitido");
     const staticUrls = [
       { loc: `${BASE_URL}/`,            priority: "1.0", changefreq: "daily"   },
       { loc: `${BASE_URL}/propiedades`, priority: "0.9", changefreq: "daily"   },
@@ -197,13 +197,351 @@ exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 5: onVisitStatusChanged  (v2 Firestore trigger)  ← NUEVA 3D
-// Escucha /visits/{visitId} y env\u00eda emails al aprobar o rechazar una visita.
+// FUNCIÓN 5: onVisitStatusChanged  (v2 Firestore trigger)
+// Escucha /visits/{visitId} y envía emails premium al cambiar estado.
 //
-// SETUP (una sola vez):
-//   firebase functions:secrets:set GMAIL_USER   → escribe el email Gmail
-//   firebase functions:secrets:set GMAIL_PASS   → escribe el App Password Gmail
+// Estados manejados:
+//   pending  → approved    : Email al cliente (confirmación) + al agente
+//   pending  → rejected    : Email al cliente (rechazo con motivo)
+//   pending  → rescheduled : Email al cliente (nueva propuesta de hora)
+//   approved → rescheduled : Email al cliente (cambio de hora)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Estilos base compartidos ─────────────────────────────────────────────────
+const CSS_BASE = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background-color: #f0f4f8; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; }
+  .wrapper { background: #f0f4f8; padding: 40px 16px; }
+  .container { max-width: 600px; margin: 0 auto; }
+  .card { background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  .header { padding: 32px 40px 28px; text-align: center; }
+  .logo { height: 52px; object-fit: contain; }
+  .body { padding: 36px 40px; }
+  .footer { background: #f8f9fb; border-top: 1px solid #e8ecf0; padding: 20px 40px; text-align: center; }
+  .footer p { color: #9ca3af; font-size: 12px; line-height: 1.6; margin: 0; }
+  .footer a { color: #b8952a; text-decoration: none; }
+  .emoji-icon { font-size: 40px; display: block; margin: 0 auto 16px; text-align: center; }
+  .title { font-size: 24px; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
+  .subtitle { font-size: 15px; color: #6b7280; margin: 0 0 28px; line-height: 1.6; }
+  .info-card { background: #f8f9fb; border: 1px solid #e8ecf0; border-radius: 14px; padding: 20px 24px; margin: 0 0 24px; }
+  .info-row { display: flex; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #f0f2f5; }
+  .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .info-label { font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; width: 120px; flex-shrink: 0; padding-top: 2px; }
+  .info-value { font-size: 14px; color: #1f2937; font-weight: 500; flex: 1; }
+  .info-value.accent { font-weight: 700; }
+  .note-box { border-radius: 12px; padding: 14px 18px; margin: 0 0 24px; }
+  .btn-primary { display: inline-block; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 50px; transition: all 0.2s; }
+  .btn-secondary { display: inline-block; text-decoration: none; font-weight: 600; font-size: 14px; padding: 12px 24px; border-radius: 50px; border: 2px solid; margin-left: 10px; }
+  .btn-center { text-align: center; margin-top: 28px; }
+  .divider { height: 1px; background: #f0f2f5; margin: 24px 0; }
+  .tip { font-size: 13px; color: #9ca3af; line-height: 1.6; margin: 0; }
+`;
+
+// ─── Wrapper HTML completo ────────────────────────────────────────────────────
+function htmlWrapper(headerBg, content) {
+  return `<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>${FROM_NAME}</title>
+  <style>${CSS_BASE}</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="container">
+    <div class="card">
+
+      <!-- HEADER -->
+      <div class="header" style="background:${headerBg};">
+        <img src="${LOGO_URL}" alt="${FROM_NAME}" class="logo" width="auto" height="52"/>
+      </div>
+
+      <!-- BODY -->
+      <div class="body">
+        ${content}
+      </div>
+
+      <!-- FOOTER -->
+      <div class="footer">
+        <p>
+          <strong style="color:#374151;">${FROM_NAME}</strong><br/>
+          Cra 5 No. 9-28, Anserma, Caldas, Colombia<br/>
+          <a href="tel:+573105968202">+57 310 596 8202</a> &nbsp;·&nbsp;
+          <a href="${BASE_URL}">${BASE_URL}</a>
+        </p>
+        <p style="margin-top:12px; font-size:11px;">
+          Este correo fue generado automáticamente. Por favor no respondas a este mensaje.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// ─── Fila de info reutilizable ────────────────────────────────────────────────
+function infoRow(label, value, accentColor) {
+  if (!value) return "";
+  const valueClass = accentColor
+    ? `info-value accent" style="color:${accentColor}`
+    : "info-value";
+  return `
+    <div class="info-row">
+      <span class="info-label">${label}</span>
+      <span class="${valueClass}">${value}</span>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 1 — VISITA APROBADA (cliente)
+// ═══════════════════════════════════════════════════════════════════════════════
+function approvedHtml(d) {
+  return htmlWrapper(
+    "linear-gradient(135deg, #1a2a1a 0%, #2d4a2d 100%)",
+    `
+    <span class="emoji-icon">🎉</span>
+    <h1 class="title" style="color:#166534; text-align:center;">¡Tu visita está confirmada!</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+      nos alegra informarte que tu solicitud de visita fue <strong style="color:#166534;">aprobada</strong>.
+    </p>
+
+    <div class="info-card">
+      ${infoRow("🏠 Propiedad", d.propertyName, "#166534")}
+      ${infoRow("📅 Fecha", d.requestedDate)}
+      ${infoRow("🕐 Hora", d.requestedTime)}
+      ${d.agentName ? infoRow("👤 Agente", d.agentName, "#b8952a") : ""}
+      ${d.adminNotes ? infoRow("💬 Nota", d.adminNotes) : ""}
+    </div>
+
+    ${d.adminNotes ? `
+    <div class="note-box" style="background:#f0fdf4; border-left:4px solid #22c55e;">
+      <p style="margin:0; font-size:13px; color:#15803d; font-weight:600;">Mensaje del agente</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#166534;">${d.adminNotes}</p>
+    </div>` : ""}
+
+    <div class="divider"></div>
+
+    <p style="font-size:14px; color:#374151; line-height:1.7; margin:0 0 8px;">
+      📌 <strong>Recuerda llegar puntualmente</strong> a la hora indicada. Si necesitas reagendar o tienes alguna pregunta, contáctanos con anticipación.
+    </p>
+    <p class="tip">
+      Lleva contigo tu documento de identidad. El agente te recibirá en la propiedad.
+    </p>
+
+    <div class="btn-center">
+      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#166534,#15803d); color:#ffffff;">
+        💬 Confirmar por WhatsApp
+      </a>
+      <a href="${BASE_URL}/propiedades" class="btn-secondary" style="color:#166534; border-color:#166534;">
+        Ver más propiedades
+      </a>
+    </div>
+    `
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 2 — VISITA RECHAZADA (cliente)
+// ═══════════════════════════════════════════════════════════════════════════════
+function rejectedHtml(d) {
+  return htmlWrapper(
+    "linear-gradient(135deg, #1a1010 0%, #3d1515 100%)",
+    `
+    <span class="emoji-icon">😔</span>
+    <h1 class="title" style="color:#991b1b; text-align:center;">Solicitud no disponible</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+      lamentamos informarte que tu solicitud de visita para
+      <strong style="color:#1f2937;">${d.propertyName}</strong> no pudo ser aprobada en este momento.
+    </p>
+
+    ${d.adminNotes ? `
+    <div class="note-box" style="background:#fef2f2; border-left:4px solid #ef4444;">
+      <p style="margin:0; font-size:13px; color:#991b1b; font-weight:600;">Motivo</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#7f1d1d;">${d.adminNotes}</p>
+    </div>` : ""}
+
+    <div class="info-card">
+      ${infoRow("🏠 Propiedad", d.propertyName)}
+      ${infoRow("📅 Fecha solicitada", d.requestedDate)}
+      ${infoRow("🕐 Hora solicitada", d.requestedTime)}
+    </div>
+
+    <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
+      <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">¿Qué puedes hacer?</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
+        • Escríbenos por WhatsApp para intentar otra fecha.<br/>
+        • Explora nuestras otras propiedades disponibles.<br/>
+        • Nuestro equipo estará encantado de ayudarte.
+      </p>
+    </div>
+
+    <div class="btn-center">
+      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b45309,#d97706); color:#ffffff;">
+        💬 Contactar por WhatsApp
+      </a>
+      <a href="${BASE_URL}/propiedades" class="btn-secondary" style="color:#b45309; border-color:#b45309;">
+        Ver catálogo
+      </a>
+    </div>
+
+    <div class="divider"></div>
+    <p class="tip" style="text-align:center;">
+      Gracias por confiar en nosotros. Seguimos a tu disposición para encontrar la propiedad ideal.
+    </p>
+    `
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 3 — NUEVA HORA PROPUESTA / REAGENDADO (cliente)
+// ═══════════════════════════════════════════════════════════════════════════════
+function rescheduledHtml(d) {
+  const newDate = d.proposedDate || d.requestedDate;
+  const newTime = d.proposedTime || d.requestedTime;
+  return htmlWrapper(
+    "linear-gradient(135deg, #0f2040 0%, #1e3a6e 100%)",
+    `
+    <span class="emoji-icon">📅</span>
+    <h1 class="title" style="color:#1e40af; text-align:center;">Propuesta de nueva fecha</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+      hemos reservado una nueva hora para tu visita a
+      <strong style="color:#1f2937;">${d.propertyName}</strong>.
+      Por favor <strong style="color:#1e40af;">confirma si la nueva fecha te queda bien</strong>.
+    </p>
+
+    <div class="info-card">
+      <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Nueva propuesta</p>
+      ${infoRow("🏠 Propiedad", d.propertyName, "#1e40af")}
+      ${infoRow("📅 Nueva fecha", newDate, "#1e40af")}
+      ${infoRow("🕐 Nueva hora", newTime, "#1e40af")}
+      ${d.agentName ? infoRow("👤 Agente", d.agentName) : ""}
+    </div>
+
+    ${d.adminNotes ? `
+    <div class="note-box" style="background:#eff6ff; border-left:4px solid #3b82f6;">
+      <p style="margin:0; font-size:13px; color:#1d4ed8; font-weight:600;">Nota del agente</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#1e3a8a;">${d.adminNotes}</p>
+    </div>` : ""}
+
+    <p style="font-size:14px; color:#374151; line-height:1.7; margin:0 0 24px; text-align:center;">
+      Si esta nueva fecha <strong>no te conviene</strong>, contáctanos y buscaremos otra alternativa.
+    </p>
+
+    <div class="btn-center">
+      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#1e40af,#2563eb); color:#ffffff;">
+        ✅ Confirmar nueva fecha
+      </a>
+      <a href="${WHATSAPP_URL}" class="btn-secondary" style="color:#1e40af; border-color:#1e40af;">
+        Proponer otra fecha
+      </a>
+    </div>
+    `
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 4 — NUEVA VISITA ASIGNADA (agente)
+// ═══════════════════════════════════════════════════════════════════════════════
+function agentHtml(d) {
+  return htmlWrapper(
+    "linear-gradient(135deg, #1a1f2e 0%, #2d3548 100%)",
+    `
+    <span class="emoji-icon">🏡</span>
+    <h1 class="title" style="color:#b8952a; text-align:center;">Nueva visita asignada</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.agentName}</strong>,<br/>
+      tienes una nueva visita confirmada. Revisa todos los detalles a continuación.
+    </p>
+
+    <div class="info-card" style="border:2px solid #fef3c7;">
+      <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Datos del cliente</p>
+      ${infoRow("👤 Nombre", d.clientName, "#1f2937")}
+      ${infoRow("📧 Email", d.clientEmail || "—")}
+      ${infoRow("📱 Teléfono", d.clientPhone || "—")}
+      ${d.clientMessage ? infoRow("💬 Mensaje", d.clientMessage) : ""}
+    </div>
+
+    <div class="info-card">
+      <p style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px;">Detalle de la visita</p>
+      ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
+      ${infoRow("📅 Fecha", d.requestedDate, "#1e40af")}
+      ${infoRow("🕐 Hora", d.requestedTime, "#1e40af")}
+      ${d.propertyAddress ? infoRow("📍 Dirección", d.propertyAddress) : ""}
+    </div>
+
+    <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
+      <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">⚠️ Recuerda</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
+        Llega con al menos 10 minutos de anticipación.<br/>
+        Confirma la visita con el cliente un día antes.
+      </p>
+    </div>
+
+    <div class="btn-center">
+      <a href="${BASE_URL}/usuarios/visitas" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
+        📋 Ver panel de visitas
+      </a>
+      <a href="${WHATSAPP_URL}" class="btn-secondary" style="color:#b8952a; border-color:#b8952a;">
+        Contactar cliente
+      </a>
+    </div>
+    `
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 5 — SOLICITUD RECIBIDA (cliente) — cuando status cambia a "pending"
+// ═══════════════════════════════════════════════════════════════════════════════
+function pendingHtml(d) {
+  return htmlWrapper(
+    "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+    `
+    <span class="emoji-icon">⏳</span>
+    <h1 class="title" style="color:#b8952a; text-align:center;">Solicitud recibida</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+      recibimos tu solicitud de visita. Nuestro equipo la revisará y te confirmará
+      <strong style="color:#b8952a;">en menos de 24 horas</strong>.
+    </p>
+
+    <div class="info-card">
+      ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
+      ${infoRow("📅 Fecha solicitada", d.requestedDate)}
+      ${infoRow("🕐 Hora solicitada", d.requestedTime)}
+    </div>
+
+    <div class="note-box" style="background:#f0f9ff; border-left:4px solid #0ea5e9;">
+      <p style="margin:0; font-size:13px; color:#0369a1; font-weight:600;">¿Qué sigue?</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#075985; line-height:1.7;">
+        1. Revisamos la disponibilidad de la propiedad.<br/>
+        2. Un agente confirmará tu visita por email.<br/>
+        3. Recibirás todos los detalles de confirmación.
+      </p>
+    </div>
+
+    <div class="btn-center">
+      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
+        💬 Preguntar por WhatsApp
+      </a>
+    </div>
+
+    <div class="divider"></div>
+    <p class="tip" style="text-align:center;">
+      Si deseas cancelar esta solicitud, comunícate con nosotros antes de que sea confirmada.
+    </p>
+    `
+  );
+}
+
+// ─── Transporter ──────────────────────────────────────────────────────────────
 function buildTransporter(user, pass) {
   return nodemailer.createTransport({
     service: "gmail",
@@ -211,72 +549,7 @@ function buildTransporter(user, pass) {
   });
 }
 
-function htmlWrapper(content, user) {
-  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:32px 16px;"><tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
-  <tr><td style="background:#0d1117;padding:24px 32px;text-align:center;border-bottom:1px solid #334155;">
-    <img src="${LOGO_URL}" alt="${FROM_NAME}" height="48" style="height:48px;object-fit:contain;"/>
-  </td></tr>
-  <tr><td style="padding:32px;">${content}</td></tr>
-  <tr><td style="background:#0d1117;padding:16px 32px;border-top:1px solid #334155;text-align:center;">
-    <p style="color:#64748b;font-size:12px;margin:0;">${FROM_NAME} &middot; Cra 5 No. 9-28, Anserma, Caldas<br/>
-    <a href="${BASE_URL}" style="color:#c9a84c;text-decoration:none;">${BASE_URL}</a></p>
-  </td></tr>
-</table></td></tr></table></body></html>`;
-}
-
-function approvedHtml(d) {
-  return htmlWrapper(`
-    <h2 style="color:#c9a84c;font-size:22px;margin:0 0 8px;">Tu visita fue aprobada</h2>
-    <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">Hola <strong style="color:#e2e8f0;">${d.clientName}</strong>, tenemos buenas noticias.</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:12px;border:1px solid #334155;margin-bottom:24px;"><tr><td style="padding:20px 24px;">
-      <table width="100%" cellpadding="6" cellspacing="0">
-        <tr><td style="color:#64748b;font-size:13px;width:40%;">Propiedad</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.propertyName}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Fecha</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.requestedDate}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Hora</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.requestedTime}</td></tr>
-        ${d.agentName?`<tr><td style="color:#64748b;font-size:13px;">Agente</td><td style="color:#c9a84c;font-size:13px;font-weight:600;">${d.agentName}</td></tr>`:""}
-        ${d.adminNotes?`<tr><td style="color:#64748b;font-size:13px;">Nota</td><td style="color:#94a3b8;font-size:13px;">${d.adminNotes}</td></tr>`:""}
-      </table>
-    </td></tr></table>
-    <p style="color:#94a3b8;font-size:14px;">Por favor llega puntual. Si tienes alguna pregunta, cont\u00e1ctanos por WhatsApp.</p>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${WHATSAPP_URL}" style="display:inline-block;background:#c9a84c;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;">Contactar por WhatsApp</a>
-    </div>`);
-}
-
-function rejectedHtml(d) {
-  return htmlWrapper(`
-    <h2 style="color:#f87171;font-size:22px;margin:0 0 8px;">Tu solicitud no pudo ser aprobada</h2>
-    <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">Hola <strong style="color:#e2e8f0;">${d.clientName}</strong>, lamentamos informarte que tu solicitud para <strong style="color:#e2e8f0;">${d.propertyName}</strong> no pudo confirmarse.</p>
-    ${d.adminNotes?`<div style="background:#0f172a;border-left:3px solid #f87171;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px;"><p style="color:#94a3b8;font-size:13px;margin:0;"><strong style="color:#e2e8f0;">Motivo:</strong> ${d.adminNotes}</p></div>`:""}
-    <p style="color:#94a3b8;font-size:14px;">Te invitamos a explorar nuestro cat\u00e1logo o contactarnos.</p>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${BASE_URL}/catalogo" style="display:inline-block;background:#c9a84c;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;">Ver cat\u00e1logo</a>
-      <a href="${WHATSAPP_URL}" style="display:inline-block;background:#1e293b;color:#c9a84c;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;border:1px solid #c9a84c;margin-left:8px;">Contactar</a>
-    </div>`);
-}
-
-function agentHtml(d) {
-  return htmlWrapper(`
-    <h2 style="color:#c9a84c;font-size:22px;margin:0 0 8px;">Nueva visita asignada</h2>
-    <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">Hola <strong style="color:#e2e8f0;">${d.agentName}</strong>, tienes una visita confirmada.</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:12px;border:1px solid #334155;margin-bottom:24px;"><tr><td style="padding:20px 24px;">
-      <table width="100%" cellpadding="6" cellspacing="0">
-        <tr><td style="color:#64748b;font-size:13px;width:40%;">Cliente</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.clientName}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Email</td><td style="color:#e2e8f0;font-size:13px;">${d.clientEmail||"-"}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Tel\u00e9fono</td><td style="color:#e2e8f0;font-size:13px;">${d.clientPhone||"-"}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Propiedad</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.propertyName}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Fecha</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.requestedDate}</td></tr>
-        <tr><td style="color:#64748b;font-size:13px;">Hora</td><td style="color:#e2e8f0;font-size:13px;font-weight:600;">${d.requestedTime}</td></tr>
-      </table>
-    </td></tr></table>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${BASE_URL}/usuarios/visitas" style="display:inline-block;background:#c9a84c;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;">Ver panel de visitas</a>
-    </div>`);
-}
-
+// ─── Trigger principal ────────────────────────────────────────────────────────
 exports.onVisitStatusChanged = onDocumentUpdated(
   {
     document : "visits/{visitId}",
@@ -286,7 +559,10 @@ exports.onVisitStatusChanged = onDocumentUpdated(
   async (event) => {
     const before = event.data.before.data();
     const after  = event.data.after.data();
-    if (!before || !after || before.status === after.status) return null;
+    if (!before || !after) return null;
+
+    const statusChanged = before.status !== after.status;
+    if (!statusChanged) return null;
 
     const user        = GMAIL_USER.value();
     const pass        = GMAIL_PASS.value();
@@ -294,22 +570,75 @@ exports.onVisitStatusChanged = onDocumentUpdated(
     const from        = `"${FROM_NAME}" <${user}>`;
     const promises    = [];
 
-    // pending → approved
-    if (before.status === "pending" && after.status === "approved") {
-      if (after.clientEmail)
-        promises.push(transporter.sendMail({ from, to: after.clientEmail, subject: `Visita aprobada \u2014 ${after.propertyName}`, html: approvedHtml(after) }));
-      if (after.agentEmail)
-        promises.push(transporter.sendMail({ from, to: after.agentEmail, subject: `Nueva visita asignada \u2014 ${after.propertyName}`, html: agentHtml(after) }));
+    const prevStatus = before.status;
+    const nextStatus = after.status;
+
+    // ── Nueva solicitud recibida ───────────────────────────────────────
+    if (nextStatus === "pending" && !prevStatus) {
+      if (after.clientEmail) {
+        promises.push(transporter.sendMail({
+          from,
+          to      : after.clientEmail,
+          subject : `✅ Solicitud recibida — ${after.propertyName}`,
+          html    : pendingHtml(after),
+        }));
+      }
     }
 
-    // pending → rejected
-    if (before.status === "pending" && after.status === "rejected") {
-      if (after.clientEmail)
-        promises.push(transporter.sendMail({ from, to: after.clientEmail, subject: `Actualizaci\u00f3n sobre tu solicitud \u2014 ${after.propertyName}`, html: rejectedHtml(after) }));
+    // ── Aprobada ───────────────────────────────────────────────────────
+    if (nextStatus === "approved") {
+      if (after.clientEmail) {
+        promises.push(transporter.sendMail({
+          from,
+          to      : after.clientEmail,
+          subject : `🎉 ¡Visita confirmada! — ${after.propertyName}`,
+          html    : approvedHtml(after),
+        }));
+      }
+      if (after.agentEmail) {
+        promises.push(transporter.sendMail({
+          from,
+          to      : after.agentEmail,
+          subject : `🏡 Nueva visita asignada — ${after.propertyName}`,
+          html    : agentHtml(after),
+        }));
+      }
     }
 
-    try { await Promise.allSettled(promises); }
-    catch (e) { console.error("[visitEmails] Error:", e); }
+    // ── Rechazada ──────────────────────────────────────────────────────
+    if (nextStatus === "rejected") {
+      if (after.clientEmail) {
+        promises.push(transporter.sendMail({
+          from,
+          to      : after.clientEmail,
+          subject : `Actualización sobre tu visita — ${after.propertyName}`,
+          html    : rejectedHtml(after),
+        }));
+      }
+    }
+
+    // ── Reagendada / nueva propuesta de hora ──────────────────────────
+    if (nextStatus === "rescheduled") {
+      if (after.clientEmail) {
+        promises.push(transporter.sendMail({
+          from,
+          to      : after.clientEmail,
+          subject : `📅 Nueva propuesta de fecha — ${after.propertyName}`,
+          html    : rescheduledHtml(after),
+        }));
+      }
+    }
+
+    try {
+      const results = await Promise.allSettled(promises);
+      results.forEach((r, i) => {
+        if (r.status === "rejected") console.error(`[visitEmails] Error en email #${i}:`, r.reason);
+        else console.log(`[visitEmails] Email #${i} enviado OK`);
+      });
+    } catch (e) {
+      console.error("[visitEmails] Error general:", e);
+    }
+
     return null;
   }
 );
