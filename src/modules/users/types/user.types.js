@@ -1,13 +1,12 @@
 // src/modules/users/types/user.types.js
 
-// ─── Roles ────────────────────────────────────────────────────────────────────
+// ─── Roles ───────────────────────────────────────────────────────────────────
 // SISTEMA DE ROLES DEFINITIVO:
 //   admin  → Control total: usuarios, configuración, todo lo operativo
 //   member → Agente inmobiliario: acceso operativo completo (sin gestión de usuarios/config)
 //   viewer → Solo lectura sobre contenido operativo (sin editar, sin chat)
 //
-// ⚠️ El rol 'agent' fue ELIMINADO porque nunca existió en Firestore.
-//    Todo lo que era 'agent' ahora es 'member'.
+// ⚠️ El rol 'agent' fue ELIMINADO. Todo lo que era 'agent' ahora es 'member'.
 
 export const USER_ROLES = {
   ADMIN:  'admin',
@@ -37,6 +36,23 @@ export const USER_ROLE_BADGE_CLASSES = {
   [USER_ROLES.ADMIN]:  'bg-red-500/10 text-red-400 border-red-500/30',
   [USER_ROLES.MEMBER]: 'bg-green-500/10 text-green-400 border-green-500/30',
   [USER_ROLES.VIEWER]: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+};
+
+// ─── Estados ─────────────────────────────────────────────────────────────────
+// Los estados se mantienen igual — son del usuario, no del rol.
+
+export const USER_STATUS = {
+  ACTIVE:   'active',
+  INACTIVE: 'inactive',
+  PENDING:  'pending',
+  BLOCKED:  'blocked',
+};
+
+export const USER_STATUS_LABELS = {
+  [USER_STATUS.ACTIVE]:   'Activo',
+  [USER_STATUS.INACTIVE]: 'Inactivo',
+  [USER_STATUS.PENDING]:  'Pendiente de aprobación',
+  [USER_STATUS.BLOCKED]:  'Bloqueado',
 };
 
 // ─── Permisos por rol ─────────────────────────────────────────────────────────
@@ -104,7 +120,7 @@ export const canRead = (userRole) =>
  */
 export const canManageUser = (currentUserRole, targetRole, currentUserEmail, targetUserEmail) => {
   if (currentUserRole !== USER_ROLES.ADMIN) return false;
-  if (!Object.values(USER_ROLES).includes(targetRole)) return false;
+  if (targetRole && !Object.values(USER_ROLES).includes(targetRole)) return false;
   if (currentUserEmail && targetUserEmail && currentUserEmail === targetUserEmail) return false;
   return true;
 };

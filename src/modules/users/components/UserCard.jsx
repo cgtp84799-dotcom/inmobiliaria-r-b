@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import {
   FaEdit, FaTrash, FaEnvelope, FaPhone,
   FaUserShield, FaUsers, FaEye, FaToggleOn, FaToggleOff,
-  FaKey, FaExpand, FaUserTie, FaCalendarCheck,
-  FaFileContract, FaHome,
+  FaKey, FaExpand,
 } from 'react-icons/fa';
 import {
   USER_ROLES, USER_ROLE_LABELS, USER_ROLE_BADGE_CLASSES,
@@ -12,9 +11,8 @@ import {
 
 const ROLE_ICONS = {
   [USER_ROLES.ADMIN]:  <FaUserShield className="text-red-400" />,
-  [USER_ROLES.MEMBER]: <FaUsers      className="text-blue-400" />,
-  [USER_ROLES.AGENT]:  <FaUserTie   className="text-green-400" />,
-  [USER_ROLES.VIEWER]: <FaEye       className="text-slate-400" />,
+  [USER_ROLES.MEMBER]: <FaUsers      className="text-green-400" />,
+  [USER_ROLES.VIEWER]: <FaEye        className="text-slate-400" />,
 };
 
 const STATUS_STYLES = {
@@ -33,13 +31,12 @@ const UserCard = ({
   onDelete,
   onChangeStatus,
   onResetPassword,
-  onViewDetail,        // ✅ nuevo: abre UserDetailPanel
+  onViewDetail,
   currentUserRole,
 }) => {
   if (!user) return null;
 
   const isAdmin      = currentUserRole === USER_ROLES.ADMIN;
-  const isAgent      = user.role === USER_ROLES.AGENT;
   const displayName  = user.displayName || user.email || 'Usuario';
   const initial      = displayName.charAt(0).toUpperCase();
   const roleBadge    = USER_ROLE_BADGE_CLASSES[user.role] || USER_ROLE_BADGE_CLASSES[USER_ROLES.VIEWER];
@@ -48,17 +45,9 @@ const UserCard = ({
   const canEdit      = isAdmin && onEdit;
   const canDel       = isAdmin && onDelete && user.role !== USER_ROLES.ADMIN;
 
-  // Formatear última conexión
   const lastSeen = user.lastSeen?.toDate
     ? user.lastSeen.toDate().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
     : null;
-
-  // Mini KPIs solo para agentes (si existen en el doc)
-  const agentStats = isAgent ? [
-    { icon: FaHome,           value: user.totalProperties ?? '–', label: 'Propiedades' },
-    { icon: FaCalendarCheck,  value: user.totalVisits      ?? '–', label: 'Visitas' },
-    { icon: FaFileContract,   value: user.totalContracts   ?? '–', label: 'Contratos' },
-  ] : [];
 
   return (
     <motion.div
@@ -69,7 +58,6 @@ const UserCard = ({
     >
       {/* ─ Header ─ */}
       <div className="p-5 flex items-start gap-4">
-        {/* Avatar */}
         <div className="relative flex-shrink-0">
           {user.photoURL ? (
             <img
@@ -82,19 +70,16 @@ const UserCard = ({
               {initial}
             </div>
           )}
-          {/* Indicador online */}
           {user.online && (
             <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-slate-900" />
           )}
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <h3 className="text-light font-bold text-base truncate">{displayName}</h3>
-          {/* Badges en línea */}
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold border ${roleBadge}`}>
-              {ROLE_ICONS[user.role]}
+              {ROLE_ICONS[user.role] ?? ROLE_ICONS[USER_ROLES.VIEWER]}
               {USER_ROLE_LABELS[user.role] || 'Sin rol'}
             </span>
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold border ${statusBadge}`}>
@@ -122,23 +107,9 @@ const UserCard = ({
         )}
       </div>
 
-      {/* ─ Mini KPIs agente ─ */}
-      {isAgent && (
-        <div className="mx-5 mb-3 grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-          {agentStats.map(({ icon: Icon, value, label }) => (
-            <div key={label} className="text-center">
-              <Icon className="text-primary mx-auto mb-0.5 text-xs" />
-              <p className="text-light font-bold text-sm tabular-nums">{value}</p>
-              <p className="text-slate-500 text-xs">{label}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* ─ Acciones ─ */}
       {isAdmin && (
         <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex flex-wrap gap-2 mt-auto">
-          {/* Ver detalle completo */}
           {onViewDetail && (
             <button
               onClick={() => onViewDetail(user)}
