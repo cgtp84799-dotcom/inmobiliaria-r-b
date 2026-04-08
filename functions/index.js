@@ -7,6 +7,10 @@ const nodemailer  = require("nodemailer");
 // ─── v2 imports (trigger Firestore) ──────────────────────────────────────────
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret }      = require("firebase-functions/params");
+const { setGlobalOptions }  = require("firebase-functions/v2");
+
+// ─── Opciones globales v2 (solo aplica a funciones v2, no afecta v1) ─────────
+setGlobalOptions({ maxInstances: 10 });
 
 if (!admin.apps.length) {
   admin.initializeApp();
