@@ -1,18 +1,16 @@
-// ─── v1 imports (funciones HTTP existentes) ──────────────────────────────────
-const functionsV1 = require("firebase-functions/v1");
-const admin       = require("firebase-admin");
-const cors        = require("cors")({ origin: true });
-const nodemailer  = require("nodemailer");
-
-// ─── v2 imports (nuevo trigger Firestore) ────────────────────────────────────
+// ─── v2 imports ──────────────────────────────────────────────────────────────
+const { onRequest }         = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { defineSecret }      = require("firebase-functions/params");
+const admin                 = require("firebase-admin");
+const cors                  = require("cors")({ origin: true });
+const nodemailer            = require("nodemailer");
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// ─── Secrets (firebase functions:secrets:set GMAIL_USER GMAIL_PASS) ──────────
+// ─── Secrets ─────────────────────────────────────────────────────────────────
 const GMAIL_USER = defineSecret("GMAIL_USER");
 const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
@@ -74,10 +72,11 @@ function toLastMod(value){try{if(!value)return null;if(typeof value?.toDate==="f
 function buildUrlNode(urlData){const images=Array.isArray(urlData.images)?urlData.images:[];const imgBlocks=images.map((img)=>`\n    <image:image>\n      <image:loc>${xmlEscape(img.loc)}</image:loc>\n      <image:title><![CDATA[${img.title||""}]]></image:title>\n      <image:caption><![CDATA[${img.caption||""}]]></image:caption>\n    </image:image>`).join("");const lastmodBlock=urlData.lastmod?`\n    <lastmod>${xmlEscape(urlData.lastmod)}</lastmod>`:"";return`\n  <url>\n    <loc>${xmlEscape(urlData.loc)}</loc>${lastmodBlock}\n    <changefreq>${xmlEscape(urlData.changefreq||"weekly")}</changefreq>\n    <priority>${xmlEscape(urlData.priority||"0.5")}</priority>${imgBlocks}\n  </url>`;}
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 1: deleteUserComplete  (v1 HTTP)
+// FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.deleteUserComplete = functionsV1.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
+exports.deleteUserComplete = onRequest(
+  { region: "us-central1", cors: true },
+  async (req, res) => {
     try {
       if (handlePreflight(req, res)) return;
       setCorsHeaders(req, res);
@@ -100,14 +99,15 @@ exports.deleteUserComplete = functionsV1.https.onRequest((req, res) => {
       console.error("deleteUserComplete Error:", error);
       return res.status(error.status || 500).json({ error: error.message });
     }
-  });
-});
+  }
+);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 2: createUserByAdmin  (v1 HTTP)
+// FUNCIÓN 2: createUserByAdmin  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.createUserByAdmin = functionsV1.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
+exports.createUserByAdmin = onRequest(
+  { region: "us-central1", cors: true },
+  async (req, res) => {
     try {
       if (handlePreflight(req, res)) return;
       setCorsHeaders(req, res);
@@ -138,71 +138,73 @@ exports.createUserByAdmin = functionsV1.https.onRequest((req, res) => {
       console.error("createUserByAdmin Error:", error);
       return res.status(error.status || 500).json({ error: error.message });
     }
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 3: redirectToCustomDomain  (v1 HTTP)
-// ═══════════════════════════════════════════════════════════════════════════════
-exports.redirectToCustomDomain = functionsV1.https.onRequest((req, res) => {
-  const host = String(req.headers.host || "");
-  if (host.includes("web.app") || host.includes("firebaseapp.com")) {
-    return res.redirect(301, `${BASE_URL}${req.url}`);
   }
-  return res.status(200).send("OK");
-});
+);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 4: generateSitemap  (v1 HTTP)
+// FUNCIÓN 3: redirectToCustomDomain  (v2 HTTP)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
-  try {
-    if (handlePreflight(req, res)) return;
-    setCorsHeaders(req, res);
-    if (req.method !== "GET") return res.status(405).send("M\u00e9todo no permitido");
-    const staticUrls = [
-      { loc: `${BASE_URL}/`,            priority: "1.0", changefreq: "daily"   },
-      { loc: `${BASE_URL}/propiedades`, priority: "0.9", changefreq: "daily"   },
-      { loc: `${BASE_URL}/contacto`,    priority: "0.7", changefreq: "monthly" },
-      { loc: `${BASE_URL}/nosotros`,    priority: "0.6", changefreq: "monthly" },
-    ];
-    const snapshot           = await admin.firestore().collection("properties").get();
-    const propertyUrls       = [];
-    const cityLandingMap     = new Map();
-    const typeCityLandingMap = new Map();
-    snapshot.forEach((doc) => {
-      const data = doc.data() || {};
-      if (!isPublicProperty(data)) return;
-      const slug    = buildPropertySlug(data);
-      const loc     = `${BASE_URL}/propiedades/${slug}-${doc.id}`;
-      const lastmod = toLastMod(data.updatedAt || data.createdAt);
-      const images  = extractPropertyImages(data, BASE_URL);
-      propertyUrls.push({ loc, priority: "0.8", changefreq: "daily", lastmod, images });
-      const cityPath = buildCityLandingPath(resolveCity(data));
-      if (cityPath && !cityLandingMap.has(cityPath))
-        cityLandingMap.set(cityPath, { loc: `${BASE_URL}${cityPath}`, priority: "0.8", changefreq: "daily", lastmod });
-      const typeCityPath = buildTypeCityLandingPath(data);
-      if (typeCityPath && !typeCityLandingMap.has(typeCityPath))
-        typeCityLandingMap.set(typeCityPath, { loc: `${BASE_URL}${typeCityPath}`, priority: "0.8", changefreq: "daily", lastmod });
-    });
-    const allUrls = [...staticUrls, ...cityLandingMap.values(), ...typeCityLandingMap.values(), ...propertyUrls];
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset\n  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"\n>\n${allUrls.map(buildUrlNode).join("")}\n</urlset>`;
-    res.set("Content-Type", "application/xml; charset=utf-8");
-    res.set("Cache-Control", "public, max-age=900, s-maxage=900");
-    return res.status(200).send(xml);
-  } catch (error) {
-    console.error("generateSitemap Error:", error);
-    return res.status(500).send("Error generando sitemap");
+exports.redirectToCustomDomain = onRequest(
+  { region: "us-central1" },
+  (req, res) => {
+    const host = String(req.headers.host || "");
+    if (host.includes("web.app") || host.includes("firebaseapp.com")) {
+      return res.redirect(301, `${BASE_URL}${req.url}`);
+    }
+    return res.status(200).send("OK");
   }
-});
+);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FUNCI\u00d3N 5: onVisitStatusChanged  (v2 Firestore trigger)  ← NUEVA 3D
-// Escucha /visits/{visitId} y env\u00eda emails al aprobar o rechazar una visita.
-//
-// SETUP (una sola vez):
-//   firebase functions:secrets:set GMAIL_USER   → escribe el email Gmail
-//   firebase functions:secrets:set GMAIL_PASS   → escribe el App Password Gmail
+// FUNCIÓN 4: generateSitemap  (v2 HTTP)
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.generateSitemap = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    try {
+      if (handlePreflight(req, res)) return;
+      setCorsHeaders(req, res);
+      if (req.method !== "GET") return res.status(405).send("M\u00e9todo no permitido");
+      const staticUrls = [
+        { loc: `${BASE_URL}/`,            priority: "1.0", changefreq: "daily"   },
+        { loc: `${BASE_URL}/propiedades`, priority: "0.9", changefreq: "daily"   },
+        { loc: `${BASE_URL}/contacto`,    priority: "0.7", changefreq: "monthly" },
+        { loc: `${BASE_URL}/nosotros`,    priority: "0.6", changefreq: "monthly" },
+      ];
+      const snapshot           = await admin.firestore().collection("properties").get();
+      const propertyUrls       = [];
+      const cityLandingMap     = new Map();
+      const typeCityLandingMap = new Map();
+      snapshot.forEach((doc) => {
+        const data = doc.data() || {};
+        if (!isPublicProperty(data)) return;
+        const slug    = buildPropertySlug(data);
+        const loc     = `${BASE_URL}/propiedades/${slug}-${doc.id}`;
+        const lastmod = toLastMod(data.updatedAt || data.createdAt);
+        const images  = extractPropertyImages(data, BASE_URL);
+        propertyUrls.push({ loc, priority: "0.8", changefreq: "daily", lastmod, images });
+        const cityPath = buildCityLandingPath(resolveCity(data));
+        if (cityPath && !cityLandingMap.has(cityPath))
+          cityLandingMap.set(cityPath, { loc: `${BASE_URL}${cityPath}`, priority: "0.8", changefreq: "daily", lastmod });
+        const typeCityPath = buildTypeCityLandingPath(data);
+        if (typeCityPath && !typeCityLandingMap.has(typeCityPath))
+          typeCityLandingMap.set(typeCityPath, { loc: `${BASE_URL}${typeCityPath}`, priority: "0.8", changefreq: "daily", lastmod });
+      });
+      const allUrls = [...staticUrls, ...cityLandingMap.values(), ...typeCityLandingMap.values(), ...propertyUrls];
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset\n  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"\n>\n${allUrls.map(buildUrlNode).join("")}\n</urlset>`;
+      res.set("Content-Type", "application/xml; charset=utf-8");
+      res.set("Cache-Control", "public, max-age=900, s-maxage=900");
+      return res.status(200).send(xml);
+    } catch (error) {
+      console.error("generateSitemap Error:", error);
+      return res.status(500).send("Error generando sitemap");
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 5: onVisitStatusChanged  (v2 Firestore trigger)
+// Escucha /visits/{visitId} y envía emails al aprobar o rechazar una visita.
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildTransporter(user, pass) {
   return nodemailer.createTransport({
@@ -211,7 +213,7 @@ function buildTransporter(user, pass) {
   });
 }
 
-function htmlWrapper(content, user) {
+function htmlWrapper(content) {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/></head>
 <body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:32px 16px;"><tr><td align="center">
