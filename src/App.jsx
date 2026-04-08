@@ -35,6 +35,7 @@ import ProtectedRoute     from "./shared/components/ProtectedRoute";
 import SettingsFab        from "./shared/components/UI/SettingsFab";
 import LocationPage       from "./modules/public/pages/LocationPage";
 import ProfilePage        from "./modules/profile/pages/ProfilePage";
+import PrivacyPolicyPage  from "./modules/public/pages/PrivacyPolicyPage";
 
 const VisitsPage        = lazy(() => import("./modules/visits/pages/VisitsPage"));
 const ScheduleVisitPage = lazy(() => import("./modules/visits/pages/ScheduleVisitPage"));
@@ -45,7 +46,6 @@ const ClientManagement  = lazy(() => import("./modules/clients/pages/ClientManag
 const ContractsPage     = lazy(() => import("./modules/contracts/pages/ContractsPage"));
 const DocumentsPage     = lazy(() => import("./modules/documents/pages/DocumentsPage"));
 const ContactsPage      = lazy(() => import("./modules/contacts/pages/ContactsPage"));
-// ── 3C: CalendarPage viene del módulo de visitas ──────────────────────────────
 const CalendarPage      = lazy(() => import("./modules/visits/pages/CalendarPage"));
 const UsersPage         = lazy(() => import("./modules/users/pages/UsersPage"));
 const RequestsPage      = lazy(() => import("./modules/users/pages/RequestsPage"));
@@ -309,126 +309,136 @@ const ContactPage = () => (
       <motion.a href="https://wa.me/573105968202?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20propiedades" target="_blank" rel="noopener noreferrer" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-gradient-to-br from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-white group transform hover:-translate-y-1 hover:scale-[1.02]">
         <FaWhatsapp className="text-3xl sm:text-5xl mx-auto mb-3 group-hover:scale-110 transition-transform" />
         <h3 className="text-base sm:text-xl font-extrabold mb-1">WhatsApp</h3>
-        <p className="text-xs sm:text-sm opacity-90">Chatea con nosotros</p>
+        <p className="text-xs sm:text-sm opacity-90">310 596 8202</p>
       </motion.a>
-      <motion.a href="https://instagram.com/inmobiliaria_ryb" target="_blank" rel="noopener noreferrer" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:via-purple-500 hover:to-indigo-500 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-white group transform hover:-translate-y-1 hover:scale-[1.02]">
-        <FaInstagram className="text-3xl sm:text-5xl mx-auto mb-3 group-hover:scale-110 transition-transform" />
-        <h3 className="text-base sm:text-xl font-extrabold mb-1">Instagram</h3>
-        <p className="text-xs sm:text-sm opacity-90">@inmobiliaria_ryb</p>
+      <motion.a href="tel:+573206736391" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-white group transform hover:-translate-y-1 hover:scale-[1.02]">
+        <FaPhone className="text-3xl sm:text-5xl mx-auto mb-3 group-hover:scale-110 transition-transform" />
+        <h3 className="text-base sm:text-xl font-extrabold mb-1">Teléfono</h3>
+        <p className="text-xs sm:text-sm opacity-90">320 673 6391</p>
       </motion.a>
-      <motion.a href="https://www.facebook.com/share/17piE61vjU/" target="_blank" rel="noopener noreferrer" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-white group transform hover:-translate-y-1 hover:scale-[1.02]">
-        <FaFacebook className="text-3xl sm:text-5xl mx-auto mb-3 group-hover:scale-110 transition-transform" />
-        <h3 className="text-base sm:text-xl font-extrabold mb-1">Facebook</h3>
-        <p className="text-xs sm:text-sm opacity-90">Síguenos</p>
-      </motion.a>
-      <motion.a href="mailto:inmojuridi09@gmail.com" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gradient-to-br from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-slate-950 group transform hover:-translate-y-1 hover:scale-[1.02]">
+      <motion.a href="mailto:inmojuridi09@gmail.com" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 p-4 sm:p-7 rounded-2xl text-center shadow-xl hover:shadow-2xl transition-all duration-300 text-white group transform hover:-translate-y-1 hover:scale-[1.02]">
         <FaEnvelope className="text-3xl sm:text-5xl mx-auto mb-3 group-hover:scale-110 transition-transform" />
         <h3 className="text-base sm:text-xl font-extrabold mb-1">Email</h3>
-        <p className="text-xs sm:text-sm opacity-90 font-semibold">Escríbenos</p>
+        <p className="text-xs sm:text-sm opacity-90">inmojuridi09@gmail.com</p>
       </motion.a>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 sm:p-7 rounded-2xl text-center shadow-xl">
+        <FaMapMarkerAlt className="text-3xl sm:text-5xl mx-auto mb-3 text-primary" />
+        <h3 className="text-base sm:text-xl font-extrabold mb-1 text-white">Dirección</h3>
+        <p className="text-xs sm:text-sm text-slate-300">Cra 5 No. 9-28, Anserma, Caldas</p>
+      </motion.div>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-      <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} className="card-soft p-5 sm:p-8">
-        <h2 className="text-lg sm:text-2xl font-bold text-primary mb-5">Información de contacto</h2>
-        <div className="space-y-5">
-          <div className="flex items-start gap-4">
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><FaPhone className="text-primary text-base" /></div>
-            <div><h3 className="text-light font-semibold mb-1">Teléfonos</h3><p className="text-muted text-sm">310 596 8202</p><p className="text-muted text-sm">320 673 6391</p></div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="card-soft p-5 sm:p-7 mb-6 sm:mb-10">
+      <div className="flex items-center gap-3 mb-4">
+        <FaClock className="text-primary text-xl" />
+        <h3 className="text-white font-bold text-lg">Horario de Atención</h3>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {[["Lunes a Viernes","8:00 AM - 6:00 PM"],["Sábados","8:00 AM - 12:00 PM"],["Domingos","Previa cita"],["Festivos","Previa cita"]].map(([day, hours]) => (
+          <div key={day} className="flex justify-between items-center py-2 border-b border-slate-800">
+            <span className="text-slate-300 text-sm font-medium">{day}</span>
+            <span className="text-primary text-sm font-bold">{hours}</span>
           </div>
-          <div className="flex items-start gap-4">
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><FaEnvelope className="text-primary text-base" /></div>
-            <div className="min-w-0"><h3 className="text-light font-semibold mb-1">Correo electrónico</h3><a href="mailto:inmojuridi09@gmail.com" className="text-primary text-sm hover:underline break-all">inmojuridi09@gmail.com</a></div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><FaMapMarkerAlt className="text-primary text-base" /></div>
-            <div><h3 className="text-light font-semibold mb-1">Dirección</h3><p className="text-muted text-sm">Cra 5 No. 9 - 28</p><p className="text-muted text-sm">Anserma, Caldas, Colombia</p></div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><FaClock className="text-primary text-base" /></div>
-            <div>
-              <h3 className="text-light font-semibold mb-2">Horarios de atención</h3>
-              <div className="text-muted text-sm space-y-1">
-                <p><span className="text-light font-medium">Lunes a Viernes:</span> 8:00 AM - 12:30 PM / 2:00 PM - 5:30 PM</p>
-                <p><span className="text-light font-medium">Sábados:</span> 8:30 AM - 1:00 PM</p>
-                <p className="text-slate-400 italic">No se atiende domingos ni festivos</p>
-              </div>
-            </div>
-          </div>
+        ))}
+      </div>
+    </motion.div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="card-soft overflow-hidden">
+      <div className="p-5 sm:p-6 border-b border-slate-800">
+        <h3 className="text-white font-bold text-lg">Nuestra Ubicación</h3>
+        <p className="text-slate-400 text-sm mt-1">Carrera 5 No. 9-28, Anserma, Caldas, Colombia</p>
+      </div>
+      <div className="w-full h-64 sm:h-80 bg-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <FaMapMarkerAlt className="text-primary text-4xl sm:text-6xl mx-auto mb-3" />
+          <p className="text-slate-300 font-semibold">Anserma, Caldas</p>
+          <a href="https://maps.google.com/?q=Anserma,Caldas,Colombia" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block button-gold text-sm px-5 py-2">Ver en Google Maps</a>
         </div>
-      </motion.div>
-      <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }} className="card-soft p-2 h-full min-h-[260px] sm:min-h-[380px]">
-        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3972.6886447157144!2d-75.78463!3d5.23889!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8e4737a74c4e5555%3A0x1234567890abcdef!2sCra.%205%20%239-28%2C%20Anserma%2C%20Caldas!5e0!3m2!1ses!2sco!4v1234567890123!5m2!1ses!2sco" width="100%" height="100%" style={{ border: 0, borderRadius: "12px", minHeight: "260px" }} allowFullScreen="" loading="lazy" referrerPolicy="no-referrer-when-downgrade" title="Ubicación Rincón Bedoya &amp; Asociados" />
-      </motion.div>
-    </div>
-    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="text-center mt-8 sm:mt-12 p-5 sm:p-8 card-soft">
-      <h2 className="text-xl sm:text-3xl font-bold text-primary mb-2 sm:mb-4">¿Listo para dar el siguiente paso?</h2>
-      <p className="text-slate-300 mb-5 max-w-2xl mx-auto text-sm sm:text-base">Nuestro equipo de profesionales está listo para asesorarte en tu próximo proyecto inmobiliario.</p>
-      <a href="https://wa.me/573105968202?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20propiedades" target="_blank" rel="noopener noreferrer" className="button-gold inline-flex items-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4">
-        <FaWhatsapp className="text-lg sm:text-xl" /> Contactar por WhatsApp
-      </a>
+      </div>
     </motion.div>
   </div>
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-function App() {
+function AppRoutes() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <ScrollToTop />
-        <NotificationInitializer />
-        <Toaster position="top-right" />
-        <Routes>
-          <Route element={<PublicLayout />}>
-            <Route path={PUBLIC_ROUTES.HOME}            element={<HomePage />} />
-            <Route path={PUBLIC_ROUTES.CATALOG}         element={<CatalogPage />} />
-            <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<LocationPage />} />
-            <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL} element={<PropertyDetailPage />} />
-            <Route path={PUBLIC_ROUTES.CONTACT}         element={<ContactPage />} />
-            <Route path={AUTH_ROUTES.ACCESS_REQUEST}    element={<AccessRequestPage />} />
-            <Route path={PUBLIC_ROUTES.SCHEDULE_VISIT}  element={<Suspense fallback={<PageLoader />}><ScheduleVisitPage /></Suspense>} />
-          </Route>
-
-          <Route path={AUTH_ROUTES.LOGIN} element={<AuthPage />} />
-
+    <>
+      <NotificationInitializer />
+      <ScrollToTop />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { background: "#1e293b", color: "#f1f5f9", border: "1px solid #334155" },
+          success: { iconTheme: { primary: "var(--color-primary)", secondary: "#0f172a" } },
+        }}
+      />
+      <Routes>
+        {/* ── Public ─────────────────────────────────────────────────────────── */}
+        <Route element={<PublicLayout />}>
+          <Route path={PUBLIC_ROUTES.HOME}                 element={<HomePage />} />
+          <Route path={PUBLIC_ROUTES.CATALOG}              element={<CatalogPage />} />
+          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES}      element={<CatalogPage />} />
+          <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<CatalogPage />} />
+          <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL}      element={<PropertyDetailPage />} />
+          <Route path={PUBLIC_ROUTES.CONTACT}              element={<ContactPage />} />
+          <Route path="/ubicacion"                         element={<LocationPage />} />
+          <Route path={PUBLIC_ROUTES.PRIVACY_POLICY}       element={<PrivacyPolicyPage />} />
           <Route
+            path={PUBLIC_ROUTES.SCHEDULE_VISIT}
             element={
-              <ProtectedRoute>
-                <div className="bg-main">
-                  <AdminLayout />
-                  <SettingsFab />
-                </div>
-              </ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <ScheduleVisitPage />
+              </Suspense>
             }
-          >
-            <Route path={PRIVATE_ROUTES.DASHBOARD}       element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-            <Route
-              path={PRIVATE_ROUTES.AGENT_DASHBOARD}
-              element={
-                <AgentRoute>
-                  <Suspense fallback={<PageLoader />}><AgentDashboard /></Suspense>
-                </AgentRoute>
-              }
-            />
-            <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.VISITS}     element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.CHAT}       element={<Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />} />
-            <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
-            {/* 3C: Calendario unificado (visits + appointments) */}
-            <Route path={PRIVATE_ROUTES.CALENDAR}   element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.USERS}      element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.REQUESTS}   element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
-            <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
-          </Route>
+          />
+        </Route>
 
-          <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        {/* ── Auth ───────────────────────────────────────────────────────────── */}
+        <Route path={AUTH_ROUTES.LOGIN}          element={<AuthPage />} />
+        <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
+
+        {/* ── Private (Admin layout) ─────────────────────────────────────────── */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path={PRIVATE_ROUTES.DASHBOARD}   element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.PROPERTIES}  element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CLIENTS}     element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CONTRACTS}   element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.DOCUMENTS}   element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.QUERIES}     element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CALENDAR}    element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.VISITS}      element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.USERS}       element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.REQUESTS}    element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.PROFILE}     element={<ProfilePage />} />
+          <Route
+            path={PRIVATE_ROUTES.AGENT_DASHBOARD}
+            element={
+              <AgentRoute>
+                <Suspense fallback={<PageLoader />}><AgentDashboard /></Suspense>
+              </AgentRoute>
+            }
+          />
+        </Route>
+
+        {/* ── Fallback ───────────────────────────────────────────────────────── */}
+        <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
+      </Routes>
+      <SettingsFab />
+    </>
   );
 }
 
-export default App;
+// ─────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

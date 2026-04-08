@@ -11,6 +11,7 @@ export const PUBLIC_ROUTES = {
   PROPERTY_DETAIL:     '/propiedades/:slugId',
   CONTACT:             '/contacto',
   SCHEDULE_VISIT:      '/agendar-visita',
+  PRIVACY_POLICY:      '/politica-privacidad',
 };
 
 export const AUTH_ROUTES = {
