@@ -1,44 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
+import { useAuth } from '../../auth/hooks/useAuth';
 import toast from 'react-hot-toast';
 
 /**
  * useVisits — hook para la página de administración de visitas.
  *
+ * Comportamiento por rol:
+ *   admin  → ve TODAS las visitas (subscribeAll)
+ *   member → ve SOLO las visitas donde agentEmail == su email (subscribeByAgent)
+ *
  * API pública:
  * { visits, loading, error, counts, approve, reject, complete, reschedule, remove, reload }
- *
- * Fix: isMounted ref evita que el callback de onSnapshot actualice estado
- * después del desmontaje, lo que provocaba el crash interno del SDK de
- * Firestore (INTERNAL ASSERTION FAILED: Unexpected state ID ca9 / b815).
  */
 export function useVisits() {
+  const { user, role } = useAuth();
   const [visits,  setVisits]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
+    if (!user) return;
     isMounted.current = true;
 
     let unsub = () => {};
 
+    const onData = (data) => {
+      if (!isMounted.current) return;
+      setVisits(data);
+      setLoading(false);
+      setError(null);
+    };
+
+    const onError = (err) => {
+      if (!isMounted.current) return;
+      console.error('useVisits error:', err);
+      setError(err);
+      setLoading(false);
+      toast.error('Error al cargar las visitas');
+    };
+
     try {
-      unsub = visitService.subscribeAll(
-        (data) => {
-          if (!isMounted.current) return;
-          setVisits(data);
-          setLoading(false);
-          setError(null);
-        },
-        (err) => {
-          if (!isMounted.current) return;
-          console.error('useVisits error:', err);
-          setError(err);
-          setLoading(false);
-          toast.error('Error al cargar las visitas');
-        },
-      );
+      // Admin ve todo — member ve solo sus visitas asignadas
+      if (role === 'admin') {
+        unsub = visitService.subscribeAll(onData, onError);
+      } else {
+        // member: filtra por su propio email
+        unsub = visitService.subscribeByAgent(user.email, onData, onError);
+      }
     } catch (err) {
       if (isMounted.current) {
         setError(err);
@@ -50,7 +60,7 @@ export function useVisits() {
       isMounted.current = false;
       try { unsub(); } catch (_) {}
     };
-  }, []);
+  }, [user?.email, role]);
 
   // Contadores por estado
   const counts = useMemo(
@@ -62,7 +72,8 @@ export function useVisits() {
     try {
       await visitService.approveVisit(visit, adminNotes, agentData);
       toast.success('Visita aprobada ✅');
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast.error('Error al aprobar la visita');
     }
   }, []);

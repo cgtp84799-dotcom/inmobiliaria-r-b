@@ -1,15 +1,89 @@
 import {
   collection, addDoc, updateDoc, deleteDoc,
-  doc, getDocs, query, where, orderBy, limit,
+  doc, getDocs, getDoc, query, where, orderBy, limit,
   serverTimestamp, onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { VISIT_STATUS } from '../types/visit.types';
 import { notificationService } from '../../notifications/services/notification.service';
+import { auth } from '../../../core/config/firebase.config';
 
 const COLLECTION = 'visits';
 const col = () => collection(db, COLLECTION);
 const ref = (id) => doc(db, COLLECTION, id);
+
+// ─── Helper: email al cliente y/o agente vía colección /mail ─────────────────
+// Requiere la extensión "Trigger Email from Firestore" instalada en Firebase.
+// Si no está instalada, el addDoc simplemente se guarda y no pasa nada más.
+async function sendMail(to, subject, html) {
+  if (!to) return;
+  try {
+    await addDoc(collection(db, 'mail'), {
+      to,
+      message: { subject, html },
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('sendMail: no se pudo encolar el email:', e.message);
+  }
+}
+
+// ─── Helper: crear o actualizar cliente y registrar en historial ──────────────
+async function upsertClientAndHistory(visit, agentData, approvedByEmail) {
+  try {
+    const clientsSnap = await getDocs(
+      query(collection(db, 'clients'), where('email', '==', visit.clientEmail)),
+    );
+
+    const basePayload = {
+      name:      visit.clientName,
+      email:     visit.clientEmail,
+      phone:     visit.clientPhone || '',
+      updatedAt: serverTimestamp(),
+    };
+
+    let clientId;
+
+    if (clientsSnap.empty) {
+      const newRef = await addDoc(collection(db, 'clients'), {
+        ...basePayload,
+        source:    'visit_request',
+        agentId:   agentData.agentId   || visit.agentId   || null,
+        agentName: agentData.agentName || visit.agentName || null,
+        agentEmail:agentData.agentEmail|| visit.agentEmail|| null,
+        createdAt: serverTimestamp(),
+      });
+      clientId = newRef.id;
+    } else {
+      clientId = clientsSnap.docs[0].id;
+      await updateDoc(clientsSnap.docs[0].ref, basePayload);
+    }
+
+    // Historial de la visita aprobada
+    await addDoc(collection(db, 'clients', clientId, 'history'), {
+      type:         'visit_approved',
+      visitId:      visit.id,
+      propertyId:   visit.propertyId  || null,
+      propertyName: visit.propertyName,
+      date:         visit.requestedDate,
+      time:         visit.requestedTime,
+      agentId:      agentData.agentId   || visit.agentId   || null,
+      agentName:    agentData.agentName || visit.agentName || null,
+      agentEmail:   agentData.agentEmail|| visit.agentEmail|| null,
+      approvedBy:   approvedByEmail     || null,
+      notes:        visit.adminNotes    || '',
+      createdAt:    serverTimestamp(),
+    });
+
+    // Vincular clientId a la visita
+    await updateDoc(ref(visit.id), { clientId });
+
+    return clientId;
+  } catch (e) {
+    console.warn('upsertClientAndHistory error:', e.message);
+    return null;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // visitService
@@ -41,19 +115,24 @@ export const visitService = {
     return unsub;
   },
 
+  // ── Suscripción filtrada por agente (rol member) ──────────
+  // Muestra solo las visitas asignadas al agente autenticado.
+  subscribeByAgent(agentEmail, onData, onError) {
+    const q = query(
+      col(),
+      where('agentEmail', '==', agentEmail),
+      orderBy('createdAt', 'desc'),
+    );
+    return onSnapshot(
+      q,
+      { includeMetadataChanges: false },
+      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => onError?.(err),
+    );
+  },
+
   // ── Solicitar visita (formulario público — usuario NO autenticado) ──────
-  //
-  // REGLAS de Firestore:
-  //   /visits        → allow create: if true;               ✅ siempre funciona
-  //   /appointments  → allow write: if isSignedIn();         ❌ usuario anónimo FALLA
-  //   /users         → allow read: if isSignedIn();          ❌ usuario anónimo FALLA
-  //   /notifications → allow create: if isSignedIn();        ❌ usuario anónimo FALLA
-  //
-  // Las tres operaciones posteriores son "best-effort": si fallan solo
-  // emiten un console.warn y NO relanzar el error, de modo que el visitante
-  // siempre ve la pantalla de "¡Solicitud enviada!" aunque no esté autenticado.
   async requestVisit(payload) {
-    // 1. Escritura principal — la única que DEBE funcionar
     const visitRef = await addDoc(col(), {
       ...payload,
       sourceCollection: 'visits',
@@ -61,7 +140,7 @@ export const visitService = {
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Espejo en /appointments (best-effort)
+    // Espejo en /appointments (best-effort)
     try {
       await addDoc(collection(db, 'appointments'), {
         visitId:          visitRef.id,
@@ -83,10 +162,10 @@ export const visitService = {
         updatedAt:        serverTimestamp(),
       });
     } catch (e) {
-      console.warn('visitService: espejo en /appointments omitido (usuario no autenticado):', e.code);
+      console.warn('visitService: espejo en /appointments omitido:', e.code);
     }
 
-    // 3. Notificar admins (best-effort — requiere isSignedIn para leer /users)
+    // Notificar admins (best-effort)
     try {
       const adminsSnap = await getDocs(
         query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)),
@@ -103,7 +182,7 @@ export const visitService = {
         ),
       );
     } catch (e) {
-      console.warn('visitService: notificaciones a admins omitidas (usuario no autenticado):', e.code);
+      console.warn('visitService: notificaciones a admins omitidas:', e.code);
     }
 
     return visitRef.id;
@@ -179,18 +258,32 @@ export const visitService = {
   },
 
   // ── Aprobar visita ────────────────────────────────────────────────────
+  // agentData = { agentId, agentName, agentEmail }
+  // El email del admin que aprueba se toma de auth.currentUser.
   async approveVisit(visit, adminNotes = '', agentData = {}) {
+    const approvedByEmail = auth.currentUser?.email || null;
+
     const updatePayload = {
-      status:     VISIT_STATUS.APPROVED,
+      status:          VISIT_STATUS.APPROVED,
       adminNotes,
-      updatedAt:  serverTimestamp(),
-      approvedAt: serverTimestamp(),
+      approvedBy:      approvedByEmail,
+      updatedAt:       serverTimestamp(),
+      approvedAt:      serverTimestamp(),
       ...(agentData.agentId    && { agentId:    agentData.agentId }),
       ...(agentData.agentName  && { agentName:  agentData.agentName }),
       ...(agentData.agentEmail && { agentEmail: agentData.agentEmail }),
     };
     await updateDoc(ref(visit.id), updatePayload);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.APPROVED, adminNotes);
+
+    // 1. Crear/actualizar cliente y registrar en historial
+    await upsertClientAndHistory(
+      { ...visit, adminNotes },
+      agentData,
+      approvedByEmail,
+    );
+
+    // 2. Notificación interna al cliente
     if (visit.clientEmail) {
       await notificationService.createNotification({
         userId:    visit.clientEmail,
@@ -198,17 +291,63 @@ export const visitService = {
         title:     'Visita aprobada',
         message:   `Tu visita a "${visit.propertyName}" fue aprobada para el ${visit.requestedDate} a las ${visit.requestedTime}.`,
         actionUrl: '/portal/visitas',
-      });
+      }).catch(() => {});
     }
+
+    // 3. Notificación interna al agente asignado
     const effectiveAgentEmail = agentData.agentEmail || visit.agentEmail;
+    const effectiveAgentName  = agentData.agentName  || visit.agentName;
     if (effectiveAgentEmail) {
       await notificationService.createNotification({
         userId:    effectiveAgentEmail,
-        type:      'visit_approved',
+        type:      'visit_assigned',
         title:     'Visita asignada',
         message:   `Tienes una visita aprobada: "${visit.propertyName}" — ${visit.clientName} el ${visit.requestedDate}.`,
         actionUrl: '/usuarios/visitas',
-      });
+      }).catch(() => {});
+    }
+
+    // 4. Email al cliente
+    await sendMail(
+      visit.clientEmail,
+      `✅ Tu visita a "${visit.propertyName}" fue aprobada`,
+      `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+          <h2 style="color:#01696f;">¡Tu visita fue aprobada! 🎉</h2>
+          <p>Hola <strong>${visit.clientName}</strong>,</p>
+          <p>Tu solicitud de visita ha sido confirmada con los siguientes datos:</p>
+          <table style="border-collapse:collapse;width:100%;">
+            <tr><td style="padding:6px 0;color:#666;">📍 Propiedad</td><td style="padding:6px 0;"><strong>${visit.propertyName}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#666;">📅 Fecha</td><td style="padding:6px 0;"><strong>${visit.requestedDate}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#666;">🕐 Hora</td><td style="padding:6px 0;"><strong>${visit.requestedTime}</strong></td></tr>
+            ${effectiveAgentName ? `<tr><td style="padding:6px 0;color:#666;">👤 Agente</td><td style="padding:6px 0;"><strong>${effectiveAgentName}</strong></td></tr>` : ''}
+            ${adminNotes ? `<tr><td style="padding:6px 0;color:#666;">📝 Notas</td><td style="padding:6px 0;">${adminNotes}</td></tr>` : ''}
+          </table>
+          <p style="margin-top:24px;color:#888;font-size:13px;">Si tienes alguna pregunta, responde este correo.</p>
+        </div>
+      `,
+    );
+
+    // 5. Email al agente asignado
+    if (effectiveAgentEmail) {
+      await sendMail(
+        effectiveAgentEmail,
+        `📋 Nueva visita asignada — ${visit.propertyName}`,
+        `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+            <h2 style="color:#01696f;">Tienes una visita asignada 📅</h2>
+            <p>Hola <strong>${effectiveAgentName || effectiveAgentEmail}</strong>,</p>
+            <table style="border-collapse:collapse;width:100%;">
+              <tr><td style="padding:6px 0;color:#666;">👤 Cliente</td><td style="padding:6px 0;"><strong>${visit.clientName}</strong> (${visit.clientEmail})</td></tr>
+              <tr><td style="padding:6px 0;color:#666;">📞 Teléfono</td><td style="padding:6px 0;">${visit.clientPhone || 'No indicado'}</td></tr>
+              <tr><td style="padding:6px 0;color:#666;">📍 Propiedad</td><td style="padding:6px 0;"><strong>${visit.propertyName}</strong></td></tr>
+              <tr><td style="padding:6px 0;color:#666;">📅 Fecha</td><td style="padding:6px 0;"><strong>${visit.requestedDate} a las ${visit.requestedTime}</strong></td></tr>
+              ${adminNotes ? `<tr><td style="padding:6px 0;color:#666;">📝 Notas</td><td style="padding:6px 0;">${adminNotes}</td></tr>` : ''}
+            </table>
+            <p style="margin-top:24px;color:#888;font-size:13px;">Aprobado por: ${approvedByEmail || 'administrador'}</p>
+          </div>
+        `,
+      );
     }
   },
 
@@ -216,6 +355,7 @@ export const visitService = {
   async rejectVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
+
     if (visit.clientEmail) {
       await notificationService.createNotification({
         userId:    visit.clientEmail,
@@ -223,7 +363,21 @@ export const visitService = {
         title:     'Visita no aprobada',
         message:   `Tu solicitud de visita a "${visit.propertyName}" no pudo ser aprobada. ${adminNotes || ''}`.trim(),
         actionUrl: '/portal/visitas',
-      });
+      }).catch(() => {});
+
+      await sendMail(
+        visit.clientEmail,
+        `Tu solicitud de visita a "${visit.propertyName}"`,
+        `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+            <h2 style="color:#a12c7b;">Solicitud de visita</h2>
+            <p>Hola <strong>${visit.clientName}</strong>,</p>
+            <p>Lamentablemente tu solicitud de visita a <strong>${visit.propertyName}</strong> no pudo ser aprobada en este momento.</p>
+            ${adminNotes ? `<p><strong>Motivo:</strong> ${adminNotes}</p>` : ''}
+            <p>Si deseas más información, contáctanos respondiendo este correo.</p>
+          </div>
+        `,
+      );
     }
   },
 
@@ -231,6 +385,23 @@ export const visitService = {
   async completeVisit(visitId, adminNotes = '') {
     await this.updateStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
+
+    // Registrar en historial del cliente si existe clientId
+    try {
+      const visitSnap = await getDoc(ref(visitId));
+      const visit = { id: visitId, ...visitSnap.data() };
+      if (visit.clientId) {
+        await addDoc(collection(db, 'clients', visit.clientId, 'history'), {
+          type:         'visit_completed',
+          visitId,
+          propertyName: visit.propertyName,
+          date:         visit.requestedDate,
+          agentName:    visit.agentName || null,
+          notes:        adminNotes,
+          createdAt:    serverTimestamp(),
+        });
+      }
+    } catch (_) {}
   },
 
   // ── Proponer nueva hora / reagendar ───────────────────────────────────
@@ -245,15 +416,37 @@ export const visitService = {
     };
     await updateDoc(ref(visit.id ?? visit), updatePayload);
     await this.syncAppointmentStatus(visit.id ?? visit, VISIT_STATUS.RESCHEDULED, adminNotes);
+
     const clientEmail = typeof visit === 'object' ? visit.clientEmail : null;
+    const clientName  = typeof visit === 'object' ? visit.clientName  : null;
+    const propName    = typeof visit === 'object' ? visit.propertyName : null;
+
     if (clientEmail) {
       await notificationService.createNotification({
         userId:    clientEmail,
         type:      'visit_rescheduled',
         title:     'Nueva propuesta de fecha',
-        message:   `Te proponemos reagendar tu visita a "${visit.propertyName}" para el ${proposedDate} a las ${proposedTime}.`,
+        message:   `Te proponemos reagendar tu visita a "${propName}" para el ${proposedDate} a las ${proposedTime}.`,
         actionUrl: '/portal/visitas',
       }).catch(() => {});
+
+      await sendMail(
+        clientEmail,
+        `📅 Nueva fecha propuesta para tu visita a "${propName}"`,
+        `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+            <h2 style="color:#006494;">Propuesta de nueva fecha</h2>
+            <p>Hola <strong>${clientName}</strong>,</p>
+            <p>Te proponemos reagendar tu visita a <strong>${propName}</strong>:</p>
+            <table style="border-collapse:collapse;width:100%;">
+              <tr><td style="padding:6px 0;color:#666;">📅 Nueva fecha</td><td style="padding:6px 0;"><strong>${proposedDate}</strong></td></tr>
+              <tr><td style="padding:6px 0;color:#666;">🕐 Nueva hora</td><td style="padding:6px 0;"><strong>${proposedTime}</strong></td></tr>
+              ${adminNotes ? `<tr><td style="padding:6px 0;color:#666;">📝 Comentario</td><td style="padding:6px 0;">${adminNotes}</td></tr>` : ''}
+            </table>
+            <p style="margin-top:16px;">Responde este correo para confirmar o solicitar otro horario.</p>
+          </div>
+        `,
+      );
     }
   },
 
@@ -264,6 +457,25 @@ export const visitService = {
       where('status', 'in', [
         VISIT_STATUS.APPROVED,
         VISIT_STATUS.COMPLETED,
+        VISIT_STATUS.RESCHEDULED,
+      ]),
+      orderBy('requestedDate', 'asc'),
+    );
+    return onSnapshot(
+      q,
+      { includeMetadataChanges: false },
+      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'visits' }))),
+      (err)  => onError?.(err),
+    );
+  },
+
+  // ── Calendario filtrado por agente ────────────────────────────────────
+  subscribeCalendarByAgent(agentEmail, onData, onError) {
+    const q = query(
+      col(),
+      where('agentEmail', '==', agentEmail),
+      where('status', 'in', [
+        VISIT_STATUS.APPROVED,
         VISIT_STATUS.RESCHEDULED,
       ]),
       orderBy('requestedDate', 'asc'),

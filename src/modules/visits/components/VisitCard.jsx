@@ -5,22 +5,23 @@ import {
   FaCheckCircle, FaTimes,
   FaFlag, FaChevronDown, FaChevronUp, FaTrash,
   FaUserTie, FaCalendarAlt, FaRedoAlt,
-  FaClock,
+  FaClock, FaShieldAlt,
 } from 'react-icons/fa';
 import { VISIT_STATUS, VISIT_STATUS_LABELS, VISIT_STATUS_COLORS } from '../types/visit.types';
 import { formatShort } from '../../../shared/utils/formatDate';
+import { useAuth } from '../../auth/hooks/useAuth';
 
 /**
  * VisitCard
  *
  * Props:
  *   visit        — documento Firestore normalizado
- *   agents       — array de { uid, displayName, email }
- *   onApprove    — (visit, notes, agentData) => void
+ *   agents       — array de { uid, displayName, email }  (solo admin lo pasa)
+ *   onApprove    — (visit, notes, agentData) => void     (solo admin)
  *   onReject     — (visit, notes) => void
  *   onComplete   — (visitId, notes) => void
  *   onReschedule — (visitId, proposedDate, proposedTime, notes) => void
- *   onDelete     — (visitId) => void
+ *   onDelete     — (visitId) => void                     (solo admin)
  */
 export default function VisitCard({
   visit,
@@ -31,6 +32,9 @@ export default function VisitCard({
   onReschedule,
   onDelete,
 }) {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   const [expanded,      setExpanded]      = useState(false);
   const [noteInput,     setNoteInput]     = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
@@ -70,13 +74,15 @@ export default function VisitCard({
       ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
       : true;
 
-  // Botones disponibles según estado
-  const canApprove    = visit.status === VISIT_STATUS.PENDING;
-  const canReject     = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED;
+  // ── Permisos por rol ──────────────────────────────────────────────────
+  // Admin: puede aprobar, rechazar, reagendar, completar, eliminar
+  // Member: solo puede reagendar y marcar como completada (sus visitas asignadas)
+  const canApprove    = isAdmin && visit.status === VISIT_STATUS.PENDING;
+  const canReject     = isAdmin && (visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED);
   const canReschedule = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED;
   const canComplete   = visit.status === VISIT_STATUS.APPROVED || visit.status === VISIT_STATUS.RESCHEDULED;
+  const canDelete     = isAdmin;
 
-  // Clases del botón de confirmar según acción
   const confirmBtnClass = [
     'flex-1 py-2 rounded-xl text-sm font-semibold transition-colors',
     'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -98,7 +104,6 @@ export default function VisitCard({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              {/* Badge de estado */}
               <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${colors.text} ${colors.bg} ${colors.border}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${colors.text.replace('text-', 'bg-')}`} />
                 {label}
@@ -106,7 +111,6 @@ export default function VisitCard({
               <span className="text-slate-500 text-xs">
                 {visit.requestedDate} — {visit.requestedTime}
               </span>
-              {/* Fecha propuesta (reagendada) */}
               {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
                 <span className="text-blue-400 text-xs font-semibold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
                   📅 Propuesta: {visit.proposedDate} {visit.proposedTime}
@@ -119,7 +123,6 @@ export default function VisitCard({
             <p className="text-slate-400 text-xs truncate mt-0.5">{visit.propertyAddress}</p>
           </div>
 
-          {/* Toggle expandir */}
           <button
             onClick={() => setExpanded((v) => !v)}
             className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
@@ -129,7 +132,7 @@ export default function VisitCard({
           </button>
         </div>
 
-        {/* ─── Datos del cliente ─────────────────────────────────────────── */}
+        {/* ─── Datos del cliente ────────────────────────────────────────── */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <FaUser className="text-slate-500 flex-shrink-0" size={11} />
@@ -145,7 +148,15 @@ export default function VisitCard({
           </div>
         </div>
 
-        {/* ─── Botones de acción ─────────────────────────────────────────── */}
+        {/* ─── Agente asignado (visible en cabecera si ya tiene) ────────── */}
+        {visit.agentName && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <FaUserTie className="text-yellow-500" size={10} />
+            <span className="text-yellow-400 text-xs font-semibold">{visit.agentName}</span>
+          </div>
+        )}
+
+        {/* ─── Botones de acción ────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
           {canApprove && (
             <button
@@ -199,7 +210,7 @@ export default function VisitCard({
             </button>
           )}
 
-          {onDelete && (
+          {canDelete && onDelete && (
             <button
               onClick={() => onDelete(visit.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors ml-auto"
@@ -209,7 +220,7 @@ export default function VisitCard({
           )}
         </div>
 
-        {/* ─── Panel de acción (inline expandible) ──────────────────────── */}
+        {/* ─── Panel de acción inline ───────────────────────────────────── */}
         <AnimatePresence>
           {action && (
             <motion.div
@@ -218,8 +229,8 @@ export default function VisitCard({
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden space-y-2"
             >
-              {/* Selector agente (solo aprobar) */}
-              {action === 'approve' && agents.length > 0 && (
+              {/* Selector agente (solo admin, solo aprobar) */}
+              {action === 'approve' && isAdmin && agents.length > 0 && (
                 <div>
                   <label className="block text-slate-400 text-xs font-semibold mb-1">
                     <FaUserTie className="inline mr-1" size={10} />
@@ -270,7 +281,6 @@ export default function VisitCard({
                 </div>
               )}
 
-              {/* Nota de texto */}
               <textarea
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
@@ -309,7 +319,7 @@ export default function VisitCard({
         </AnimatePresence>
       </div>
 
-      {/* ─── Sección expandida (detalle completo) ─────────────────────────── */}
+      {/* ─── Sección expandida ────────────────────────────────────────────── */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -318,7 +328,6 @@ export default function VisitCard({
             exit={{ opacity: 0, height: 0 }}
             className="border-t border-slate-800 px-4 sm:px-5 py-3 space-y-2 overflow-hidden"
           >
-            {/* Bloque fecha propuesta */}
             {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
                 <p className="text-blue-400 text-xs font-semibold uppercase tracking-wider mb-1">Nueva hora propuesta</p>
@@ -345,6 +354,15 @@ export default function VisitCard({
                 <FaUserTie className="text-yellow-500" size={11} />
                 <span className="text-slate-400 text-xs">Agente asignado:</span>
                 <span className="text-yellow-400 text-xs font-semibold">{visit.agentName}</span>
+              </div>
+            )}
+
+            {/* Quién aprobó — visible solo para admin */}
+            {isAdmin && visit.approvedBy && (
+              <div className="flex items-center gap-2">
+                <FaShieldAlt className="text-slate-500" size={11} />
+                <span className="text-slate-400 text-xs">Aprobado por:</span>
+                <span className="text-slate-300 text-xs font-semibold">{visit.approvedBy}</span>
               </div>
             )}
 
