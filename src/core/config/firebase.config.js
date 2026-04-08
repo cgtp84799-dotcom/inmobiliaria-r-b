@@ -5,7 +5,7 @@ import { initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
-import { getMessaging, isSupported } from 'firebase/messaging';
+import { isSupported } from 'firebase/messaging';
 
 // ✅ Configuración desde variables de entorno
 const firebaseConfig = {
@@ -41,12 +41,10 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // ── Firestore ──────────────────────────────────────────────────────────────────
-// experimentalAutoDetectLongPolling: detecta automáticamente si el entorno
-// soporta WebSocket nativo. Si no, cae a long-polling.
-// Esto corrige el bug INTERNAL ASSERTION FAILED (ID: ca9 / b815) de
-// Firestore SDK v12+ cuando hay múltiples listeners onSnapshot activos.
-// NO usar experimentalForceLongPolling — fuerza long-polling en todos los casos
-// y provoca inestabilidad con reconexiones concurrentes.
+// experimentalAutoDetectLongPolling: detecta si el entorno soporta WebSocket
+// nativo. Si no, cae a long-polling. Esto estabiliza el error
+// INTERNAL ASSERTION FAILED (ID: ca9 / b815) de Firestore SDK v12+ con
+// múltiples listeners onSnapshot activos simultáneamente.
 export const db = initializeFirestore(app, {
   cacheSizeBytes:                    CACHE_SIZE_UNLIMITED,
   experimentalAutoDetectLongPolling: true,
@@ -61,21 +59,15 @@ export const storage = getStorage(app);
 // ── Cloud Functions ────────────────────────────────────────────────────────────
 export const functions = getFunctions(app, 'us-central1');
 
-// ── Messaging (solo si el navegador lo soporta) ────────────────────────────────
+// ── Messaging (lazy, solo si el navegador lo soporta) ─────────────────────────
+// Se usa import() dinámico para evitar que require() rompa el módulo ES.
 // isSupported() devuelve false en Safari < 16.4, iframes sin permisos, etc.
-// El valor se resuelve de forma asíncrona para no bloquear la inicialización.
-let messaging = null;
-
 export const messagingReady = isSupported()
-  .then((supported) => {
-    if (supported) {
-      const { getMessaging: _getMessaging } = require('firebase/messaging');
-      messaging = _getMessaging(app);
-    }
-    return messaging;
+  .then(async (supported) => {
+    if (!supported) return null;
+    const { getMessaging } = await import('firebase/messaging');
+    return getMessaging(app);
   })
-  .catch(() => null); // nunca debe romper la app si el navegador no soporta push
-
-export { messaging };
+  .catch(() => null);
 
 export default app;
