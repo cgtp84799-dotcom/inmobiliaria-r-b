@@ -94,8 +94,6 @@ export const visitService = {
   },
 
   // ── Member/Agente: ve solo sus visitas ASIGNADAS ─────────────────────
-  // La visita le aparece al member SOLO si ya tiene su email en agentEmail,
-  // es decir, DESPUÉS de que alguien la aprobó y le fue asignada.
   subscribeByAgent(agentEmail, onData, onError) {
     const q = query(
       col(),
@@ -111,9 +109,6 @@ export const visitService = {
   },
 
   // ── Member/Agente: ve las PENDIENTES (para poder tomar una) ──────────
-  // Cuando están pendientes, todos los agentes las ven para poder aceptar.
-  // En cuanto alguien la acepta, agentEmail queda asignado y desaparece
-  // de esta lista para los demás (porque ya no es PENDING).
   subscribePending(onData, onError) {
     const q = query(
       col(),
@@ -168,7 +163,7 @@ export const visitService = {
       ));
     } catch (_) {}
 
-    // Notificar members (para que sepan que hay una pendiente)
+    // Notificar members
     try {
       const members = await getDocs(
         query(collection(db, 'users'), where('role', '==', 'member'), limit(50)),
@@ -228,18 +223,6 @@ export const visitService = {
   },
 
   // ── APROBAR visita ───────────────────────────────────────────────────
-  // Lógica de "el primero que la aprueba se la queda":
-  //
-  //   Admin aprueba → puede elegir un agente en el selector;
-  //                   si no elige nadie, queda sin agente asignado.
-  //
-  //   Member aprueba → automáticamente se asigna a SÍ MISMO como agente.
-  //                    agentData que le pasa el hook = su propio usuario.
-  //
-  // En ambos casos, el agentEmail queda guardado en el documento.
-  // A partir de ese momento subscribeByAgent solo muestra esa visita
-  // al agente asignado → desaparece de la lista de los demás members.
-  //
   async approveVisit(visit, adminNotes = '', agentData = {}) {
     const currentUser = auth.currentUser;
     const approvedByEmail = currentUser?.email || null;
@@ -262,7 +245,6 @@ export const visitService = {
     const agentEmail = agentData.agentEmail || visit.agentEmail;
     const agentName  = agentData.agentName  || visit.agentName;
 
-    // Notificación interna al cliente
     if (visit.clientEmail) {
       await notificationService.createNotification({
         userId: visit.clientEmail, type: 'visit_approved',
@@ -272,7 +254,6 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // Notificación interna al agente asignado
     if (agentEmail) {
       await notificationService.createNotification({
         userId: agentEmail, type: 'visit_assigned',
@@ -282,7 +263,6 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // Email al cliente
     await sendMail(
       visit.clientEmail,
       `✅ Tu visita a "${visit.propertyName}" fue aprobada`,
@@ -300,7 +280,6 @@ export const visitService = {
       </div>`,
     );
 
-    // Email al agente
     if (agentEmail) {
       await sendMail(
         agentEmail,
@@ -428,14 +407,20 @@ export const visitService = {
   },
 
   // ── Calendario appointments (sin espejo de visits) ───────────────────
+  // FIX: eliminado where('sourceCollection', '!=', 'visits') + doble orderBy
+  // porque requería un índice compuesto que causaba el crash interno del SDK.
+  // Ahora se filtra en memoria — mismo resultado, sin índice ni crash.
   subscribeCalendarAppointments(onData, onError) {
     const q = query(
       collection(db, 'appointments'),
-      where('sourceCollection', '!=', 'visits'),
-      orderBy('sourceCollection'), orderBy('date', 'asc'),
+      orderBy('date', 'asc'),
     );
     return onSnapshot(q, { includeMetadataChanges: false },
-      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'appointments' }))),
+      (snap) => onData(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data(), source: 'appointments' }))
+          .filter((d) => d.sourceCollection !== 'visits'), // filtro en memoria
+      ),
       (err) => onError?.(err),
     );
   },

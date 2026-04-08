@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
 
 /**
@@ -12,8 +12,8 @@ import { visitService } from '../services/visit.service';
  *   { id, title, date, time, clientName, propertyName, agentName,
  *     status, source, color }
  *
- * El componente CalendarPage puede usar este hook directamente
- * sin saber nada de las dos colecciones.
+ * FIX: colorCache movido a useRef para evitar que se recree en cada render
+ * y causar re-renders en bucle que disparan múltiples listeners.
  */
 
 const AGENT_COLORS = [
@@ -31,10 +31,12 @@ function agentColor(agentId, cache) {
 }
 
 export function useCalendarEvents() {
-  const [visitsEvents,       setVisitsEvents]       = useState([]);
-  const [appointmentEvents,  setAppointmentEvents]  = useState([]);
-  const [loading,            setLoading]            = useState(true);
-  const colorCache = {};
+  const [visitsEvents,      setVisitsEvents]      = useState([]);
+  const [appointmentEvents, setAppointmentEvents] = useState([]);
+  const [loading,           setLoading]           = useState(true);
+
+  // FIX: useRef en lugar de objeto literal para que no se recree en cada render
+  const colorCacheRef = useRef({});
 
   useEffect(() => {
     let loadedA = false;
@@ -53,7 +55,7 @@ export function useCalendarEvents() {
           agentName:    v.agentName ?? null,
           status:       v.status,
           source:       'visits',
-          color:        agentColor(v.agentId, colorCache),
+          color:        agentColor(v.agentId, colorCacheRef.current),
         })));
         loadedA = true;
         check();
@@ -73,7 +75,7 @@ export function useCalendarEvents() {
           agentName:    a.agentName ?? null,
           status:       a.status,
           source:       'appointments',
-          color:        agentColor(a.agentId, colorCache),
+          color:        agentColor(a.agentId, colorCacheRef.current),
         })));
         loadedB = true;
         check();
@@ -81,12 +83,15 @@ export function useCalendarEvents() {
       () => { loadedB = true; check(); }
     );
 
-    return () => { unsubVisits(); unsubAppts(); };
+    return () => {
+      unsubVisits();
+      unsubAppts();
+    };
   }, []);
 
   // Combinar y ordenar por fecha+hora
   const events = [...visitsEvents, ...appointmentEvents].sort((a, b) => {
-    const da = `${a.date} ${a.time || '00:00'}`;
+    const da  = `${a.date} ${a.time  || '00:00'}`;
     const db_ = `${b.date} ${b.time || '00:00'}`;
     return da.localeCompare(db_);
   });
