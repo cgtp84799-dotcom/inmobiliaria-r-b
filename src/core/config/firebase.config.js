@@ -42,7 +42,7 @@ export const auth = getAuth(app);
 // Fix: experimentalForceLongPolling evita el bug INTERNAL ASSERTION FAILED de Firestore v12+
 export const db = initializeFirestore(app, {
   cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: true, // detecta automáticamente en vez de forzar
 });
 export const rtdb = getDatabase(app);
 export const storage = getStorage(app);
