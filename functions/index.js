@@ -5,7 +5,7 @@ const cors        = require("cors")({ origin: true });
 const nodemailer  = require("nodemailer");
 
 // ─── v2 imports (trigger Firestore) ──────────────────────────────────────────
-const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret }      = require("firebase-functions/params");
 
 if (!admin.apps.length) {
@@ -198,13 +198,15 @@ exports.generateSitemap = functionsV1.https.onRequest(async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN 5: onVisitStatusChanged  (v2 Firestore trigger)
-// Escucha /visits/{visitId} y envía emails premium al cambiar estado.
 //
-// Estados manejados:
-//   pending  → approved    : Email al cliente (confirmación) + al agente
-//   pending  → rejected    : Email al cliente (rechazo con motivo)
-//   pending  → rescheduled : Email al cliente (nueva propuesta de hora)
-//   approved → rescheduled : Email al cliente (cambio de hora)
+// Usa onDocumentWritten para capturar tanto creaciones como actualizaciones.
+//
+// Flujo de emails:
+//   CREACIÓN  (prevStatus = null)   → "pending"   : Email al cliente (solicitud recibida)
+//   UPDATE    pending  → approved   : Email al cliente (confirmación) + al agente
+//   UPDATE    pending  → rejected   : Email al cliente (rechazo con motivo)
+//   UPDATE    pending  → rescheduled: Email al cliente (nueva propuesta de hora)
+//   UPDATE    approved → rescheduled: Email al cliente (cambio de hora confirmada)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Estilos base compartidos ─────────────────────────────────────────────────
@@ -298,7 +300,49 @@ function infoRow(label, value, accentColor) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 1 — VISITA APROBADA (cliente)
+// EMAIL 1 — SOLICITUD RECIBIDA (cliente) — al crear la visita con status pending
+// ═══════════════════════════════════════════════════════════════════════════════
+function pendingHtml(d) {
+  return htmlWrapper(
+    "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+    `
+    <span class="emoji-icon">⏳</span>
+    <h1 class="title" style="color:#b8952a; text-align:center;">Solicitud recibida</h1>
+    <p class="subtitle" style="text-align:center;">
+      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+      recibimos tu solicitud de visita. Nuestro equipo la revisará y te confirmará
+      <strong style="color:#b8952a;">en menos de 24 horas</strong>.
+    </p>
+
+    <div class="info-card">
+      ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
+      ${infoRow("📅 Fecha solicitada", d.requestedDate)}
+      ${infoRow("🕐 Hora solicitada", d.requestedTime)}
+      ${d.notes ? infoRow("💬 Tu mensaje", d.notes) : ""}
+    </div>
+
+    <div class="note-box" style="background:#fffbeb; border-left:4px solid #f59e0b;">
+      <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">¿Qué sigue?</p>
+      <p style="margin:6px 0 0; font-size:14px; color:#78350f; line-height:1.7;">
+        Un asesor revisará tu solicitud y te enviará un correo de confirmación con los detalles de la visita.
+        Si tienes alguna pregunta, no dudes en contactarnos.
+      </p>
+    </div>
+
+    <div class="btn-center">
+      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
+        💬 Contactar por WhatsApp
+      </a>
+      <a href="${BASE_URL}/propiedades" class="btn-secondary" style="color:#b8952a; border-color:#b8952a;">
+        Ver más propiedades
+      </a>
+    </div>
+    `
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL 2 — VISITA APROBADA (cliente)
 // ═══════════════════════════════════════════════════════════════════════════════
 function approvedHtml(d) {
   return htmlWrapper(
@@ -347,7 +391,7 @@ function approvedHtml(d) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 2 — VISITA RECHAZADA (cliente)
+// EMAIL 3 — VISITA RECHAZADA (cliente)
 // ═══════════════════════════════════════════════════════════════════════════════
 function rejectedHtml(d) {
   return htmlWrapper(
@@ -400,7 +444,7 @@ function rejectedHtml(d) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 3 — NUEVA HORA PROPUESTA / REAGENDADO (cliente)
+// EMAIL 4 — NUEVA HORA PROPUESTA / REAGENDADO (cliente)
 // ═══════════════════════════════════════════════════════════════════════════════
 function rescheduledHtml(d) {
   const newDate = d.proposedDate || d.requestedDate;
@@ -448,7 +492,7 @@ function rescheduledHtml(d) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 4 — NUEVA VISITA ASIGNADA (agente)
+// EMAIL 5 — NUEVA VISITA ASIGNADA (agente)
 // ═══════════════════════════════════════════════════════════════════════════════
 function agentHtml(d) {
   return htmlWrapper(
@@ -497,148 +541,149 @@ function agentHtml(d) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EMAIL 5 — SOLICITUD RECIBIDA (cliente) — cuando status cambia a "pending"
-// ═══════════════════════════════════════════════════════════════════════════════
-function pendingHtml(d) {
-  return htmlWrapper(
-    "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
-    `
-    <span class="emoji-icon">⏳</span>
-    <h1 class="title" style="color:#b8952a; text-align:center;">Solicitud recibida</h1>
-    <p class="subtitle" style="text-align:center;">
-      Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
-      recibimos tu solicitud de visita. Nuestro equipo la revisará y te confirmará
-      <strong style="color:#b8952a;">en menos de 24 horas</strong>.
-    </p>
-
-    <div class="info-card">
-      ${infoRow("🏠 Propiedad", d.propertyName, "#b8952a")}
-      ${infoRow("📅 Fecha solicitada", d.requestedDate)}
-      ${infoRow("🕐 Hora solicitada", d.requestedTime)}
-    </div>
-
-    <div class="note-box" style="background:#f0f9ff; border-left:4px solid #0ea5e9;">
-      <p style="margin:0; font-size:13px; color:#0369a1; font-weight:600;">¿Qué sigue?</p>
-      <p style="margin:6px 0 0; font-size:14px; color:#075985; line-height:1.7;">
-        1. Revisamos la disponibilidad de la propiedad.<br/>
-        2. Un agente confirmará tu visita por email.<br/>
-        3. Recibirás todos los detalles de confirmación.
-      </p>
-    </div>
-
-    <div class="btn-center">
-      <a href="${WHATSAPP_URL}" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836); color:#ffffff;">
-        💬 Preguntar por WhatsApp
-      </a>
-    </div>
-
-    <div class="divider"></div>
-    <p class="tip" style="text-align:center;">
-      Si deseas cancelar esta solicitud, comunícate con nosotros antes de que sea confirmada.
-    </p>
-    `
-  );
-}
-
-// ─── Transporter ──────────────────────────────────────────────────────────────
-function buildTransporter(user, pass) {
+// ─── Helper: crear transporte nodemailer con secrets ya resueltos ─────────────
+function createTransport(gmailUser, gmailPass) {
   return nodemailer.createTransport({
     service: "gmail",
-    auth: { user, pass },
+    auth: { user: gmailUser, pass: gmailPass },
   });
 }
 
-// ─── Trigger principal ────────────────────────────────────────────────────────
-exports.onVisitStatusChanged = onDocumentUpdated(
+// ─── Helper: enviar un email con manejo de errores ────────────────────────────
+async function sendMail(transporter, gmailUser, { to, subject, html }) {
+  if (!to) {
+    console.warn(`[onVisitStatusChanged] sendMail: destinatario vacío para "${subject}". Ignorado.`);
+    return;
+  }
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${gmailUser}>`,
+    to,
+    subject,
+    html,
+  });
+  console.log(`[onVisitStatusChanged] Email enviado a ${to} — ${subject}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRIGGER PRINCIPAL — onVisitStatusChanged
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.onVisitStatusChanged = onDocumentWritten(
   {
-    document : "visits/{visitId}",
-    region   : "us-central1",
-    secrets  : [GMAIL_USER, GMAIL_PASS],
+    document: "visits/{visitId}",
+    region:   "us-central1",
+    secrets:  [GMAIL_USER, GMAIL_PASS],
   },
   async (event) => {
-    const before = event.data.before.data();
-    const after  = event.data.after.data();
-    if (!before || !after) return null;
+    // ── Extraer datos antes/después ──────────────────────────────────────────
+    const before = event.data?.before?.data() ?? null;
+    const after  = event.data?.after?.data()  ?? null;
 
-    const statusChanged = before.status !== after.status;
-    if (!statusChanged) return null;
-
-    const user        = GMAIL_USER.value();
-    const pass        = GMAIL_PASS.value();
-    const transporter = buildTransporter(user, pass);
-    const from        = `"${FROM_NAME}" <${user}>`;
-    const promises    = [];
-
-    const prevStatus = before.status;
-    const nextStatus = after.status;
-
-    // ── Nueva solicitud recibida ───────────────────────────────────────
-    if (nextStatus === "pending" && !prevStatus) {
-      if (after.clientEmail) {
-        promises.push(transporter.sendMail({
-          from,
-          to      : after.clientEmail,
-          subject : `✅ Solicitud recibida — ${after.propertyName}`,
-          html    : pendingHtml(after),
-        }));
-      }
+    // Documento eliminado — ignorar
+    if (!after) {
+      console.log("[onVisitStatusChanged] Documento eliminado. Ignorado.");
+      return;
     }
 
-    // ── Aprobada ───────────────────────────────────────────────────────
-    if (nextStatus === "approved") {
-      if (after.clientEmail) {
-        promises.push(transporter.sendMail({
-          from,
-          to      : after.clientEmail,
-          subject : `🎉 ¡Visita confirmada! — ${after.propertyName}`,
-          html    : approvedHtml(after),
-        }));
-      }
-      if (after.agentEmail) {
-        promises.push(transporter.sendMail({
-          from,
-          to      : after.agentEmail,
-          subject : `🏡 Nueva visita asignada — ${after.propertyName}`,
-          html    : agentHtml(after),
-        }));
-      }
+    const prevStatus = before?.status ?? null;
+    const nextStatus = String(after.status || "").trim().toLowerCase();
+
+    // Sin cambio de estado relevante
+    if (prevStatus === nextStatus) {
+      console.log(`[onVisitStatusChanged] Estado sin cambio (${nextStatus}). Ignorado.`);
+      return;
     }
 
-    // ── Rechazada ──────────────────────────────────────────────────────
-    if (nextStatus === "rejected") {
-      if (after.clientEmail) {
-        promises.push(transporter.sendMail({
-          from,
-          to      : after.clientEmail,
-          subject : `Actualización sobre tu visita — ${after.propertyName}`,
-          html    : rejectedHtml(after),
-        }));
-      }
+    console.log(`[onVisitStatusChanged] ${event.params.visitId}: ${prevStatus ?? "NEW"} → ${nextStatus}`);
+
+    // ── Resolver secrets ─────────────────────────────────────────────────────
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+
+    if (!gmailUser || !gmailPass) {
+      console.error("[onVisitStatusChanged] Secrets GMAIL_USER / GMAIL_PASS no disponibles.");
+      return;
     }
 
-    // ── Reagendada / nueva propuesta de hora ──────────────────────────
-    if (nextStatus === "rescheduled") {
-      if (after.clientEmail) {
-        promises.push(transporter.sendMail({
-          from,
-          to      : after.clientEmail,
-          subject : `📅 Nueva propuesta de fecha — ${after.propertyName}`,
-          html    : rescheduledHtml(after),
-        }));
-      }
-    }
+    const transporter = createTransport(gmailUser, gmailPass);
 
-    try {
-      const results = await Promise.allSettled(promises);
-      results.forEach((r, i) => {
-        if (r.status === "rejected") console.error(`[visitEmails] Error en email #${i}:`, r.reason);
-        else console.log(`[visitEmails] Email #${i} enviado OK`);
+    // ── Datos del documento ──────────────────────────────────────────────────
+    const d = {
+      clientName:      String(after.clientName      || "Cliente").trim(),
+      clientEmail:     String(after.clientEmail     || "").trim(),
+      clientPhone:     String(after.clientPhone     || "").trim(),
+      clientMessage:   String(after.notes           || "").trim(),
+      propertyName:    String(after.propertyName    || "la propiedad").trim(),
+      propertyAddress: String(after.propertyAddress || "").trim(),
+      requestedDate:   String(after.requestedDate   || "").trim(),
+      requestedTime:   String(after.requestedTime   || "").trim(),
+      proposedDate:    String(after.proposedDate    || "").trim(),
+      proposedTime:    String(after.proposedTime    || "").trim(),
+      agentName:       String(after.agentName       || "").trim(),
+      agentEmail:      String(after.agentEmail      || "").trim(),
+      adminNotes:      String(after.adminNotes      || "").trim(),
+      notes:           String(after.notes           || "").trim(),
+    };
+
+    const clientEmail = d.clientEmail;
+    const agentEmail  = d.agentEmail;
+
+    // ── Enrutamiento según transición de estado ──────────────────────────────
+
+    // CREACIÓN — nueva visita con status pending (no había documento antes)
+    if (prevStatus === null && nextStatus === "pending") {
+      await sendMail(transporter, gmailUser, {
+        to:      clientEmail,
+        subject: `✅ Solicitud de visita recibida — ${d.propertyName}`,
+        html:    pendingHtml(d),
       });
-    } catch (e) {
-      console.error("[visitEmails] Error general:", e);
+      return;
     }
 
-    return null;
+    // UPDATE pending → approved
+    if (nextStatus === "approved") {
+      const emails = [];
+
+      // Email al cliente
+      emails.push(sendMail(transporter, gmailUser, {
+        to:      clientEmail,
+        subject: `🎉 ¡Visita confirmada! — ${d.propertyName}`,
+        html:    approvedHtml(d),
+      }));
+
+      // Email al agente (si tiene email asignado)
+      if (agentEmail) {
+        emails.push(sendMail(transporter, gmailUser, {
+          to:      agentEmail,
+          subject: `🏡 Nueva visita asignada — ${d.propertyName} (${d.requestedDate} ${d.requestedTime})`,
+          html:    agentHtml(d),
+        }));
+      }
+
+      await Promise.all(emails);
+      return;
+    }
+
+    // UPDATE → rejected
+    if (nextStatus === "rejected") {
+      await sendMail(transporter, gmailUser, {
+        to:      clientEmail,
+        subject: `😔 Actualización sobre tu visita — ${d.propertyName}`,
+        html:    rejectedHtml(d),
+      });
+      return;
+    }
+
+    // UPDATE → rescheduled (desde pending o approved)
+    if (nextStatus === "rescheduled") {
+      await sendMail(transporter, gmailUser, {
+        to:      clientEmail,
+        subject: `📅 Nueva propuesta de fecha — ${d.propertyName}`,
+        html:    rescheduledHtml(d),
+      });
+      return;
+    }
+
+    // completed y cualquier otro estado → sin email
+    console.log(`[onVisitStatusChanged] Estado "${nextStatus}" no genera email. Ignorado.`);
   }
 );
