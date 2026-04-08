@@ -8,8 +8,6 @@ import { VISIT_STATUS, VISIT_STATUS_LABELS } from '../types/visit.types';
 import { db } from '../../../core/config/firebase.config';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
-// Solo el admin necesita la lista de agentes para elegir a quién asignar.
-// El member se auto-asigna al aprobar, así que no necesita el selector.
 async function fetchAgents() {
   const [admins, members] = await Promise.all([
     getDocs(query(collection(db, 'users'), where('role', '==', 'admin'))),
@@ -45,7 +43,6 @@ export default function VisitsPage() {
   const [filter, setFilter] = useState('all');
   const [agents, setAgents] = useState([]);
 
-  // Solo el admin carga la lista de agentes
   useEffect(() => {
     if (isAdmin) {
       fetchAgents().then(setAgents).catch(console.error);
@@ -67,22 +64,10 @@ export default function VisitsPage() {
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
           {isAdmin
             ? `${visits.length} visita${visits.length !== 1 ? 's' : ''} en total`
-            : `${visits.filter(v => v.status === VISIT_STATUS.PENDING).length} pendiente(s) disponibles · ${visits.filter(v => v.status !== VISIT_STATUS.PENDING).length} asignada(s) a ti`
+            : `${counts[VISIT_STATUS.PENDING] ?? 0} pendiente(s) · ${visits.filter(v => v.status !== VISIT_STATUS.PENDING).length} asignada(s) a ti`
           }
         </p>
       </div>
-
-      {/* ── Aviso para members (cómo funciona el sistema) ─────────── */}
-      {!isAdmin && (
-        <div className="bg-blue-500/10 border border-blue-500/25 rounded-2xl p-4">
-          <p className="text-blue-300 text-sm font-semibold mb-1">¿Cómo funciona?</p>
-          <p className="text-blue-200 text-xs leading-relaxed">
-            Las visitas <strong>pendientes</strong> son solicitudes que aún nadie ha tomado.
-            Si apruebas una, queda asignada a ti y desaparece para los demás agentes.
-            Solo tú y el administrador podrán verla a partir de ese momento.
-          </p>
-        </div>
-      )}
 
       {/* ── KPIs ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -128,12 +113,12 @@ export default function VisitsPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <FaCalendarCheck className="mx-auto text-4xl text-slate-700 mb-3" />
-          <p className="text-slate-400">No hay visitas con este filtro</p>
-          {!isAdmin && filter === 'all' && (
-            <p className="text-slate-500 text-xs mt-2">
-              Cuando llegue una nueva solicitud aparecerá aquí automáticamente.
-            </p>
-          )}
+          <p className="text-slate-400 font-semibold">No hay visitas aquí todavía</p>
+          <p className="text-slate-500 text-xs mt-2">
+            {filter === 'all'
+              ? 'Cuando llegue una solicitud aparecerá aquí automáticamente.'
+              : 'Prueba con otro filtro o espera nuevas solicitudes.'}
+          </p>
         </div>
       ) : (
         <AnimatePresence mode="popLayout">
@@ -142,7 +127,7 @@ export default function VisitsPage() {
               <VisitCard
                 key={visit.id}
                 visit={visit}
-                agents={isAdmin ? agents : []}  // member no necesita el selector
+                agents={isAdmin ? agents : []}
                 onApprove={(v, notes, agentData) => approve(v, notes, agentData)}
                 onReject={(v, notes)             => reject(v, notes)}
                 onComplete={(visitId, notes)      => complete(visitId, notes)}
