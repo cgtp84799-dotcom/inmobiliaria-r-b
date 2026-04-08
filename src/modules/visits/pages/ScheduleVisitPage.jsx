@@ -8,7 +8,7 @@ import {
 import toast from 'react-hot-toast';
 import { visitService } from '../services/visit.service';
 import { createVisitPayload } from '../types/visit.types';
-import { propertyService } from '../../properties/services/property.service';
+import propertyService from '../../properties/services/property.service';
 
 /**
  * ScheduleVisitPage — formulario público para agendar una visita.
