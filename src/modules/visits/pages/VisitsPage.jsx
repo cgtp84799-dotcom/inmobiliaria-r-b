@@ -36,11 +36,10 @@ const KPI_STATUSES = [
 ];
 
 export default function VisitsPage() {
-  // ✅ AuthContext expone isAdmin e isMember directamente
-  const { isAdmin, isMember } = useAuth();
-  const canManage = isAdmin || isMember;
+  // ✅ Usar los booleans del AuthContext directamente
+  const { isAdmin, isMember, canOperate } = useAuth();
 
-  const { visits, loading, counts, approve, reject, complete, reschedule, remove } = useVisits();
+  const { visits, loading, error, counts, approve, reject, complete, reschedule, remove } = useVisits();
   const [filter, setFilter] = useState('all');
   const [agents, setAgents] = useState([]);
 
@@ -69,6 +68,13 @@ export default function VisitsPage() {
           }
         </p>
       </div>
+
+      {/* ── Error state ───────────────────────────────────────── */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3 text-red-400 text-sm">
+          ⚠️ Error al cargar visitas. Recarga la página o contacta soporte si persiste.
+        </div>
+      )}
 
       {/* ── KPIs ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -129,12 +135,10 @@ export default function VisitsPage() {
                 key={visit.id}
                 visit={visit}
                 agents={isAdmin ? agents : []}
-                isAdmin={isAdmin}
-                canManage={canManage}
-                onApprove={canManage ? (v, notes, agentData) => approve(v, notes, agentData) : undefined}
-                onReject={canManage  ? (v, notes)             => reject(v, notes)             : undefined}
-                onComplete={canManage ? (visitId, notes)      => complete(visitId, notes)      : undefined}
-                onReschedule={canManage ? (visitId, date, time, notes) =>
+                onApprove={canOperate ? (v, notes, agentData) => approve(v, notes, agentData) : undefined}
+                onReject={canOperate  ? (v, notes)             => reject(v, notes)             : undefined}
+                onComplete={canOperate ? (visitId, notes)      => complete(visitId, notes)      : undefined}
+                onReschedule={canOperate ? (visitId, date, time, notes) =>
                   reschedule(
                     visits.find((v) => v.id === visitId) ?? { id: visitId },
                     date, time, notes,

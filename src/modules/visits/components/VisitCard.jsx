@@ -17,7 +17,7 @@ import { useAuth } from '../../../core/contexts/AuthContext';
  * Props:
  *   visit        — documento Firestore normalizado
  *   agents       — array de { uid, displayName, email }  (solo admin lo pasa)
- *   onApprove    — (visit, notes, agentData) => void     (solo admin)
+ *   onApprove    — (visit, notes, agentData) => void
  *   onReject     — (visit, notes) => void
  *   onComplete   — (visitId, notes) => void
  *   onReschedule — (visitId, proposedDate, proposedTime, notes) => void
@@ -32,8 +32,9 @@ export default function VisitCard({
   onReschedule,
   onDelete,
 }) {
-  const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  // ✅ CORRECCIÓN CRÍTICA: AuthContext expone isAdmin/isMember/canOperate,
+  //    NO expone "role" directamente. Antes se leía { role } → undefined → isAdmin siempre false → sin botones.
+  const { isAdmin, isMember, canOperate } = useAuth();
 
   const [expanded,      setExpanded]      = useState(false);
   const [noteInput,     setNoteInput]     = useState('');
@@ -74,10 +75,12 @@ export default function VisitCard({
       ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
       : true;
 
-  const canApprove    = isAdmin && visit.status === VISIT_STATUS.PENDING;
-  const canReject     = isAdmin && (visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED);
-  const canReschedule = visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED;
-  const canComplete   = visit.status === VISIT_STATUS.APPROVED || visit.status === VISIT_STATUS.RESCHEDULED;
+  // ── Permisos por acción ───────────────────────────────────────────────
+  // canOperate = isAdmin || isMember  (de AuthContext)
+  const canApprove    = canOperate && visit.status === VISIT_STATUS.PENDING;
+  const canReject     = canOperate && (visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.RESCHEDULED);
+  const canReschedule = canOperate && (visit.status === VISIT_STATUS.PENDING || visit.status === VISIT_STATUS.APPROVED);
+  const canComplete   = canOperate && (visit.status === VISIT_STATUS.APPROVED || visit.status === VISIT_STATUS.RESCHEDULED);
   const canDelete     = isAdmin;
 
   const confirmBtnClass = [
@@ -102,7 +105,7 @@ export default function VisitCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${colors.text} ${colors.bg} ${colors.border}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${colors.text.replace('text-', 'bg-')}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${colors.dot ?? ''}`} />
                 {label}
               </span>
               <span className="text-slate-500 text-xs">
@@ -129,6 +132,7 @@ export default function VisitCard({
           </button>
         </div>
 
+        {/* Datos del cliente */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <FaUser className="text-slate-500 flex-shrink-0" size={11} />
@@ -151,6 +155,7 @@ export default function VisitCard({
           </div>
         )}
 
+        {/* ─── Botones de acción ──────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
           {canApprove && (
             <button
@@ -214,6 +219,7 @@ export default function VisitCard({
           )}
         </div>
 
+        {/* ─── Panel de confirmación ──────────────────────────────────── */}
         <AnimatePresence>
           {action && (
             <motion.div
@@ -222,6 +228,7 @@ export default function VisitCard({
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden space-y-2"
             >
+              {/* Selector de agente solo para admin al aprobar */}
               {action === 'approve' && isAdmin && agents.length > 0 && (
                 <div>
                   <label className="block text-slate-400 text-xs font-semibold mb-1">
@@ -240,6 +247,15 @@ export default function VisitCard({
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Si es member aprobando, se auto-asigna — mostramos aviso */}
+              {action === 'approve' && isMember && (
+                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-3 py-2">
+                  <p className="text-yellow-400 text-xs flex items-center gap-1.5">
+                    <FaUserTie size={10} /> Serás asignado automáticamente como agente
+                  </p>
                 </div>
               )}
 
@@ -310,6 +326,7 @@ export default function VisitCard({
         </AnimatePresence>
       </div>
 
+      {/* ─── Detalles expandidos ─────────────────────────────────────────── */}
       <AnimatePresence>
         {expanded && (
           <motion.div
