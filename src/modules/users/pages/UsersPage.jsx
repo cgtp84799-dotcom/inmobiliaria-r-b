@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import {
   FaUserPlus, FaFilter, FaSearch, FaUsers, FaSpinner,
   FaTimesCircle, FaUserShield, FaShieldAlt, FaEye, FaInfoCircle,
-  FaUserTie,
 } from 'react-icons/fa';
 import { userService } from '../services/user.service';
 import {
@@ -15,7 +14,7 @@ import {
 } from '../types/user.types';
 import UserCard        from '../components/UserCard';
 import UserEditModal   from '../components/UserEditModal';
-import UserDetailPanel from '../components/UserDetailPanel'; // ✅ NUEVO
+import UserDetailPanel from '../components/UserDetailPanel';
 import { useAuth }     from '../../../core/contexts/AuthContext';
 import ConfirmModal    from '../../../shared/components/UI/ConfirmModal';
 
@@ -36,12 +35,10 @@ const UsersPage = () => {
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false, title: '', message: '', confirmText: 'Sí, confirmar', onConfirm: null,
   });
-
-  // ✅ NUEVO: estado del panel lateral
   const [detailUser,   setDetailUser]   = useState(null);
   const [panelOpen,    setPanelOpen]    = useState(false);
 
-  // ── Datos derivados ────────────────────────────────────────────────────────────
+  // ── Datos derivados ───────────────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
     let result = [...users];
     if (filters.searchTerm) {
@@ -57,17 +54,16 @@ const UsersPage = () => {
     return result;
   }, [users, filters]);
 
-  // ✅ agents incluido en stats
+  // ✅ Sin AGENT — solo los 3 roles reales
   const stats = useMemo(() => ({
     total:   users.length,
     active:  users.filter(u => u.status === 'active').length,
     admins:  users.filter(u => u.role === USER_ROLES.ADMIN).length,
     members: users.filter(u => u.role === USER_ROLES.MEMBER).length,
-    agents:  users.filter(u => u.role === USER_ROLES.AGENT).length,
     viewers: users.filter(u => u.role === USER_ROLES.VIEWER).length,
   }), [users]);
 
-  // ── Carga de datos ────────────────────────────────────────────────────────────
+  // ── Carga de datos ────────────────────────────────────────────────────────
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -89,15 +85,11 @@ const UsersPage = () => {
   const clearFilters = () =>
     setFilters({ searchTerm: '', role: '', status: '' });
 
-  // ── Panel de detalle ───────────────────────────────────────────────────────────
-  const handleViewDetail = (user) => {
-    setDetailUser(user);
-    setPanelOpen(true);
-  };
-
+  // ── Panel lateral ────────────────────────────────────────────────────────
+  const handleViewDetail = (user) => { setDetailUser(user); setPanelOpen(true); };
   const closePanel = () => setPanelOpen(false);
 
-  // ── Modal crear / editar ─────────────────────────────────────────────────────────
+  // ── Modal crear / editar ─────────────────────────────────────────────────
   const openCreateModal = () => {
     if (!canCreate) { toast.error('No tienes permisos para crear usuarios'); return; }
     setEditingUser(null);
@@ -108,18 +100,14 @@ const UsersPage = () => {
     if (!canUpdate) { toast.error('No tienes permisos para editar usuarios'); return; }
     setEditingUser(user);
     setModalOpen(true);
-    closePanel(); // cerrar panel si está abierto al abrir el modal
+    closePanel();
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditingUser(null);
-  };
+  const closeModal = () => { setModalOpen(false); setEditingUser(null); };
 
   const handleSave = async (formData, editingUser) => {
     if (editingUser && !canUpdate) throw new Error('Sin permisos para editar usuarios');
     if (!editingUser && !canCreate) throw new Error('Sin permisos para crear usuarios');
-
     if (editingUser) {
       await userService.updateUser(editingUser.id, {
         displayName: formData.displayName,
@@ -139,7 +127,7 @@ const UsersPage = () => {
     loadUsers();
   };
 
-  // ── Acciones de tarjeta ─────────────────────────────────────────────────────────
+  // ── Acciones de tarjeta ──────────────────────────────────────────────────
   const handleDelete = (user) => {
     if (!canDelete) { toast.error('No tienes permisos para eliminar usuarios'); return; }
     if (user.email === currentUser?.email) { toast.error('No puedes eliminar tu propia cuenta'); return; }
@@ -187,7 +175,23 @@ const UsersPage = () => {
     });
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────────
+  // ── KPI rows: 5 tarjetas (sin Agentes) ──────────────────────────────────
+  const KPI_ITEMS = [
+    { id: 'total',   label: 'Total',        value: stats.total,   color: 'primary',   Icon: FaUsers      },
+    { id: 'active',  label: 'Activos',      value: stats.active,  color: 'green-400', Icon: FaUserShield },
+    { id: 'admins',  label: 'Admins',       value: stats.admins,  color: 'red-400',   Icon: FaShieldAlt  },
+    { id: 'members', label: 'Agentes',      value: stats.members, color: 'blue-400',  Icon: FaUsers      },
+    { id: 'viewers', label: 'Solo lectura', value: stats.viewers, color: 'slate-400', Icon: FaEye        },
+  ];
+
+  // ── Roles del sistema: solo los 3 que existen ────────────────────────────
+  const ROLE_INFO = [
+    { id: USER_ROLES.ADMIN,  emoji: '✨', label: 'Administrador'     },
+    { id: USER_ROLES.MEMBER, emoji: '👥', label: 'Agente inmobiliario'},
+    { id: USER_ROLES.VIEWER, emoji: '👁️', label: 'Solo lectura'      },
+  ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="px-4 py-6 space-y-6">
 
@@ -209,24 +213,17 @@ const UsersPage = () => {
         )}
       </motion.div>
 
-      {/* KPIs — ahora incluye Agentes */}
+      {/* KPIs */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
       >
-        {[
-          { label: 'Total',       value: stats.total,   color: 'primary',    Icon: FaUsers      },
-          { label: 'Activos',     value: stats.active,  color: 'green-400',  Icon: FaUserShield },
-          { label: 'Admins',      value: stats.admins,  color: 'red-400',    Icon: FaShieldAlt  },
-          { label: 'Agentes',     value: stats.agents,  color: 'green-400',  Icon: FaUserTie    },
-          { label: 'Equipo',      value: stats.members, color: 'blue-400',   Icon: FaUsers      },
-          { label: 'Solo lectura',value: stats.viewers, color: 'slate-400',  Icon: FaEye        },
-        ].map(({ label, value, color, Icon }) => (
-          <div key={label} className="card-soft p-4">
+        {KPI_ITEMS.map(({ id, label, value, color, Icon }) => (
+          <div key={id} className="card-soft p-4">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg bg-${color}/10 flex items-center justify-center`}>
+              <div className={`w-10 h-10 rounded-lg bg-${color}/10 flex items-center justify-center flex-shrink-0`}>
                 <Icon className={`text-${color}`} />
               </div>
               <div>
@@ -238,7 +235,7 @@ const UsersPage = () => {
         ))}
       </motion.div>
 
-      {/* Info roles — ahora incluye AGENT */}
+      {/* Info roles */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -247,18 +244,13 @@ const UsersPage = () => {
       >
         <div className="flex items-start gap-3">
           <FaInfoCircle className="text-blue-400 mt-1 flex-shrink-0" />
-          <div>
-            <h3 className="text-blue-400 font-semibold mb-2">Roles del sistema</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-              {[
-                { emoji: '✨', label: 'Administrador',       role: USER_ROLES.ADMIN  },
-                { emoji: '👥', label: 'Miembro del equipo',  role: USER_ROLES.MEMBER },
-                { emoji: '👔', label: 'Agente inmobiliario', role: USER_ROLES.AGENT  },
-                { emoji: '👁️', label: 'Solo lectura',        role: USER_ROLES.VIEWER },
-              ].map(({ emoji, label, role }) => (
-                <div key={role}>
+          <div className="w-full">
+            <h3 className="text-blue-400 font-semibold mb-3">Roles del sistema</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              {ROLE_INFO.map(({ id, emoji, label }) => (
+                <div key={id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                   <p className="text-light font-semibold mb-1">{emoji} {label}</p>
-                  <p className="text-slate-400 text-xs">{USER_ROLE_DESCRIPTIONS[role]}</p>
+                  <p className="text-slate-400 text-xs leading-relaxed">{USER_ROLE_DESCRIPTIONS[id]}</p>
                 </div>
               ))}
             </div>
@@ -399,14 +391,13 @@ const UsersPage = () => {
               onDelete={canDelete         ? handleDelete        : null}
               onChangeStatus={canUpdate   ? handleChangeStatus  : null}
               onResetPassword={canUpdate  ? handleResetPassword : null}
-              onViewDetail={handleViewDetail}  // ✅ siempre disponible para admin
+              onViewDetail={handleViewDetail}
               currentUserRole={userData?.role}
             />
           ))}
         </motion.div>
       )}
 
-      {/* Modal crear / editar */}
       <UserEditModal
         editingUser={editingUser}
         isOpen={modalOpen}
@@ -415,7 +406,6 @@ const UsersPage = () => {
         currentUserRole={userData?.role}
       />
 
-      {/* Modal confirmación */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
@@ -425,7 +415,6 @@ const UsersPage = () => {
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
 
-      {/* ✅ Panel lateral de detalle de usuario */}
       <UserDetailPanel
         user={detailUser}
         isOpen={panelOpen}
@@ -434,7 +423,6 @@ const UsersPage = () => {
         onChangeStatus={canUpdate  ? handleChangeStatus  : null}
         onResetPassword={canUpdate ? handleResetPassword : null}
       />
-
     </div>
   );
 };
