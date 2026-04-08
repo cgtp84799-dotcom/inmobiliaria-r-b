@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../core/contexts/AuthContext';
 import { AUTH_ROUTES } from '../../core/config/routes.config';
+import { USER_ROLES } from '../../modules/users/types/user.types';
 
-// Spinner con logo RYB
 const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
     <img
@@ -18,7 +18,6 @@ const LoadingScreen = () => (
   </div>
 );
 
-// Pantalla de acceso denegado
 const AccessDenied = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-950">
     <div className="text-center px-6">
@@ -35,20 +34,29 @@ const AccessDenied = () => (
   </div>
 );
 
+/**
+ * ProtectedRoute — guarda todas las rutas privadas.
+ *
+ * Sin allowedRoles: cualquier usuario autenticado con rol válido puede entrar.
+ * Con allowedRoles: solo los roles listados pueden entrar.
+ *
+ * Los viewers tienen acceso al panel pero no a rutas admin-only
+ * como /usuarios y /solicitudes (que pasan allowedRoles=['admin']).
+ */
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, userData, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
-
-  // FIX: usar AUTH_ROUTES.LOGIN en vez de /acceso (ruta inexistente)
   if (!currentUser) return <Navigate to={AUTH_ROUTES.LOGIN} replace />;
 
-  if (allowedRoles?.length) {
-    const role = userData?.role;
-    if (!role || !allowedRoles.includes(role)) {
-      return <AccessDenied />;
-    }
-  }
+  const role = userData?.role;
+  const validRoles = Object.values(USER_ROLES);
+
+  // Si el rol no existe o no es válido → acceso denegado
+  if (!role || !validRoles.includes(role)) return <AccessDenied />;
+
+  // Si se especifican roles permitidos → verificar
+  if (allowedRoles?.length && !allowedRoles.includes(role)) return <AccessDenied />;
 
   return children ? children : <Outlet />;
 };

@@ -37,18 +37,18 @@ import LocationPage       from "./modules/public/pages/LocationPage";
 import ProfilePage        from "./modules/profile/pages/ProfilePage";
 import PrivacyPolicyPage  from "./modules/public/pages/PrivacyPolicyPage";
 
-const VisitsPage        = lazy(() => import("./modules/visits/pages/VisitsPage"));
-const ScheduleVisitPage = lazy(() => import("./modules/visits/pages/ScheduleVisitPage"));
-const DashboardPage     = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
-const AgentDashboard    = lazy(() => import("./modules/agents/pages/AgentDashboard"));
-const PropertyManagement= lazy(() => import("./modules/properties/pages/PropertyManagement"));
-const ClientManagement  = lazy(() => import("./modules/clients/pages/ClientManagement"));
-const ContractsPage     = lazy(() => import("./modules/contracts/pages/ContractsPage"));
-const DocumentsPage     = lazy(() => import("./modules/documents/pages/DocumentsPage"));
-const ContactsPage      = lazy(() => import("./modules/contacts/pages/ContactsPage"));
-const CalendarPage      = lazy(() => import("./modules/visits/pages/CalendarPage"));
-const UsersPage         = lazy(() => import("./modules/users/pages/UsersPage"));
-const RequestsPage      = lazy(() => import("./modules/users/pages/RequestsPage"));
+const VisitsPage         = lazy(() => import("./modules/visits/pages/VisitsPage"));
+const ScheduleVisitPage  = lazy(() => import("./modules/visits/pages/ScheduleVisitPage"));
+const DashboardPage      = lazy(() => import("./modules/dashboard/pages/DashboardPage"));
+const AgentDashboard     = lazy(() => import("./modules/agents/pages/AgentDashboard"));
+const PropertyManagement = lazy(() => import("./modules/properties/pages/PropertyManagement"));
+const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientManagement"));
+const ContractsPage      = lazy(() => import("./modules/contracts/pages/ContractsPage"));
+const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
+const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
+const CalendarPage       = lazy(() => import("./modules/visits/pages/CalendarPage"));
+const UsersPage          = lazy(() => import("./modules/users/pages/UsersPage"));
+const RequestsPage       = lazy(() => import("./modules/users/pages/RequestsPage"));
 
 // ─────────────────────────────────────────────────────────────────────────────
 const PageLoader = () => (
@@ -58,13 +58,8 @@ const PageLoader = () => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-const AgentRoute = ({ children }) => {
-  const { userData } = useAuth();
-  if (userData?.role !== USER_ROLES.AGENT) {
-    return <Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />;
-  }
-  return children;
-};
+// ⚠️ AgentRoute eliminado — el rol 'agent' ya no existe.
+//    El módulo AgentDashboard ahora es solo para admin (panel de métricas del equipo).
 
 // ─────────────────────────────────────────────────────────────────────────────
 const NotificationInitializer = () => {
@@ -371,7 +366,7 @@ function AppRoutes() {
         }}
       />
       <Routes>
-        {/* ── Public ─────────────────────────────────────────────────────────── */}
+        {/* ── Rutas públicas ─────────────────────────────────────────────────── */}
         <Route element={<PublicLayout />}>
           <Route path={PUBLIC_ROUTES.HOME}                 element={<HomePage />} />
           <Route path={PUBLIC_ROUTES.CATALOG}              element={<CatalogPage />} />
@@ -383,19 +378,16 @@ function AppRoutes() {
           <Route path={PUBLIC_ROUTES.PRIVACY_POLICY}       element={<PrivacyPolicyPage />} />
           <Route
             path={PUBLIC_ROUTES.SCHEDULE_VISIT}
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <ScheduleVisitPage />
-              </Suspense>
-            }
+            element={<Suspense fallback={<PageLoader />}><ScheduleVisitPage /></Suspense>}
           />
         </Route>
 
-        {/* ── Auth ───────────────────────────────────────────────────────────── */}
+        {/* ── Autenticación ──────────────────────────────────────────────────── */}
         <Route path={AUTH_ROUTES.LOGIN}          element={<AuthPage />} />
         <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
 
-        {/* ── Private (Admin layout) ─────────────────────────────────────────── */}
+        {/* ── Rutas privadas — admin, member y viewer ────────────────────────── */}
+        {/* ProtectedRoute sin allowedRoles = cualquier rol válido puede entrar  */}
         <Route
           element={
             <ProtectedRoute>
@@ -403,23 +395,41 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         >
-          <Route path={PRIVATE_ROUTES.DASHBOARD}   element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.PROPERTIES}  element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CLIENTS}     element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CONTRACTS}   element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.DOCUMENTS}   element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.QUERIES}     element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CALENDAR}    element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.VISITS}      element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.USERS}       element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.REQUESTS}    element={<Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.PROFILE}     element={<ProfilePage />} />
+          <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.CALENDAR}   element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.VISITS}     element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
+          <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
+
+          {/* Solo admin puede gestionar usuarios y solicitudes */}
+          <Route
+            path={PRIVATE_ROUTES.USERS}
+            element={
+              <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                <Suspense fallback={<PageLoader />}><UsersPage /></Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={PRIVATE_ROUTES.REQUESTS}
+            element={
+              <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                <Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Panel de rendimiento del equipo — solo admin */}
           <Route
             path={PRIVATE_ROUTES.AGENT_DASHBOARD}
             element={
-              <AgentRoute>
+              <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
                 <Suspense fallback={<PageLoader />}><AgentDashboard /></Suspense>
-              </AgentRoute>
+              </ProtectedRoute>
             }
           />
         </Route>

@@ -10,6 +10,7 @@ import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firest
 import { ref, set, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { auth, db, rtdb } from '../config/firebase.config';
 import toast from 'react-hot-toast';
+import { USER_ROLES } from '../../modules/users/types/user.types';
 
 const AuthContext = createContext();
 
@@ -23,33 +24,26 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser]   = useState(null);
   const [userData, setUserData]         = useState(null);
   const [loading, setLoading]           = useState(true);
+  const presenceUnsubRef                = useRef(null);
 
-  const presenceUnsubRef = useRef(null);
-
-  // ========================================
-  // PRESENCIA EN TIEMPO REAL
-  // ========================================
+  // ── PRESENCIA ─────────────────────────────────────────────────────────────
 
   const setupPresence = (userId, userEmail, firestoreData) => {
     if (presenceUnsubRef.current) {
       presenceUnsubRef.current();
       presenceUnsubRef.current = null;
     }
-
     const userStatusRef = ref(rtdb, `status/${userId}`);
     const userRef       = doc(db, 'users', userEmail);
-
-    const presenceData = {
+    const presenceData  = {
       state:        'online',
       last_changed: rtdbServerTimestamp(),
       displayName:  firestoreData.displayName || userEmail.split('@')[0] || 'Usuario',
       email:        firestoreData.email || userEmail,
       photoURL:     firestoreData.photoURL || null,
-      role:         firestoreData.role || 'viewer'
+      role:         firestoreData.role || USER_ROLES.VIEWER,
     };
-
     const connectedRef = ref(rtdb, '.info/connected');
-
     const unsub = onValue(connectedRef, (snapshot) => {
       if (snapshot.val() === true) {
         set(userStatusRef, presenceData);
@@ -59,13 +53,11 @@ export const AuthProvider = ({ children }) => {
           displayName:  presenceData.displayName,
           email:        presenceData.email,
           photoURL:     presenceData.photoURL,
-          role:         presenceData.role
+          role:         presenceData.role,
         });
       }
     });
-
     presenceUnsubRef.current = unsub;
-
     setDoc(userRef, { lastSeen: serverTimestamp(), online: true }, { merge: true })
       .catch(e => console.error('Error actualizando lastSeen:', e));
   };
@@ -78,25 +70,24 @@ export const AuthProvider = ({ children }) => {
     try {
       await set(ref(rtdb, `status/${userId}`), {
         state:        'offline',
-        last_changed: rtdbServerTimestamp()
+        last_changed: rtdbServerTimestamp(),
       });
       await setDoc(doc(db, 'users', userEmail), {
         online:   false,
-        lastSeen: serverTimestamp()
+        lastSeen: serverTimestamp(),
       }, { merge: true });
     } catch (error) {
       console.error('Error limpiando presencia:', error);
     }
   };
 
-  // ========================================
-  // SYNC: crea doc en Firestore si no existe
-  // ========================================
+  // ── SYNC A FIRESTORE ──────────────────────────────────────────────────────
+  // Crea el documento del usuario si no existe. El rol por defecto es 'viewer'
+  // hasta que un admin lo apruebe y asigne 'member' o 'admin'.
 
   const syncUserToFirestore = async (authUser) => {
     const userRef = doc(db, 'users', authUser.email);
     const userDoc = await getDoc(userRef);
-
     if (!userDoc.exists()) {
       await setDoc(userRef, {
         uid:         authUser.uid,
@@ -104,44 +95,39 @@ export const AuthProvider = ({ children }) => {
         displayName: authUser.displayName || '',
         phone:       authUser.phoneNumber  || '',
         photoURL:    authUser.photoURL     || null,
-        role:        'viewer',
+        role:        USER_ROLES.VIEWER,    // por defecto hasta aprobación del admin
         status:      'pending',
         online:      false,
         createdAt:   Timestamp.now(),
         updatedAt:   Timestamp.now(),
-        lastSeen:    serverTimestamp()
+        lastSeen:    serverTimestamp(),
       });
     }
   };
 
-  // ========================================
-  // LISTENER PRINCIPAL
-  // ========================================
+  // ── LISTENER PRINCIPAL ────────────────────────────────────────────────────
 
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence);
-
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
           await syncUserToFirestore(user);
-
           const userDocRef = doc(db, 'users', user.email);
           const userDoc    = await getDoc(userDocRef);
-
           if (userDoc.exists()) {
             const data = userDoc.data();
             setCurrentUser({
               ...user,
-              role:        data.role        || 'viewer',
+              role:        data.role        || USER_ROLES.VIEWER,
               status:      data.status      || 'pending',
               displayName: data.displayName || user.displayName || '',
-              phone:       data.phone       || ''
+              phone:       data.phone       || '',
             });
             setUserData(data);
             setupPresence(user.uid, user.email, data);
           } else {
-            setCurrentUser({ ...user, role: 'viewer', status: 'pending' });
+            setCurrentUser({ ...user, role: USER_ROLES.VIEWER, status: 'pending' });
             setUserData(null);
           }
         } catch (error) {
@@ -155,13 +141,10 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // ========================================
-  // FUNCIONES PÚBLICAS
-  // ========================================
+  // ── FUNCIONES PÚBLICAS ────────────────────────────────────────────────────
 
   const signIn = async (email, password) => {
     try {
@@ -175,7 +158,7 @@ export const AuthProvider = ({ children }) => {
         'auth/invalid-email':      'Correo electrónico inválido',
         'auth/user-disabled':      'Usuario deshabilitado',
         'auth/too-many-requests':  'Demasiados intentos. Intenta más tarde',
-        'auth/invalid-credential': 'Correo o contraseña incorrectos'
+        'auth/invalid-credential': 'Correo o contraseña incorrectos',
       };
       throw new Error(errorMessages[error.code] || error.message);
     }
@@ -183,9 +166,7 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
-      if (currentUser) {
-        await clearPresence(currentUser.uid, currentUser.email);
-      }
+      if (currentUser) await clearPresence(currentUser.uid, currentUser.email);
       await firebaseSignOut(auth);
       setUserData(null);
       setCurrentUser(null);
@@ -197,24 +178,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helpers de rol
-  // isAgent: true si el usuario tiene rol 'agent' o 'admin' (los admins ven todo)
-  // Usado en Sidebar para mostrar/ocultar módulo de Contratos
-  const isAdmin  = userData?.role === 'admin';
-  const isMember = userData?.role === 'member';
-  const isAgent  = userData?.role === 'agent' || userData?.role === 'admin';
-  const isViewer = userData?.role === 'viewer';
+  // ── HELPERS DE ROL ────────────────────────────────────────────────────────
+  // Usa estos en todos los componentes — nunca comparar strings de rol directamente.
+  //
+  //   isAdmin     → true si role === 'admin'
+  //   isMember    → true si role === 'member'  (agente inmobiliario)
+  //   isViewer    → true si role === 'viewer'
+  //   canOperate  → true si admin O member (puede crear/editar/aprobar)
+  //   canRead     → true si cualquier rol autenticado (puede ver todo menos config/usuarios)
+
+  const role      = userData?.role;
+  const isAdmin   = role === USER_ROLES.ADMIN;
+  const isMember  = role === USER_ROLES.MEMBER;
+  const isViewer  = role === USER_ROLES.VIEWER;
+  const canOperate = isAdmin || isMember;
+  const canRead    = isAdmin || isMember || isViewer;
 
   const value = {
     currentUser,
     userData,
     loading,
+    // Booleanos de rol
     isAdmin,
     isMember,
-    isAgent,
     isViewer,
+    canOperate,  // usar en lugar de isMemberOrAdmin()
+    canRead,     // usar en lugar de isSignedIn() para contenido operativo
+    // Funciones
     signIn,
-    signOut
+    signOut,
   };
 
   return (
