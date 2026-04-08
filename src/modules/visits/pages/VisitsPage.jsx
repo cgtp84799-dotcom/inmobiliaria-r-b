@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaCalendarCheck } from 'react-icons/fa';
 import { useVisits } from '../hooks/useVisits';
-import { useAuth } from '../../auth/hooks/useAuth';
+import { useAuth } from '../../../core/contexts/AuthContext';
 import VisitCard from '../components/VisitCard';
 import { VISIT_STATUS, VISIT_STATUS_LABELS } from '../types/visit.types';
 import { db } from '../../../core/config/firebase.config';
@@ -59,7 +59,7 @@ export default function VisitsPage() {
   return (
     <div className="space-y-6">
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-extrabold" style={{ color: 'var(--color-text)' }}>
           {isAdmin ? 'Gestión de Visitas' : 'Mis Visitas'}
@@ -84,7 +84,7 @@ export default function VisitsPage() {
         </div>
       )}
 
-      {/* ── KPIs ──────────────────────────────────────────────────── */}
+      {/* ── KPIs ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {KPI_STATUSES.map((s) => (
           <button
@@ -102,7 +102,7 @@ export default function VisitsPage() {
         ))}
       </div>
 
-      {/* ── Filtros ───────────────────────────────────────────────── */}
+      {/* ── Filtros ───────────────────────────────────────────── */}
       <div className="flex gap-2 flex-wrap">
         {STATUS_FILTERS.map((f) => (
           <button
@@ -120,7 +120,7 @@ export default function VisitsPage() {
         ))}
       </div>
 
-      {/* ── Lista ─────────────────────────────────────────────────── */}
+      {/* ── Lista ─────────────────────────────────────────────── */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-32 rounded-2xl" />)}
