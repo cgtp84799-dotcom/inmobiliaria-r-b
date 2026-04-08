@@ -22,15 +22,13 @@ export const visitService = {
     return onSnapshot(
       q,
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      (err)  => onError?.(err)
+      (err)  => onError?.(err),
     );
   },
 
-  // ── 3A: requestVisit también escribe en appointments ──────
-  // Así el historial de cliente (que lee appointments) ve las
-  // visitas llegadas del formulario público sin migrar datos.
+  // ── Solicitar visita (escribe en /visits + espejo en /appointments) ──
   async requestVisit(payload) {
-    // 1. Escribir en /visits (fuente principal)
+    // 1. Fuente principal
     const visitRef = await addDoc(col(), {
       ...payload,
       sourceCollection: 'visits',
@@ -38,36 +36,35 @@ export const visitService = {
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Espejo en /appointments para historial de cliente
+    // 2. Espejo en /appointments para historial de cliente (best-effort)
     try {
       await addDoc(collection(db, 'appointments'), {
-        visitId:         visitRef.id,
-        sourceCollection:'visits',
-        clientName:      payload.clientName,
-        clientEmail:     payload.clientEmail,
-        clientPhone:     payload.clientPhone ?? '',
-        propertyId:      payload.propertyId  ?? null,
-        propertyName:    payload.propertyName,
-        propertyAddress: payload.propertyAddress ?? '',
-        date:            payload.requestedDate,
-        time:            payload.requestedTime,
-        notes:           payload.notes ?? '',
-        agentId:         payload.agentId    ?? null,
-        agentName:       payload.agentName  ?? null,
-        agentEmail:      payload.agentEmail ?? null,
-        status:          VISIT_STATUS.PENDING,
-        createdAt:       serverTimestamp(),
-        updatedAt:       serverTimestamp(),
+        visitId:          visitRef.id,
+        sourceCollection: 'visits',
+        clientName:       payload.clientName,
+        clientEmail:      payload.clientEmail,
+        clientPhone:      payload.clientPhone      ?? '',
+        propertyId:       payload.propertyId       ?? null,
+        propertyName:     payload.propertyName,
+        propertyAddress:  payload.propertyAddress  ?? '',
+        date:             payload.requestedDate,
+        time:             payload.requestedTime,
+        notes:            payload.notes            ?? '',
+        agentId:          payload.agentId          ?? null,
+        agentName:        payload.agentName        ?? null,
+        agentEmail:       payload.agentEmail       ?? null,
+        status:           VISIT_STATUS.PENDING,
+        createdAt:        serverTimestamp(),
+        updatedAt:        serverTimestamp(),
       });
     } catch (_) {
-      // El espejo es best-effort: no debe bloquear la solicitud
       console.warn('visitService: no se pudo crear espejo en appointments');
     }
 
     // 3. Notificar admins
     try {
       const adminsSnap = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'admin'))
+        query(collection(db, 'users'), where('role', '==', 'admin')),
       );
       await Promise.allSettled(
         adminsSnap.docs.map((d) =>
@@ -77,14 +74,15 @@ export const visitService = {
             title:     'Nueva solicitud de visita',
             message:   `${payload.clientName} quiere visitar "${payload.propertyName}"`,
             actionUrl: '/usuarios/visitas',
-          })
-        )
+          }),
+        ),
       );
     } catch (_) {}
 
     return visitRef.id;
   },
 
+  // ── Lecturas puntuales ────────────────────────────────────
   async getAllVisits() {
     const snap = await getDocs(query(col(), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -92,47 +90,49 @@ export const visitService = {
 
   async getVisitsByProperty(propertyId) {
     const snap = await getDocs(
-      query(col(), where('propertyId', '==', propertyId), orderBy('createdAt', 'desc'))
+      query(col(), where('propertyId', '==', propertyId), orderBy('createdAt', 'desc')),
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
   async getVisitsByClient(clientEmail) {
     const snap = await getDocs(
-      query(col(), where('clientEmail', '==', clientEmail), orderBy('createdAt', 'desc'))
+      query(col(), where('clientEmail', '==', clientEmail), orderBy('createdAt', 'desc')),
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
+  // ── Actualización genérica de estado ─────────────────────
   async updateStatus(visitId, newStatus, adminNotes = '') {
     await updateDoc(ref(visitId), {
-      status: newStatus,
+      status:    newStatus,
       adminNotes,
       updatedAt: serverTimestamp(),
     });
   },
 
-  // ── 3A: updateStatus también sincroniza el espejo ─────────
+  // ── Sincronizar espejo en /appointments ───────────────────
   async syncAppointmentStatus(visitId, newStatus, adminNotes = '') {
     try {
       const snap = await getDocs(
-        query(collection(db, 'appointments'), where('visitId', '==', visitId))
+        query(collection(db, 'appointments'), where('visitId', '==', visitId)),
       );
       await Promise.all(
         snap.docs.map((d) =>
-          updateDoc(d.ref, { status: newStatus, adminNotes, updatedAt: serverTimestamp() })
-        )
+          updateDoc(d.ref, { status: newStatus, adminNotes, updatedAt: serverTimestamp() }),
+        ),
       );
     } catch (_) {}
   },
 
+  // ── Actualización genérica de campos ─────────────────────
   async updateVisit(visitId, data) {
     await updateDoc(ref(visitId), { ...data, updatedAt: serverTimestamp() });
-    // Si se asigna agente, sincronizar espejo
+    // Sincronizar datos de agente en el espejo
     if (data.agentId || data.agentName || data.agentEmail) {
       try {
         const snap = await getDocs(
-          query(collection(db, 'appointments'), where('visitId', '==', visitId))
+          query(collection(db, 'appointments'), where('visitId', '==', visitId)),
         );
         await Promise.all(
           snap.docs.map((d) =>
@@ -141,8 +141,8 @@ export const visitService = {
               agentName:  data.agentName  ?? null,
               agentEmail: data.agentEmail ?? null,
               updatedAt:  serverTimestamp(),
-            })
-          )
+            }),
+          ),
         );
       } catch (_) {}
     }
@@ -152,7 +152,7 @@ export const visitService = {
     await deleteDoc(ref(visitId));
   },
 
-  // ── 3B: approveVisit acepta agentId/agentName/agentEmail ──
+  // ── Aprobar visita ────────────────────────────────────────
   async approveVisit(visit, adminNotes = '', agentData = {}) {
     const updatePayload = {
       status:     VISIT_STATUS.APPROVED,
@@ -187,6 +187,7 @@ export const visitService = {
     }
   },
 
+  // ── Rechazar visita ───────────────────────────────────────
   async rejectVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
@@ -195,43 +196,80 @@ export const visitService = {
         userId:    visit.clientEmail,
         type:      'visit_rejected',
         title:     'Visita no aprobada',
-        message:   `Tu solicitud de visita a "${visit.propertyName}" no pudo ser aprobada. ${adminNotes || ''}`,
+        message:   `Tu solicitud de visita a "${visit.propertyName}" no pudo ser aprobada. ${adminNotes || ''}`.trim(),
         actionUrl: '/portal/visitas',
       });
     }
   },
 
+  // ── Completar visita ──────────────────────────────────────
   async completeVisit(visitId, adminNotes = '') {
     await this.updateStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
   },
 
-  // ── 3C: suscripción para el calendario (visits aprobadas/completadas) ──
+  // ── Proponer nueva hora / reagendar ───────────────────────
+  // El Cloud Function onVisitStatusChanged detecta status === 'rescheduled'
+  // y envía el email de nueva propuesta al cliente automáticamente.
+  async rescheduleVisit(visit, proposedDate, proposedTime, adminNotes = '') {
+    const updatePayload = {
+      status:          VISIT_STATUS.RESCHEDULED,
+      proposedDate,
+      proposedTime,
+      adminNotes,
+      updatedAt:       serverTimestamp(),
+      rescheduledAt:   serverTimestamp(),
+    };
+    await updateDoc(ref(visit.id ?? visit), updatePayload);
+    // Sincronizar espejo con nueva fecha propuesta
+    await this.syncAppointmentStatus(
+      visit.id ?? visit,
+      VISIT_STATUS.RESCHEDULED,
+      adminNotes,
+    );
+    // Notificación in-app al cliente
+    const clientEmail = typeof visit === 'object' ? visit.clientEmail : null;
+    if (clientEmail) {
+      await notificationService.createNotification({
+        userId:    clientEmail,
+        type:      'visit_rescheduled',
+        title:     'Nueva propuesta de fecha',
+        message:   `Te proponemos reagendar tu visita a "${visit.propertyName}" para el ${proposedDate} a las ${proposedTime}.`,
+        actionUrl: '/portal/visitas',
+      }).catch(() => {});
+    }
+  },
+
+  // ── Calendario (suscripción en tiempo real) ───────────────
   subscribeCalendar(onData, onError) {
     const q = query(
       col(),
-      where('status', 'in', [VISIT_STATUS.APPROVED, VISIT_STATUS.COMPLETED]),
-      orderBy('requestedDate', 'asc')
+      where('status', 'in', [
+        VISIT_STATUS.APPROVED,
+        VISIT_STATUS.COMPLETED,
+        VISIT_STATUS.RESCHEDULED,
+      ]),
+      orderBy('requestedDate', 'asc'),
     );
     return onSnapshot(
       q,
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'visits' }))),
-      (err)  => onError?.(err)
+      (err)  => onError?.(err),
     );
   },
 
-  // ── 3C: suscripción appointments aprobados/completados ────
+  // ── Calendario appointments (sin espejo de visits) ────────
   subscribeCalendarAppointments(onData, onError) {
     const q = query(
       collection(db, 'appointments'),
-      where('sourceCollection', '!=', 'visits'), // evitar duplicados del espejo
+      where('sourceCollection', '!=', 'visits'),
       orderBy('sourceCollection'),
-      orderBy('date', 'asc')
+      orderBy('date', 'asc'),
     );
     return onSnapshot(
       q,
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'appointments' }))),
-      (err)  => onError?.(err)
+      (err)  => onError?.(err),
     );
   },
 };
