@@ -30,6 +30,9 @@ export const VISIT_STATUS_COLORS = {
 /**
  * Crea el objeto base para un nuevo documento de visita.
  * Se llama desde ScheduleVisitPage y desde el servicio.
+ *
+ * `privacyAccepted` y `privacyAcceptedAt` se guardan en Firestore como
+ * evidencia del consentimiento explícito del usuario (Ley 1581 de 2012).
  */
 export function createVisitPayload({
   propertyId,
@@ -44,6 +47,7 @@ export function createVisitPayload({
   agentId    = null,
   agentName  = null,
   agentEmail = null,
+  privacyAccepted = false,
 }) {
   return {
     propertyId,
@@ -60,6 +64,10 @@ export function createVisitPayload({
     notes,
     adminNotes: '',
     status: VISIT_STATUS.PENDING,
+    // ── Consentimiento de privacidad (Ley 1581/2012) ──────────────────────
+    privacyAccepted,
+    privacyAcceptedAt: privacyAccepted ? new Date() : null,
+    // ─────────────────────────────────────────────────────────────────────
     createdAt: new Date(),
     updatedAt: new Date(),
   };
