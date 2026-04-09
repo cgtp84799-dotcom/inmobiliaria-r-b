@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import listPlugin from '@fullcalendar/list';
-import interactionPlugin from '@fullcalendar/interaction';
-import esLocale from '@fullcalendar/core/locales/es';
+import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import { format, parse, startOfWeek, getDay, addHours, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import {
   FaPlus, FaTimes, FaSpinner, FaWhatsapp,
-  FaTrash, FaCheckCircle, FaSave, FaUserPlus, FaFilter,
+  FaTrash, FaCheckCircle, FaSave, FaUserPlus,
   FaCalendarAlt, FaHome, FaPhone, FaUsers,
+  FaFileContract, FaChevronLeft, FaChevronRight,
 } from 'react-icons/fa';
 import {
   collection, addDoc, updateDoc, deleteDoc,
@@ -18,8 +17,22 @@ import {
 import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import toast from 'react-hot-toast';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
-// ─── Paleta de colores por agente ────────────────────────────────────────────
+// ─── Localizer español ────────────────────────────────────────────────────────
+const locales = { es };
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: (date) => startOfWeek(date, { locale: es }),
+  getDay,
+  locales,
+});
+
+const DnDCalendar = withDragAndDrop(Calendar);
+
+// ─── Paleta de colores por agente ─────────────────────────────────────────────
 const AGENT_COLORS = [
   '#3b82f6', '#a855f7', '#10b981', '#f59e0b',
   '#ef4444', '#8b5cf6', '#14b8a6', '#f97316',
@@ -33,6 +46,8 @@ const TYPE_ICONS = {
   seguimiento: '👥',
   otro:        '📌',
   web_visit:   '🌐',
+  contract_sign:   '📋',
+  contract_expiry: '⚠️',
 };
 
 const STATUS_LABELS = {
@@ -46,64 +61,60 @@ const STATUS_LABELS = {
   rejected:    '✗ Rechazada',
   rescheduled: '🔄 Reagendada',
   reagendada:  '🔄 Reagendada',
+  active:      '✅ Vigente',
+  expired:     '⚠️ Vencido',
+  draft:       '📝 Borrador',
+  cancelled:   '✗ Cancelado',
 };
 
-// ─── Normalizar un documento de cualquier colección al formato interno ───────
-// visits → usa clientName, propertyName, requestedDate, requestedTime, agentId/agentName
-// appointments sin espejo → usa clientId/clientName, propertyId, date, time, assignedAgentId
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function buildDateFromFields(dateStr, timeStr) {
+  if (!dateStr) return new Date();
+  try {
+    const t = (timeStr || '09:00').slice(0, 5);
+    return new Date(`${dateStr}T${t}:00`);
+  } catch { return new Date(); }
+}
+
 function normalizeDoc(raw, source) {
   return {
     ...raw,
     _source: source,
-    // Nombre del visitante/cliente
-    _clientName:
-      raw.clientName || raw.visitorName || raw.nombre || '',
-    // Nombre de la propiedad
-    _propertyName:
-      raw.propertyName || raw.propertyTitle || '',
-    // Fecha normalizada (campo date para appointments, requestedDate para visits)
-    _date:
-      raw.date || raw.requestedDate || '',
-    // Hora normalizada
-    _time:
-      raw.time || raw.visitTime || raw.requestedTime || '09:00',
-    // Agente asignado normalizado
-    _agentId:
-      raw.assignedAgentId || raw.agentId || '',
-    _agentName:
-      raw.agentName || '',
+    _clientName:  raw.clientName  || raw.visitorName || raw.nombre || '',
+    _propertyName: raw.propertyName || raw.propertyTitle || '',
+    _date: raw.date || raw.requestedDate || '',
+    _time: raw.time || raw.visitTime || raw.requestedTime || '09:00',
+    _agentId:   raw.assignedAgentId || raw.agentId || '',
+    _agentName: raw.agentName || '',
   };
 }
 
+// ─── Componente principal ─────────────────────────────────────────────────────
 const CalendarPage = () => {
   const { currentUser } = useAuth();
-  const calendarRef = useRef(null);
 
-  // ─── State ───────────────────────────────────────────────────────────────
-  // Solo leemos appointments — que ya contiene el espejo de visits (sourceCollection:'visits')
-  // y los eventos propios del CRM interno (sin sourceCollection)
-  const [appointments, setAppointments] = useState([]);
-  // visits: solo las que NO tienen espejo en appointments (status pending sin espejo)
-  const [orphanVisits, setOrphanVisits] = useState([]);
+  // ── State de datos ──────────────────────────────────────────────────────────
+  const [appointments,  setAppointments]  = useState([]);
+  const [orphanVisits,  setOrphanVisits]  = useState([]);
+  const [contracts,     setContracts]     = useState([]);
+  const [clients,       setClients]       = useState([]);
+  const [properties,    setProperties]    = useState([]);
+  const [agents,        setAgents]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
-  const [clients, setClients]       = useState([]);
-  const [properties, setProperties] = useState([]);
-  const [agents, setAgents]         = useState([]);
-
-  const [loading, setLoading]           = useState(true);
-  const [showEventModal, setShowEventModal]   = useState(false);
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [selectedEvent, setSelectedEvent]     = useState(null);
-  const [submitting, setSubmitting]           = useState(false);
-
-  const [view, setView]               = useState('dayGridMonth');
-  const [currentDate, setCurrentDate] = useState(new Date());
-
+  // ── State de UI ─────────────────────────────────────────────────────────────
+  const [view,          setView]          = useState('month');
+  const [currentDate,   setCurrentDate]   = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState('');
-  const [filterType, setFilterType]       = useState('');
-  const [filterStatus, setFilterStatus]   = useState('');
+  const [filterType,    setFilterType]    = useState('');
+  const [filterStatus,  setFilterStatus]  = useState('');
 
-  const [eventForm, setEventForm] = useState({
+  // ── Modal evento ────────────────────────────────────────────────────────────
+  const [showEventModal,  setShowEventModal]  = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [selectedEvent,   setSelectedEvent]   = useState(null);
+  const [submitting,      setSubmitting]      = useState(false);
+  const [eventForm,       setEventForm]       = useState({
     title: '', clientId: '', propertyId: '',
     start: new Date(), location: '', notes: '',
     status: 'pendiente', type: 'visita',
@@ -111,242 +122,252 @@ const CalendarPage = () => {
   });
   const [clientForm, setClientForm] = useState({ nombre: '', telefono: '', email: '' });
 
-  // ─── Stats ────────────────────────────────────────────────────────────────
-  const allNormalized = [
-    ...appointments.map((d) => normalizeDoc(d, 'crm')),
-    ...orphanVisits.map((d) => normalizeDoc(d, 'web')),
-  ];
-  const totalEvents  = allNormalized.length;
-  const pendingCount = allNormalized.filter(
-    (e) => ['pendiente', 'pending', 'approved'].includes(e.status)
-  ).length;
-  const webVisitsCount = orphanVisits.length +
-    appointments.filter((a) => a.sourceCollection === 'visits').length;
-
-  // ─── Firestore listeners ─────────────────────────────────────────────────
+  // ─── Firestore listeners ────────────────────────────────────────────────────
   useEffect(() => {
-    setLoading(true);
     let loaded = 0;
-    const checkLoaded = () => { loaded++; if (loaded >= 2) setLoading(false); };
+    const checkLoaded = () => { loaded++; if (loaded >= 3) setLoading(false); };
 
-    // 1. appointments — TODAS (incluye espejo de visits y eventos CRM propios)
     const unsubAppts = onSnapshot(
       query(collection(db, 'appointments'), orderBy('date', 'asc')),
-      (s) => {
-        setAppointments(s.docs.map((d) => ({ id: d.id, ...d.data() })));
-        checkLoaded();
-      },
-      (err) => { console.error('appointments:', err); checkLoaded(); },
+      (s) => { setAppointments(s.docs.map((d) => ({ id: d.id, ...d.data() }))); checkLoaded(); },
+      () => checkLoaded(),
     );
 
-    // 2. visits — solo las pendientes sin espejo en appointments
-    // (las aprobadas ya tienen su espejo en appointments con sourceCollection:'visits')
     const unsubVisits = onSnapshot(
       query(collection(db, 'visits'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
-      (snap) => {
-        // Filtrar las que YA tienen espejo (visitId en appointments)
-        // Para simplificar: mostramos todas las pending, el usuario verá el estado
-        setOrphanVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
-      (err) => { console.error('visits pending:', err); },
+      (s) => setOrphanVisits(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => {},
     );
 
-    // 3. Clientes
+    const unsubContracts = onSnapshot(
+      query(collection(db, 'contracts')),
+      (s) => { setContracts(s.docs.map((d) => ({ id: d.id, ...d.data() }))); checkLoaded(); },
+      () => checkLoaded(),
+    );
+
     const unsubClients = onSnapshot(query(collection(db, 'clients')), (s) => {
       setClients(s.docs.map((d) => ({
         id: d.id,
-        nombre: d.data().nombre || d.data().name || '',
-        telefono: d.data().telefono || d.data().phone || '',
-        email: d.data().email || '',
+        nombre:   d.data().nombre   || d.data().name     || '',
+        telefono: d.data().telefono || d.data().phone    || '',
+        email:    d.data().email    || '',
       })));
     });
 
-    // 4. Propiedades
     const unsubProps = onSnapshot(query(collection(db, 'properties')), (s) => {
       setProperties(s.docs.map((d) => ({
-        id: d.id,
-        title: d.data().title || '',
-        city: d.data().city || '',
+        id: d.id, title: d.data().title || '', city: d.data().city || '',
       })));
     });
 
-    // 5. Agentes (member + admin)
     const unsubMembers = onSnapshot(
       query(collection(db, 'users'), where('role', 'in', ['member', 'admin'])),
       (s) => {
         setAgents(s.docs.map((d) => ({
           id: d.id,
-          name: d.data().name || d.data().displayName || d.data().email || '',
+          name:  d.data().name || d.data().displayName || d.data().email || '',
           email: d.data().email || '',
-          role: d.data().role,
+          role:  d.data().role,
         })));
         checkLoaded();
       },
     );
 
-    return () => { unsubAppts(); unsubVisits(); unsubClients(); unsubProps(); unsubMembers(); };
+    return () => { unsubAppts(); unsubVisits(); unsubContracts(); unsubClients(); unsubProps(); unsubMembers(); };
   }, []);
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // ─── Helpers de lookup ──────────────────────────────────────────────────────
   const getAgentColor = useCallback((agentId) => {
     if (!agentId) return '#6b7280';
     const idx = agents.findIndex((a) => a.id === agentId);
-    if (idx === -1) return '#6b7280';
-    return AGENT_COLORS[idx % AGENT_COLORS.length];
+    return idx === -1 ? '#6b7280' : AGENT_COLORS[idx % AGENT_COLORS.length];
   }, [agents]);
 
   const getClientName    = (id) => clients.find((c) => c.id === id)?.nombre || '';
   const getPropertyTitle = (id) => properties.find((p) => p.id === id)?.title || '';
   const getAgentName     = (id) => agents.find((a) => a.id === id)?.name || 'Sin asignar';
 
-  // ─── buildTitle: usa los campos normalizados ──────────────────────────────
-  const buildTitle = (norm) => {
-    // Si tiene título explícito, usarlo
-    if (norm.title && norm.title.trim() && norm.title.trim() !== 'undefined') {
-      return norm.title.trim();
-    }
-    const client = norm._clientName || getClientName(norm.clientId) || '';
-    const prop   = norm._propertyName || getPropertyTitle(norm.propertyId) || '';
-
+  const buildTitle = useCallback((norm) => {
+    if (norm.title?.trim() && norm.title.trim() !== 'undefined') return norm.title.trim();
+    const client = norm._clientName || getClientName(norm.clientId);
+    const prop   = norm._propertyName || getPropertyTitle(norm.propertyId);
     if (norm._source === 'web' || norm.sourceCollection === 'visits') {
-      if (client && prop) return `Visita: ${client} → ${prop}`;
-      if (client) return `Visita web: ${client}`;
-      if (prop) return `Visita: ${prop}`;
-      return 'Solicitud de visita';
+      if (client && prop) return `${client} → ${prop}`;
+      return client || prop || 'Solicitud de visita';
     }
-    // Evento CRM interno
     if (client && prop) return `${client} → ${prop}`;
-    if (client) return client;
-    if (prop) return prop;
-    return 'Evento sin título';
-  };
+    return client || prop || 'Evento sin título';
+  }, [clients, properties]);
 
-  // ─── Convertir a formato FullCalendar ────────────────────────────────────
-  const fcEvents = allNormalized
-    .filter((norm) => {
-      if (filterAgentId) {
-        const aid = norm._agentId || norm.assignedAgentId || norm.agentId || '';
-        if (aid !== filterAgentId) return false;
-      }
-      if (filterType) {
-        const t = norm.type || (norm._source === 'web' || norm.sourceCollection === 'visits' ? 'visita' : '');
-        if (t !== filterType) return false;
-      }
-      if (filterStatus && norm.status !== filterStatus) return false;
-      return true;
-    })
-    .map((norm) => {
-      const dateStr = norm._date || new Date().toISOString().split('T')[0];
-      const timeStr = (norm._time || '09:00').slice(0, 5);
-      const start   = `${dateStr}T${timeStr}`;
-      const endDate = new Date(new Date(start).getTime() + 60 * 60 * 1000);
+  // ─── Eventos unificados (appointments + orphanVisits + contracts) ────────────
+  const allEvents = useMemo(() => {
+    const events = [];
 
-      const isWebMirror = norm.sourceCollection === 'visits' || norm._source === 'web';
-      const agentId     = norm._agentId;
+    // 1. Appointments (incluye espejo de visitas web)
+    appointments.forEach((raw) => {
+      const norm = normalizeDoc(raw, 'crm');
+      const start = buildDateFromFields(norm._date, norm._time);
+      const end   = addHours(start, 1);
+      const agentId = norm._agentId;
+      const isWeb = norm.sourceCollection === 'visits';
 
-      let bg = getAgentColor(agentId);
-      if (['cancelada', 'rejected'].includes(norm.status))       bg = '#6b7280';
-      if (['rescheduled', 'reagendada'].includes(norm.status))   bg = '#d97706';
-      if (isWebMirror && !agentId)                               bg = '#1d4ed8';
+      let color = getAgentColor(agentId);
+      if (['cancelada', 'rejected'].includes(norm.status))     color = '#6b7280';
+      if (['rescheduled', 'reagendada'].includes(norm.status)) color = '#d97706';
+      if (isWeb && !agentId) color = '#1d4ed8';
 
-      const icon = isWebMirror
-        ? (agentId ? '🏠' : '🌐')
-        : (TYPE_ICONS[norm.type] || '📌');
-      const titleText = buildTitle(norm);
+      const icon = isWeb ? (agentId ? '🏠' : '🌐') : (TYPE_ICONS[norm.type] || '📌');
 
-      return {
-        id:              `${norm._source}_${norm.id}`,
-        title:           `${icon} ${titleText}`,
+      events.push({
+        id:       `crm_${raw.id}`,
+        title:    `${icon} ${buildTitle(norm)}`,
         start,
-        end:             endDate.toISOString(),
-        backgroundColor: bg,
-        borderColor:     bg,
-        textColor:       '#ffffff',
-        extendedProps:   {
-          ...norm,
-          _statusLabel:   STATUS_LABELS[norm.status] || '',
-          _displayTitle:  titleText,
-        },
-      };
+        end,
+        color,
+        resource: { ...norm, _type: norm.type || (isWeb ? 'visita' : 'otro'), _collection: 'appointments' },
+      });
     });
 
-  // ─── Handlers FullCalendar ───────────────────────────────────────────────
-  const handleDateClick = useCallback((info) => {
+    // 2. Visitas web pendientes sin espejo
+    orphanVisits.forEach((raw) => {
+      const norm = normalizeDoc(raw, 'web');
+      const start = buildDateFromFields(norm._date, norm._time);
+      const end   = addHours(start, 1);
+      events.push({
+        id:       `web_${raw.id}`,
+        title:    `🌐 ${buildTitle(norm)}`,
+        start,
+        end,
+        color:    '#1d4ed8',
+        resource: { ...norm, _type: 'visita', _collection: 'visits' },
+      });
+    });
+
+    // 3. Contratos — fecha de firma y vencimiento
+    contracts.forEach((c) => {
+      if (c.startDate) {
+        const start = buildDateFromFields(c.startDate, '10:00');
+        events.push({
+          id:    `cs_${c.id}`,
+          title: `📋 Firma: ${c.propertyName || c.clientName || 'Contrato'}`,
+          start,
+          end:   addHours(start, 1),
+          color: '#059669',
+          resource: { ...c, _type: 'contract_sign', _collection: 'contracts' },
+        });
+      }
+      if (c.endDate) {
+        const now  = new Date();
+        const end  = buildDateFromFields(c.endDate, '10:00');
+        const diff = (end - now) / (1000 * 60 * 60 * 24);
+        const color = diff < 0 ? '#dc2626' : diff < 30 ? '#d97706' : '#0ea5e9';
+        events.push({
+          id:    `ce_${c.id}`,
+          title: `⚠️ Vence: ${c.propertyName || c.clientName || 'Contrato'}`,
+          start: end,
+          end:   addHours(end, 1),
+          color,
+          resource: { ...c, _type: 'contract_expiry', _collection: 'contracts' },
+        });
+      }
+    });
+
+    return events;
+  }, [appointments, orphanVisits, contracts, agents, buildTitle, getAgentColor]);
+
+  // ─── Filtrado ────────────────────────────────────────────────────────────────
+  const filteredEvents = useMemo(() => allEvents.filter((ev) => {
+    const r = ev.resource;
+    if (filterAgentId) {
+      const aid = r._agentId || r.assignedAgentId || r.agentId || '';
+      if (aid !== filterAgentId) return false;
+    }
+    if (filterType) {
+      if (r._type !== filterType) return false;
+    }
+    if (filterStatus) {
+      if (r.status !== filterStatus) return false;
+    }
+    return true;
+  }), [allEvents, filterAgentId, filterType, filterStatus]);
+
+  // ─── Stats ───────────────────────────────────────────────────────────────────
+  const totalEvents   = allEvents.length;
+  const pendingCount  = allEvents.filter((e) => ['pendiente','pending','approved'].includes(e.resource?.status)).length;
+  const webCount      = allEvents.filter((e) => e.resource?.sourceCollection === 'visits' || e.resource?._source === 'web').length;
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
+  const openNewEvent = useCallback((slotInfo) => {
     setSelectedEvent(null);
     setEventForm({
       title: '', clientId: '', propertyId: '',
-      start: info.date,
+      start: slotInfo?.start || new Date(),
       location: '', notes: '', status: 'pendiente',
       type: 'visita', clientPhone: '', assignedAgentId: '',
     });
     setShowEventModal(true);
   }, []);
 
-  const handleEventClick = useCallback((info) => {
-    const norm = info.event.extendedProps;
-    setSelectedEvent({ id: norm.id, source: norm._source, resource: norm });
-    const dateStr = norm._date || info.event.startStr.split('T')[0];
-    const timeStr = (norm._time || '09:00').slice(0, 5);
+  const handleSelectEvent = useCallback((ev) => {
+    const r = ev.resource;
+    const dateStr = r._date || format(ev.start, 'yyyy-MM-dd');
+    const timeStr = (r._time || format(ev.start, 'HH:mm')).slice(0, 5);
+    setSelectedEvent({ id: r.id, source: r._source, collection: r._collection, resource: r });
     setEventForm({
-      title:           norm._displayTitle || norm.title || '',
-      clientId:        norm.clientId        || '',
-      propertyId:      norm.propertyId      || '',
+      title:           r.title?.trim() || ev.title || '',
+      clientId:        r.clientId        || '',
+      propertyId:      r.propertyId      || '',
       start:           new Date(`${dateStr}T${timeStr}`),
-      location:        norm.location        || norm.propertyAddress || '',
-      notes:           norm.notes           || norm.adminNotes || '',
-      status:          norm.status          || 'pendiente',
-      type:            norm.type            || 'visita',
-      clientPhone:     norm.clientPhone     || norm._clientName || '',
-      assignedAgentId: norm._agentId        || '',
+      location:        r.location        || r.propertyAddress || '',
+      notes:           r.notes           || r.adminNotes      || '',
+      status:          r.status          || 'pendiente',
+      type:            r._type           || 'visita',
+      clientPhone:     r.clientPhone     || '',
+      assignedAgentId: r._agentId        || '',
     });
     setShowEventModal(true);
   }, []);
 
-  const handleEventDrop = useCallback(async (info) => {
-    const norm    = info.event.extendedProps;
-    const colName = (norm._source === 'web' && norm.sourceCollection !== 'visits')
-      ? 'visits'
-      : 'appointments';
-    const newStart = info.event.start;
-    const date = newStart.toISOString().split('T')[0];
-    const time = newStart.toTimeString().slice(0, 5);
+  const handleEventDrop = useCallback(async ({ event, start }) => {
+    const r = event.resource;
+    const colName = r._collection || 'appointments';
+    if (colName === 'contracts') return; // no se reagendan contratos por drag
+    const date = format(start, 'yyyy-MM-dd');
+    const time = format(start, 'HH:mm');
     try {
-      await updateDoc(doc(db, colName, norm.id), {
+      await updateDoc(doc(db, colName, r.id), {
         date, time,
         ...(colName === 'visits' ? { requestedDate: date, requestedTime: time } : {}),
         updatedAt: new Date().toISOString(),
       });
       toast.success('Evento reagendado');
-    } catch (e) {
-      toast.error('Error al reagendar');
-      info.revert();
-    }
+    } catch { toast.error('Error al reagendar'); }
   }, []);
 
-  // ─── Guardar evento ──────────────────────────────────────────────────────
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     if (!eventForm.title.trim()) { toast.error('El título es obligatorio'); return; }
     setSubmitting(true);
     try {
       const dt   = new Date(eventForm.start);
-      const date = dt.toISOString().split('T')[0];
-      const time = dt.toTimeString().slice(0, 5);
+      const date = format(dt, 'yyyy-MM-dd');
+      const time = format(dt, 'HH:mm');
       const payload = {
-        title: eventForm.title, clientId: eventForm.clientId || '',
-        propertyId: eventForm.propertyId || '',
+        title:           eventForm.title,
+        clientId:        eventForm.clientId        || '',
+        propertyId:      eventForm.propertyId      || '',
         date, time, duration: 60,
-        location: eventForm.location, notes: eventForm.notes,
-        status: eventForm.status, type: eventForm.type,
-        clientPhone: eventForm.clientPhone,
+        location:        eventForm.location,
+        notes:           eventForm.notes,
+        status:          eventForm.status,
+        type:            eventForm.type,
+        clientPhone:     eventForm.clientPhone,
         assignedAgentId: eventForm.assignedAgentId || '',
-        createdBy: currentUser?.email || 'unknown',
-        updatedAt: new Date().toISOString(),
+        createdBy:       currentUser?.email || 'unknown',
+        updatedAt:       new Date().toISOString(),
       };
       if (selectedEvent) {
-        const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
-          ? 'visits'
-          : 'appointments';
+        const colName = selectedEvent.collection || 'appointments';
         await updateDoc(doc(db, colName, selectedEvent.id), payload);
         toast.success('Evento actualizado');
       } else {
@@ -354,43 +375,31 @@ const CalendarPage = () => {
         toast.success('Evento creado');
       }
       handleCloseModals();
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al guardar');
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { console.error(err); toast.error('Error al guardar'); }
+    finally { setSubmitting(false); }
   };
 
   const handleDeleteEvent = async () => {
     if (!selectedEvent || !confirm('¿Eliminar este evento?')) return;
     try {
-      const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
-        ? 'visits'
-        : 'appointments';
-      await deleteDoc(doc(db, colName, selectedEvent.id));
-      toast.success('Evento eliminado');
-      handleCloseModals();
+      await deleteDoc(doc(db, selectedEvent.collection || 'appointments', selectedEvent.id));
+      toast.success('Evento eliminado'); handleCloseModals();
     } catch { toast.error('Error al eliminar'); }
   };
 
   const handleMarkComplete = async () => {
     if (!selectedEvent) return;
     try {
-      const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
-        ? 'visits'
-        : 'appointments';
-      await updateDoc(doc(db, colName, selectedEvent.id), {
+      await updateDoc(doc(db, selectedEvent.collection || 'appointments', selectedEvent.id), {
         status: 'completada', updatedAt: new Date().toISOString(),
       });
-      toast.success('Marcado como completado');
-      handleCloseModals();
+      toast.success('Marcado como completado'); handleCloseModals();
     } catch { toast.error('Error al actualizar'); }
   };
 
   const handleClientChange = (clientId) => {
     const client = clients.find((c) => c.id === clientId);
-    setEventForm((prev) => ({ ...prev, clientId, clientPhone: client?.telefono || '' }));
+    setEventForm((p) => ({ ...p, clientId, clientPhone: client?.telefono || '' }));
   };
 
   const handleCreateClient = async () => {
@@ -399,14 +408,14 @@ const CalendarPage = () => {
     }
     setSubmitting(true);
     try {
-      const newClient = {
+      const data = {
         nombre: clientForm.nombre, telefono: clientForm.telefono,
         email: clientForm.email || '', tipoCliente: 'Lead',
         estado: 'Activo', createdAt: new Date().toISOString(),
       };
-      const r = await addDoc(collection(db, 'clients'), newClient);
-      setClients((prev) => [...prev, { id: r.id, ...newClient }]);
-      setEventForm((prev) => ({ ...prev, clientId: r.id, clientPhone: clientForm.telefono }));
+      const r = await addDoc(collection(db, 'clients'), data);
+      setClients((p) => [...p, { id: r.id, ...data }]);
+      setEventForm((p) => ({ ...p, clientId: r.id, clientPhone: data.telefono }));
       setClientForm({ nombre: '', telefono: '', email: '' });
       setShowClientModal(false);
       toast.success('Cliente creado y vinculado');
@@ -415,121 +424,125 @@ const CalendarPage = () => {
   };
 
   const handleCloseModals = () => {
-    setShowEventModal(false);
-    setShowClientModal(false);
-    setSelectedEvent(null);
+    setShowEventModal(false); setShowClientModal(false); setSelectedEvent(null);
   };
 
-  const goToday    = () => { setCurrentDate(new Date()); calendarRef.current?.getApi().today(); };
-  const goPrev     = () => { calendarRef.current?.getApi().prev();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
-  const goNext     = () => { calendarRef.current?.getApi().next();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
-  const changeView = (v) => { setView(v); calendarRef.current?.getApi().changeView(v); };
+  // ─── Estilo de eventos ───────────────────────────────────────────────────────
+  const eventStyleGetter = useCallback((event) => {
+    const r = event.resource || {};
+    const isCompleted = ['completada','completed'].includes(r.status);
+    const isCancelled = ['cancelada','rejected'].includes(r.status);
+    return {
+      style: {
+        backgroundColor: event.color || '#6b7280',
+        borderColor:     event.color || '#6b7280',
+        color:           '#ffffff',
+        border:          'none',
+        borderRadius:    '6px',
+        fontSize:        '11px',
+        fontWeight:      600,
+        padding:         '2px 6px',
+        opacity:         isCompleted ? 0.65 : 1,
+        textDecoration:  isCancelled ? 'line-through' : 'none',
+        cursor:          'pointer',
+        boxShadow:       '0 1px 4px rgba(0,0,0,0.25)',
+        transition:      'filter 0.15s ease, transform 0.15s ease',
+      },
+    };
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <FaSpinner className="animate-spin text-5xl text-primary" />
+  // ─── Toolbar personalizado ───────────────────────────────────────────────────
+  const CustomToolbar = useCallback(({ label, onNavigate, onView, view: currentView }) => (
+    <div className="rbc-custom-toolbar">
+      <div className="rbc-toolbar-left">
+        <button className="rbc-nav-btn" onClick={() => onNavigate('PREV')} aria-label="Anterior">
+          <FaChevronLeft size={12} />
+        </button>
+        <button className="rbc-nav-today" onClick={() => onNavigate('TODAY')}>Hoy</button>
+        <button className="rbc-nav-btn" onClick={() => onNavigate('NEXT')} aria-label="Siguiente">
+          <FaChevronRight size={12} />
+        </button>
+        <span className="rbc-current-label">{label}</span>
       </div>
-    );
-  }
+      <div className="rbc-toolbar-views">
+        {[['month','Mes'],['week','Semana'],['day','Día'],['agenda','Agenda']].map(([v, lbl]) => (
+          <button key={v}
+            className={`rbc-view-btn ${currentView === v ? 'active' : ''}`}
+            onClick={() => { onView(v); setView(v); }}
+          >{lbl}</button>
+        ))}
+      </div>
+    </div>
+  ), []);
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <FaSpinner className="animate-spin text-5xl text-primary" />
+    </div>
+  );
 
   return (
-    <div className="space-y-5">
+    <div className="cal-page space-y-5">
 
-      {/* ─── Header ───────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary mb-1 flex items-center gap-2">
-            <FaCalendarAlt /> Agenda inmobiliaria
+          <h1 className="cal-title">
+            <FaCalendarAlt className="cal-title-icon" /> Agenda inmobiliaria
           </h1>
-          <p className="text-slate-400 text-sm">Visitas, reuniones y seguimientos — todo en un solo lugar</p>
+          <p className="cal-subtitle">Visitas, reuniones, contratos y seguimientos</p>
         </div>
-        <button
-          onClick={() => {
-            setSelectedEvent(null);
-            setEventForm({ title: '', clientId: '', propertyId: '', start: new Date(), location: '', notes: '', status: 'pendiente', type: 'visita', clientPhone: '', assignedAgentId: '' });
-            setShowEventModal(true);
-          }}
-          className="button-gold inline-flex items-center gap-2 px-5 py-2.5 text-sm"
-        >
+        <button onClick={() => openNewEvent(null)} className="button-gold inline-flex items-center gap-2 px-5 py-2.5 text-sm">
           <FaPlus /> Nuevo evento
         </button>
       </div>
 
-      {/* ─── Stats rápidas ─────────────────────────────────────────────── */}
+      {/* ── Stats ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total eventos',   value: totalEvents,    icon: FaCalendarAlt, color: 'text-primary' },
-          { label: 'Pendientes',      value: pendingCount,   icon: FaSpinner,     color: 'text-yellow-400' },
-          { label: 'Agentes activos', value: agents.length,  icon: FaUsers,       color: 'text-blue-400' },
-          { label: 'Visitas web',     value: webVisitsCount, icon: FaHome,        color: 'text-emerald-400' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-3">
-            <Icon className={`text-2xl ${color} flex-shrink-0`} />
+          { label: 'Total eventos',    value: totalEvents,        icon: FaCalendarAlt,  cls: 'cal-stat-icon--primary' },
+          { label: 'Pendientes',       value: pendingCount,       icon: FaSpinner,      cls: 'cal-stat-icon--warn' },
+          { label: 'Agentes activos',  value: agents.length,      icon: FaUsers,        cls: 'cal-stat-icon--blue' },
+          { label: 'Visitas web',      value: webCount,           icon: FaHome,         cls: 'cal-stat-icon--green' },
+        ].map(({ label, value, icon: Icon, cls }) => (
+          <div key={label} className="cal-stat-card">
+            <Icon className={`cal-stat-icon ${cls}`} />
             <div>
-              <p className="text-slate-400 text-xs">{label}</p>
-              <p className="text-slate-100 font-bold text-lg">{value}</p>
+              <p className="cal-stat-label">{label}</p>
+              <p className="cal-stat-value">{value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ─── Controles navegación ──────────────────────────────────────── */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button onClick={goPrev} className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 flex items-center justify-center transition-colors">‹</button>
-          <span className="text-sm font-semibold text-slate-100 capitalize min-w-[160px] text-center">
-            {new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(currentDate)}
-          </span>
-          <button onClick={goNext} className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 flex items-center justify-center transition-colors">›</button>
-          <button onClick={goToday} className="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-xs font-semibold transition-colors">Hoy</button>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs">
-          {[['dayGridMonth','Mes'],['timeGridWeek','Semana'],['timeGridDay','Día'],['listWeek','Agenda']].map(([v, label]) => (
-            <button key={v} onClick={() => changeView(v)}
-              className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-                view === v
-                  ? 'bg-primary text-slate-900'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ─── Filtros ────────────────────────────────────────────────────── */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <FaFilter className="text-primary text-xs" />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Filtros</span>
-        </div>
+      {/* ── Filtros ────────────────────────────────────────────────────────── */}
+      <div className="cal-filters-card">
+        <p className="cal-section-title">Filtros</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Agente</label>
-            <select value={filterAgentId} onChange={(e) => setFilterAgentId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-primary outline-none">
+            <label className="cal-label">Agente</label>
+            <select value={filterAgentId} onChange={(e) => setFilterAgentId(e.target.value)} className="cal-select">
               <option value="">Todos los agentes</option>
               {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Tipo</label>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-primary outline-none">
+            <label className="cal-label">Tipo</label>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="cal-select">
               <option value="">Todos los tipos</option>
-              <option value="visita">🏠 Visitas</option>
+              <option value="visita">🏠 Visitas (CRM)</option>
               <option value="reunion">🤝 Reuniones</option>
               <option value="llamada">📞 Llamadas</option>
               <option value="seguimiento">👥 Seguimientos</option>
+              <option value="contract_sign">📋 Firmas de contrato</option>
+              <option value="contract_expiry">⚠️ Vencimientos</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Estado</label>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-primary outline-none">
+            <label className="cal-label">Estado</label>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="cal-select">
               <option value="">Todos los estados</option>
-              <option value="pending">⏳ Pendiente (web)</option>
+              <option value="pending">⏳ Pendiente</option>
               <option value="pendiente">⏳ Pendiente (CRM)</option>
               <option value="approved">✅ Aprobada</option>
               <option value="completada">✔ Completada</option>
@@ -540,79 +553,73 @@ const CalendarPage = () => {
         </div>
       </div>
 
-      {/* ─── Leyenda de agentes ─────────────────────────────────────────── */}
+      {/* ── Leyenda de agentes ─────────────────────────────────────────────── */}
       {agents.length > 0 && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Agentes por color</p>
+        <div className="cal-filters-card">
+          <p className="cal-section-title">Agentes por color</p>
           <div className="flex flex-wrap gap-4">
             {agents.map((agent) => (
-              <div key={agent.id} className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getAgentColor(agent.id) }} />
-                <span className="text-slate-200 text-xs font-medium">{agent.name}</span>
-                <span className="text-slate-500 text-xs">({agent.role === 'admin' ? 'Admin' : 'Agente'})</span>
+              <div key={agent.id} className="cal-agent-legend">
+                <span className="cal-agent-dot" style={{ backgroundColor: getAgentColor(agent.id) }} />
+                <span className="cal-agent-name">{agent.name}</span>
+                <span className="cal-agent-role">({agent.role === 'admin' ? 'admin' : 'member'})</span>
               </div>
             ))}
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#1d4ed8]" />
-              <span className="text-slate-300 text-xs">🌐 Visita web sin asignar</span>
+            <div className="cal-agent-legend">
+              <span className="cal-agent-dot" style={{ backgroundColor: '#1d4ed8' }} />
+              <span className="cal-agent-name">🌐 Visita web sin asignar</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-slate-500" />
-              <span className="text-slate-300 text-xs">Sin agente asignado</span>
+            <div className="cal-agent-legend">
+              <span className="cal-agent-dot" style={{ backgroundColor: '#059669' }} />
+              <span className="cal-agent-name">📋 Firma contrato</span>
+            </div>
+            <div className="cal-agent-legend">
+              <span className="cal-agent-dot" style={{ backgroundColor: '#d97706' }} />
+              <span className="cal-agent-name">⚠️ Vencimiento próximo</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── FullCalendar ────────────────────────────────────────────────── */}
-      <div className="fc-dark-wrap rounded-xl overflow-hidden border border-slate-800">
-        <FullCalendar
-          ref={calendarRef}
-          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
-          locale={esLocale}
-          firstDay={1}
-          headerToolbar={false}
-          events={fcEvents}
-          editable={true}
-          selectable={true}
-          selectMirror={true}
-          dayMaxEvents={3}
-          height={660}
-          dateClick={handleDateClick}
-          eventClick={handleEventClick}
-          eventDrop={handleEventDrop}
-          datesSet={(info) => setCurrentDate(info.view.currentStart)}
-          eventContent={(arg) => {
-            const status = arg.event.extendedProps.status || '';
-            const isCompleted = ['completada', 'completed'].includes(status);
-            const isCancelled = ['cancelada', 'rejected'].includes(status);
-            return (
-              <div style={{
-                padding: '2px 6px',
-                fontWeight: 600,
-                fontSize: '11px',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-                opacity: isCompleted ? 0.65 : 1,
-                textDecoration: isCancelled ? 'line-through' : 'none',
-                color: '#fff',
-              }}>
-                {arg.timeText && (
-                  <span style={{ opacity: 0.8, marginRight: 4, fontSize: '10px' }}>
-                    {arg.timeText}
-                  </span>
-                )}
-                {arg.event.title}
-              </div>
-            );
+      {/* ── Calendario ─────────────────────────────────────────────────────── */}
+      <div className="cal-wrapper">
+        <DnDCalendar
+          localizer={localizer}
+          culture="es"
+          events={filteredEvents}
+          view={view}
+          date={currentDate}
+          onView={setView}
+          onNavigate={setCurrentDate}
+          onSelectSlot={openNewEvent}
+          onSelectEvent={handleSelectEvent}
+          onEventDrop={handleEventDrop}
+          onEventResize={handleEventDrop}
+          selectable
+          resizable
+          popup
+          components={{ toolbar: CustomToolbar }}
+          eventPropGetter={eventStyleGetter}
+          messages={{
+            noEventsInRange: 'No hay eventos en este período',
+            showMore: (n) => `+${n} más`,
+            allDay: 'Todo el día',
+            previous: 'Anterior',
+            next: 'Siguiente',
+            today: 'Hoy',
+            month: 'Mes',
+            week: 'Semana',
+            day: 'Día',
+            agenda: 'Agenda',
+            date: 'Fecha',
+            time: 'Hora',
+            event: 'Evento',
           }}
-          noEventsText="No hay eventos en este período"
+          style={{ height: 680 }}
         />
       </div>
 
-      {/* ─── MODAL EVENTO ────────────────────────────────────────────────── */}
+      {/* ── Modal evento ───────────────────────────────────────────────────── */}
       <AnimatePresence>
         {showEventModal && (
           <motion.div
@@ -621,28 +628,23 @@ const CalendarPage = () => {
             onClick={handleCloseModals}
           >
             <motion.div
-              initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
+              initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.93, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="cal-modal"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-xl font-bold text-primary">
+                  <h2 className="cal-modal-title">
                     {selectedEvent
-                      ? (selectedEvent.resource?.sourceCollection === 'visits' || selectedEvent.source === 'web'
-                          ? '🌐 Visita desde web'
-                          : '✏️ Editar evento')
+                      ? (selectedEvent.collection === 'visits' ? '🌐 Visita web' : selectedEvent.collection === 'contracts' ? '📋 Contrato' : '✏️ Editar evento')
                       : '➕ Nuevo evento'}
                   </h2>
-                  {(selectedEvent?.resource?.sourceCollection === 'visits' || selectedEvent?.source === 'web') && (
-                    <span className="text-xs bg-blue-900/50 text-blue-300 border border-blue-700 px-2 py-1 rounded-full">
-                      Formulario web
-                    </span>
+                  {selectedEvent?.collection === 'visits' && (
+                    <span className="cal-badge-web">Formulario web</span>
                   )}
-                  <button onClick={handleCloseModals}
-                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center ml-2">
-                    <FaTimes className="text-slate-300 text-sm" />
+                  <button onClick={handleCloseModals} className="cal-close-btn">
+                    <FaTimes size={13} />
                   </button>
                 </div>
 
@@ -650,19 +652,18 @@ const CalendarPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 text-xs mb-1">Título *</label>
+                      <label className="cal-label">Título *</label>
                       <input type="text" required value={eventForm.title}
                         onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none"
-                        placeholder="Ej: Visita Casa Laureles con Juan García" />
+                        className="cal-input" placeholder="Ej: Visita Apto 302 con Juan García" />
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Tipo de evento</label>
+                      <label className="cal-label">Tipo</label>
                       <select value={eventForm.type}
                         onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none">
-                        <option value="visita">🏠 Visita a propiedad</option>
+                        className="cal-select">
+                        <option value="visita">🏠 Visita</option>
                         <option value="reunion">🤝 Reunión</option>
                         <option value="llamada">📞 Llamada</option>
                         <option value="seguimiento">👥 Seguimiento</option>
@@ -671,10 +672,10 @@ const CalendarPage = () => {
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Estado</label>
+                      <label className="cal-label">Estado</label>
                       <select value={eventForm.status}
                         onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none">
+                        className="cal-select">
                         <option value="pendiente">⏳ Pendiente</option>
                         <option value="approved">✅ Aprobada</option>
                         <option value="confirmada">✅ Confirmada</option>
@@ -685,90 +686,80 @@ const CalendarPage = () => {
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Fecha y hora *</label>
+                      <label className="cal-label">Fecha y hora *</label>
                       <input type="datetime-local" required
-                        value={new Date(eventForm.start).toISOString().slice(0, 16)}
+                        value={format(new Date(eventForm.start), "yyyy-MM-dd'T'HH:mm")}
                         onChange={(e) => setEventForm({ ...eventForm, start: new Date(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none" />
+                        className="cal-input" />
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Agente asignado</label>
+                      <label className="cal-label">Agente asignado</label>
                       <select value={eventForm.assignedAgentId}
                         onChange={(e) => setEventForm({ ...eventForm, assignedAgentId: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none">
+                        className="cal-select">
                         <option value="">Sin asignar</option>
                         {agents.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} ({a.role === 'admin' ? 'Admin' : 'Agente'})
-                          </option>
+                          <option key={a.id} value={a.id}>{a.name} ({a.role === 'admin' ? 'Admin' : 'Agente'})</option>
                         ))}
                       </select>
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 text-xs mb-1">Cliente</label>
+                      <label className="cal-label">Cliente</label>
                       <div className="flex gap-2">
-                        <select value={eventForm.clientId}
-                          onChange={(e) => handleClientChange(e.target.value)}
-                          className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none">
+                        <select value={eventForm.clientId} onChange={(e) => handleClientChange(e.target.value)} className="cal-select flex-1">
                           <option value="">Seleccionar cliente...</option>
                           {clients.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.nombre}{c.telefono ? ` — ${c.telefono}` : ''}
-                            </option>
+                            <option key={c.id} value={c.id}>{c.nombre}{c.telefono ? ` — ${c.telefono}` : ''}</option>
                           ))}
                         </select>
                         <button type="button" onClick={() => setShowClientModal(true)}
-                          className="px-3 py-2 bg-primary hover:bg-primary/80 text-slate-900 rounded-lg text-xs font-semibold flex items-center gap-1">
+                          className="px-3 py-2 bg-primary hover:opacity-90 text-slate-900 rounded-lg text-xs font-semibold flex items-center gap-1">
                           <FaUserPlus /> Nuevo
                         </button>
                       </div>
                     </div>
 
-                    {['visita', 'seguimiento'].includes(eventForm.type) && (
+                    {['visita','seguimiento'].includes(eventForm.type) && (
                       <div className="md:col-span-2">
-                        <label className="block text-slate-400 text-xs mb-1">Propiedad</label>
+                        <label className="cal-label">Propiedad</label>
                         <select value={eventForm.propertyId}
                           onChange={(e) => setEventForm({ ...eventForm, propertyId: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none">
+                          className="cal-select">
                           <option value="">Seleccionar propiedad...</option>
                           {properties.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.title}{p.city ? ` — ${p.city}` : ''}
-                            </option>
+                            <option key={p.id} value={p.id}>{p.title}{p.city ? ` — ${p.city}` : ''}</option>
                           ))}
                         </select>
                       </div>
                     )}
 
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 text-xs mb-1">Dirección / lugar</label>
+                      <label className="cal-label">Dirección / lugar</label>
                       <input type="text" value={eventForm.location}
                         onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none"
-                        placeholder="Dirección o lugar de encuentro" />
+                        className="cal-input" placeholder="Dirección o lugar de encuentro" />
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 text-xs mb-1">Notas</label>
+                      <label className="cal-label">Notas</label>
                       <textarea rows={3} value={eventForm.notes}
                         onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none resize-none"
-                        placeholder="Detalles, instrucciones, observaciones..." />
+                        className="cal-input resize-none" placeholder="Detalles, instrucciones..." />
                     </div>
                   </div>
 
                   {/* Resumen selección */}
                   {(eventForm.clientId || eventForm.propertyId || eventForm.assignedAgentId) && (
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs space-y-1">
-                      {eventForm.clientId        && <p className="text-slate-400">👤 Cliente: <span className="text-slate-200">{getClientName(eventForm.clientId)}</span></p>}
-                      {eventForm.propertyId      && <p className="text-slate-400">🏠 Propiedad: <span className="text-slate-200">{getPropertyTitle(eventForm.propertyId)}</span></p>}
+                    <div className="cal-summary">
+                      {eventForm.clientId && <p>👤 Cliente: <strong>{getClientName(eventForm.clientId)}</strong></p>}
+                      {eventForm.propertyId && <p>🏠 Propiedad: <strong>{getPropertyTitle(eventForm.propertyId)}</strong></p>}
                       {eventForm.assignedAgentId && (
-                        <p className="text-slate-400 flex items-center gap-2">
+                        <p className="flex items-center gap-2">
                           🧑‍💼 Agente:
                           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: getAgentColor(eventForm.assignedAgentId) }} />
-                          <span className="text-slate-200">{getAgentName(eventForm.assignedAgentId)}</span>
+                          <strong>{getAgentName(eventForm.assignedAgentId)}</strong>
                         </p>
                       )}
                     </div>
@@ -777,35 +768,27 @@ const CalendarPage = () => {
                   {/* Botones */}
                   <div className="space-y-2 pt-2">
                     <div className="flex gap-2">
-                      <button type="button" onClick={handleCloseModals} disabled={submitting}
-                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50 transition-colors">
+                      <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
                         Cancelar
                       </button>
-                      <button type="submit" disabled={submitting}
-                        className="flex-1 button-gold inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
-                        {submitting
-                          ? <><FaSpinner className="animate-spin" /> Guardando...</>
-                          : <><FaSave /> {selectedEvent ? 'Guardar cambios' : 'Crear evento'}</>}
+                      <button type="submit" disabled={submitting} className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
+                        {submitting ? <><FaSpinner className="animate-spin" /> Guardando...</> : <><FaSave /> {selectedEvent ? 'Guardar cambios' : 'Crear evento'}</>}
                       </button>
                     </div>
-
-                    {selectedEvent && (
+                    {selectedEvent && selectedEvent.collection !== 'contracts' && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         {eventForm.clientPhone && (
-                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g, '')}?text=Hola, te contacto sobre tu visita: ${eventForm.title}`}
-                            target="_blank" rel="noopener noreferrer"
-                            className="px-3 py-2 bg-green-700 hover:bg-green-600 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g,'')}?text=Hola, te contacto sobre: ${eventForm.title}`}
+                            target="_blank" rel="noopener noreferrer" className="cal-btn-wa">
                             <FaWhatsapp /> WhatsApp
                           </a>
                         )}
-                        {!['completada', 'completed'].includes(selectedEvent.resource?.status) && (
-                          <button type="button" onClick={handleMarkComplete}
-                            className="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+                        {!['completada','completed'].includes(selectedEvent.resource?.status) && (
+                          <button type="button" onClick={handleMarkComplete} className="cal-btn-complete">
                             <FaCheckCircle /> Completar
                           </button>
                         )}
-                        <button type="button" onClick={handleDeleteEvent}
-                          className="px-3 py-2 bg-red-800 hover:bg-red-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+                        <button type="button" onClick={handleDeleteEvent} className="cal-btn-delete">
                           <FaTrash /> Eliminar
                         </button>
                       </div>
@@ -818,7 +801,7 @@ const CalendarPage = () => {
         )}
       </AnimatePresence>
 
-      {/* ─── MODAL CLIENTE RÁPIDO ─────────────────────────────────────────── */}
+      {/* ── Modal cliente rápido ─────────────────────────────────────────── */}
       <AnimatePresence>
         {showClientModal && (
           <motion.div
@@ -827,37 +810,34 @@ const CalendarPage = () => {
             onClick={() => setShowClientModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
+              initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.93, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl border border-slate-700 max-w-sm w-full shadow-2xl"
+              className="cal-modal max-w-sm"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-bold text-primary">Nuevo cliente rápido</h2>
-                  <button onClick={() => setShowClientModal(false)}
-                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center">
-                    <FaTimes className="text-slate-300 text-sm" />
+                  <h2 className="cal-modal-title text-base">Nuevo cliente rápido</h2>
+                  <button onClick={() => setShowClientModal(false)} className="cal-close-btn">
+                    <FaTimes size={13} />
                   </button>
                 </div>
                 <div className="space-y-3">
                   {[['nombre','Nombre completo *','text','Nombre del cliente'],['telefono','Teléfono *','tel','3001234567'],['email','Email','email','correo@ejemplo.com']].map(([field, label, type, ph]) => (
                     <div key={field}>
-                      <label className="block text-slate-400 text-xs mb-1">{label}</label>
+                      <label className="cal-label">{label}</label>
                       <input type={type} value={clientForm[field]}
                         onChange={(e) => setClientForm({ ...clientForm, [field]: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:border-primary outline-none"
-                        placeholder={ph} />
+                        className="cal-input" placeholder={ph} />
                     </div>
                   ))}
                 </div>
                 <div className="flex gap-2 mt-5">
-                  <button type="button" onClick={() => setShowClientModal(false)} disabled={submitting}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold">
+                  <button type="button" onClick={() => setShowClientModal(false)} disabled={submitting} className="cal-btn-cancel">
                     Cancelar
                   </button>
                   <button type="button" onClick={handleCreateClient} disabled={submitting}
-                    className="flex-1 button-gold inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
+                    className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
                     {submitting ? <><FaSpinner className="animate-spin" /> Creando...</> : <><FaUserPlus /> Crear</>}
                   </button>
                 </div>
@@ -867,52 +847,323 @@ const CalendarPage = () => {
         )}
       </AnimatePresence>
 
-      {/* ─── CSS FullCalendar dark mode ───────────────────────────────────── */}
+      {/* ── Estilos del calendario (light + dark) ──────────────────────────── */}
       <style>{`
-        .fc-dark-wrap { background: #0f172a; }
-        .fc-dark-wrap .fc { background: #0f172a; color: #e2e8f0; }
-        .fc-dark-wrap .fc-theme-standard td,
-        .fc-dark-wrap .fc-theme-standard th,
-        .fc-dark-wrap .fc-theme-standard .fc-scrollgrid { border-color: #1e293b !important; }
-        .fc-dark-wrap .fc-col-header-cell {
-          background: #0d1526; color: #94a3b8;
-          font-weight: 600; font-size: 12px;
-          text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 0;
+        /* ── Wrapper y reset RBC ─────────────────────────────────────── */
+        .cal-wrapper {
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: 0.875rem;
+          overflow: hidden;
+          box-shadow: var(--shadow-card);
         }
-        .fc-dark-wrap .fc-col-header-cell a { color: #94a3b8 !important; text-decoration: none; }
-        .fc-dark-wrap .fc-daygrid-day { background: #0f172a; }
-        .fc-dark-wrap .fc-daygrid-day:hover { background: #111827; cursor: pointer; }
-        .fc-dark-wrap .fc-day-today { background: oklch(0.35 0.08 85 / 0.15) !important; }
-        .fc-dark-wrap .fc-day-today .fc-daygrid-day-number { color: #d4af37 !important; font-weight: 700; }
-        .fc-dark-wrap .fc-day-other .fc-daygrid-day-number { color: #334155 !important; }
-        .fc-dark-wrap .fc-daygrid-day-number { color: #cbd5e1 !important; font-size: 13px; padding: 6px 8px; }
-        .fc-dark-wrap .fc-daygrid-day-number:hover { color: #d4af37 !important; }
-        .fc-dark-wrap .fc-event { border: none !important; border-radius: 5px; font-size: 11px; cursor: pointer; }
-        .fc-dark-wrap .fc-event:hover { filter: brightness(1.2); transform: translateY(-1px); }
-        .fc-dark-wrap .fc-event * { color: #fff !important; }
-        .fc-dark-wrap .fc-event .fc-event-title { color: #fff !important; font-weight: 600; }
-        .fc-dark-wrap .fc-event .fc-event-time  { color: rgba(255,255,255,0.8) !important; font-size: 10px; }
-        .fc-dark-wrap .fc-more-link { color: #d4af37 !important; font-weight: 700; font-size: 11px; }
-        .fc-dark-wrap .fc-more-link:hover { color: #fbbf24 !important; }
-        .fc-dark-wrap .fc-timegrid-slot { background: #0f172a; border-color: #1e293b !important; }
-        .fc-dark-wrap .fc-timegrid-slot-minor { border-color: #161e2e !important; }
-        .fc-dark-wrap .fc-timegrid-axis { background: #0d1526; color: #64748b; font-size: 11px; }
-        .fc-dark-wrap .fc-timegrid-now-indicator-line { border-color: #d4af37 !important; }
-        .fc-dark-wrap .fc-timegrid-now-indicator-arrow { border-top-color: #d4af37 !important; }
-        .fc-dark-wrap .fc-list-day-cushion { background: #0d1526 !important; color: #94a3b8 !important; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-        .fc-dark-wrap .fc-list-event:hover td { background: #1e293b !important; }
-        .fc-dark-wrap .fc-list-event td { border-color: #1e293b !important; color: #e2e8f0 !important; }
-        .fc-dark-wrap .fc-list-event-title a { color: #e2e8f0 !important; text-decoration: none; }
-        .fc-dark-wrap .fc-list-empty { background: #0f172a !important; color: #64748b !important; padding: 40px; text-align: center; }
-        .fc-dark-wrap .fc-scroller { background: #0f172a; }
-        .fc-dark-wrap ::-webkit-scrollbar { width: 5px; height: 5px; }
-        .fc-dark-wrap ::-webkit-scrollbar-track { background: #0f172a; }
-        .fc-dark-wrap ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        .fc-dark-wrap .fc-highlight { background: oklch(0.6 0.12 85 / 0.2) !important; }
-        .fc-dark-wrap .fc-popover { background: #1e293b !important; border-color: #334155 !important; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
-        .fc-dark-wrap .fc-popover-header { background: #0d1526 !important; color: #e2e8f0 !important; border-radius: 10px 10px 0 0; padding: 8px 12px; }
-        .fc-dark-wrap .fc-popover-close { color: #94a3b8 !important; }
-        .fc-dark-wrap .fc-popover-body { padding: 8px; }
+        .cal-wrapper .rbc-calendar { background: var(--color-surface); color: var(--color-text); font-family: inherit; }
+
+        /* ── Toolbar personalizado ───────────────────────────────────── */
+        .rbc-custom-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          background: var(--color-surface-2);
+          border-bottom: 1px solid var(--color-border);
+        }
+        .rbc-toolbar-left { display: flex; align-items: center; gap: 0.375rem; }
+        .rbc-nav-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 2rem; height: 2rem;
+          background: var(--color-surface-off);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-muted);
+          border-radius: 0.5rem;
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease;
+        }
+        .rbc-nav-btn:hover { background: var(--color-row-hover); color: var(--color-text); }
+        .rbc-nav-today {
+          padding: 0.25rem 0.75rem; height: 2rem;
+          background: rgba(245,158,11,0.12);
+          border: 1px solid rgba(245,158,11,0.35);
+          color: #f59e0b;
+          border-radius: 0.5rem; font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: background 0.15s ease;
+        }
+        .rbc-nav-today:hover { background: rgba(245,158,11,0.22); }
+        .rbc-current-label {
+          font-weight: 700; font-size: 14px;
+          color: var(--color-text);
+          text-transform: capitalize;
+          min-width: 160px;
+          padding-left: 0.375rem;
+        }
+        .rbc-toolbar-views { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+        .rbc-view-btn {
+          padding: 0.25rem 0.75rem; height: 2rem;
+          background: var(--color-surface-off);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-muted);
+          border-radius: 9999px; font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+        }
+        .rbc-view-btn:hover { color: var(--color-text); background: var(--color-row-hover); }
+        .rbc-view-btn.active {
+          background: #f59e0b; color: #111827;
+          border-color: #f59e0b;
+        }
+
+        /* ── Grid mensual ───────────────────────────────────────────── */
+        .cal-wrapper .rbc-month-view { border: none; background: var(--color-surface); }
+        .cal-wrapper .rbc-header {
+          background: var(--color-surface-2);
+          color: var(--color-text-muted);
+          font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.06em;
+          padding: 0.5rem 0;
+          border-bottom: 1px solid var(--color-border);
+        }
+        .cal-wrapper .rbc-header + .rbc-header { border-left: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-month-row { border-top: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-day-bg { background: var(--color-surface); }
+        .cal-wrapper .rbc-day-bg + .rbc-day-bg { border-left: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-off-range-bg { background: var(--color-surface-2); opacity: 0.6; }
+        .cal-wrapper .rbc-today { background: rgba(245,158,11,0.07) !important; }
+        .cal-wrapper .rbc-date-cell { padding: 4px 8px; }
+        .cal-wrapper .rbc-date-cell > a {
+          color: var(--color-text-muted); font-size: 12px; font-weight: 500;
+          text-decoration: none;
+        }
+        .cal-wrapper .rbc-date-cell.rbc-now > a { color: #f59e0b !important; font-weight: 700; }
+        .cal-wrapper .rbc-date-cell.rbc-off-range > a { color: var(--color-text-faint) !important; }
+        .cal-wrapper .rbc-show-more {
+          color: #f59e0b !important; font-weight: 700; font-size: 11px;
+          background: none; padding: 0 8px;
+        }
+
+        /* ── TimeGrid (semana/día) ───────────────────────────────────── */
+        .cal-wrapper .rbc-time-view { border: none; }
+        .cal-wrapper .rbc-time-header { border-bottom: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-time-header-content { border-left: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-timeslot-group {
+          border-bottom: 1px solid var(--color-border);
+          min-height: 40px;
+        }
+        .cal-wrapper .rbc-time-slot { color: var(--color-text-faint); font-size: 11px; }
+        .cal-wrapper .rbc-current-time-indicator {
+          background: #f59e0b; height: 2px;
+        }
+        .cal-wrapper .rbc-current-time-indicator::before {
+          background: #f59e0b;
+        }
+        .cal-wrapper .rbc-time-content { border-top: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-time-content > * + * > * { border-left: 1px solid var(--color-border); }
+        .cal-wrapper .rbc-time-gutter .rbc-timeslot-group {
+          background: var(--color-surface-2);
+          border-right: 1px solid var(--color-border);
+        }
+
+        /* ── Agenda view ─────────────────────────────────────────────── */
+        .cal-wrapper .rbc-agenda-view table {
+          border: none;
+          color: var(--color-text);
+        }
+        .cal-wrapper .rbc-agenda-date-cell,
+        .cal-wrapper .rbc-agenda-time-cell {
+          background: var(--color-surface-2);
+          color: var(--color-text-muted);
+          font-size: 12px;
+          padding: 8px 12px;
+          border-bottom: 1px solid var(--color-border);
+        }
+        .cal-wrapper .rbc-agenda-event-cell {
+          background: var(--color-surface);
+          border-bottom: 1px solid var(--color-border);
+          padding: 8px 12px;
+          color: var(--color-text);
+        }
+        .cal-wrapper .rbc-agenda-empty {
+          color: var(--color-text-faint); padding: 2rem; text-align: center; font-size: 13px;
+        }
+
+        /* ── Eventos ─────────────────────────────────────────────────── */
+        .cal-wrapper .rbc-event { border: none !important; border-radius: 6px !important; }
+        .cal-wrapper .rbc-event:focus { outline: 2px solid #f59e0b; outline-offset: 1px; }
+        .cal-wrapper .rbc-event-label { font-size: 10px; opacity: 0.85; }
+        .cal-wrapper .rbc-event-content { font-size: 11px; font-weight: 600; }
+        .cal-wrapper .rbc-selected { box-shadow: 0 0 0 2px #f59e0b !important; }
+
+        /* ── Popover ──────────────────────────────────────────────────── */
+        .cal-wrapper .rbc-overlay {
+          background: var(--color-modal-bg) !important;
+          border: 1px solid var(--color-border) !important;
+          border-radius: 0.75rem !important;
+          box-shadow: var(--shadow-lg) !important;
+          padding: 0.75rem !important;
+        }
+        .cal-wrapper .rbc-overlay-header {
+          color: var(--color-text) !important;
+          font-weight: 700;
+          border-bottom: 1px solid var(--color-border);
+          padding-bottom: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+
+        /* ── Drag and drop ────────────────────────────────────────────── */
+        .rbc-addons-dnd .rbc-addons-dnd-drag-preview { opacity: 0.75; }
+        .rbc-addons-dnd-resizable { cursor: ns-resize; }
+
+        /* ── Scrollbar personalizado ──────────────────────────────────── */
+        .cal-wrapper ::-webkit-scrollbar { width: 5px; height: 5px; }
+        .cal-wrapper ::-webkit-scrollbar-track { background: var(--color-surface); }
+        .cal-wrapper ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+
+        /* ── Clases utilitarias del componente ────────────────────────── */
+        .cal-page .cal-title {
+          font-size: 1.5rem; font-weight: 800;
+          color: #f59e0b;
+          display: flex; align-items: center; gap: 0.5rem;
+          margin-bottom: 0.25rem;
+        }
+        .cal-title-icon { font-size: 1.25rem; }
+        .cal-subtitle { color: var(--color-text-muted); font-size: 0.875rem; }
+
+        .cal-stat-card {
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          box-shadow: var(--shadow-sm);
+          border-radius: 0.875rem;
+          padding: 1rem;
+          display: flex; align-items: center; gap: 0.75rem;
+          transition: background 0.25s ease;
+        }
+        .cal-stat-icon { font-size: 1.5rem; flex-shrink: 0; }
+        .cal-stat-icon--primary { color: #f59e0b; }
+        .cal-stat-icon--warn    { color: #facc15; }
+        .cal-stat-icon--blue    { color: #60a5fa; }
+        .cal-stat-icon--green   { color: #34d399; }
+        .cal-stat-label { color: var(--color-text-faint); font-size: 0.75rem; }
+        .cal-stat-value { color: var(--color-text); font-weight: 700; font-size: 1.125rem; }
+
+        .cal-filters-card {
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: 0.875rem;
+          padding: 1rem;
+          transition: background 0.25s ease;
+        }
+        .cal-section-title {
+          font-size: 0.7rem; font-weight: 700;
+          color: var(--color-text-faint);
+          text-transform: uppercase; letter-spacing: 0.08em;
+          margin-bottom: 0.75rem;
+        }
+        .cal-label { display: block; font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 0.25rem; }
+        .cal-select {
+          width: 100%;
+          background: var(--color-input-bg) !important;
+          border: 1px solid var(--color-input-border) !important;
+          color: var(--color-input-text) !important;
+          border-radius: 0.5rem;
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
+        }
+        .cal-input {
+          width: 100%;
+          background: var(--color-input-bg) !important;
+          border: 1px solid var(--color-input-border) !important;
+          color: var(--color-input-text) !important;
+          border-radius: 0.5rem;
+          padding: 0.5625rem 0.875rem;
+          font-size: 0.875rem;
+          outline: none;
+          transition: border-color 0.2s ease;
+        }
+        .cal-input:focus { border-color: #f59e0b !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.18) !important; }
+
+        .cal-agent-legend { display: flex; align-items: center; gap: 0.375rem; }
+        .cal-agent-dot { width: 10px; height: 10px; border-radius: 9999px; flex-shrink: 0; }
+        .cal-agent-name { color: var(--color-text); font-size: 0.75rem; font-weight: 500; }
+        .cal-agent-role { color: var(--color-text-faint); font-size: 0.75rem; }
+
+        .cal-modal {
+          background: var(--color-modal-bg);
+          border: 1px solid var(--color-modal-border);
+          border-radius: 1rem;
+          max-width: 42rem;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: var(--shadow-lg);
+        }
+        .cal-modal-title { font-size: 1.125rem; font-weight: 700; color: #f59e0b; }
+        .cal-badge-web {
+          font-size: 0.7rem;
+          background: rgba(29,78,216,0.15);
+          color: #93c5fd;
+          border: 1px solid rgba(29,78,216,0.4);
+          border-radius: 9999px;
+          padding: 0.15rem 0.6rem;
+          margin-right: 0.5rem;
+        }
+        .cal-close-btn {
+          width: 2rem; height: 2rem;
+          background: var(--color-surface-off);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-muted);
+          border-radius: 0.5rem;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: background 0.15s ease;
+        }
+        .cal-close-btn:hover { background: var(--color-row-hover); color: var(--color-text); }
+
+        .cal-summary {
+          background: var(--color-inner-card);
+          border: 1px solid var(--color-inner-border);
+          border-radius: 0.75rem;
+          padding: 0.75rem 1rem;
+          font-size: 0.75rem;
+          color: var(--color-text-muted);
+          space-y: 0.25rem;
+        }
+        .cal-summary p { margin-bottom: 0.2rem; }
+        .cal-summary strong { color: var(--color-text); }
+
+        .cal-btn-cancel {
+          flex: 1;
+          background: var(--color-surface-off);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-muted);
+          border-radius: 0.75rem;
+          padding: 0.625rem 1rem;
+          font-size: 0.875rem; font-weight: 600;
+          cursor: pointer; transition: background 0.15s ease;
+        }
+        .cal-btn-cancel:hover { background: var(--color-row-hover); color: var(--color-text); }
+        .cal-btn-wa {
+          padding: 0.5rem 0.75rem;
+          background: #15803d; border: none; color: #fff;
+          border-radius: 0.75rem; font-size: 0.75rem; font-weight: 600;
+          display: flex; align-items: center; justify-content: center; gap: 0.375rem;
+          cursor: pointer; text-decoration: none; transition: opacity 0.15s ease;
+        }
+        .cal-btn-wa:hover { opacity: 0.88; }
+        .cal-btn-complete {
+          padding: 0.5rem 0.75rem;
+          background: #065f46; border: none; color: #fff;
+          border-radius: 0.75rem; font-size: 0.75rem; font-weight: 600;
+          display: flex; align-items: center; justify-content: center; gap: 0.375rem;
+          cursor: pointer; transition: opacity 0.15s ease;
+        }
+        .cal-btn-complete:hover { opacity: 0.88; }
+        .cal-btn-delete {
+          padding: 0.5rem 0.75rem;
+          background: #7f1d1d; border: none; color: #fff;
+          border-radius: 0.75rem; font-size: 0.75rem; font-weight: 600;
+          display: flex; align-items: center; justify-content: center; gap: 0.375rem;
+          cursor: pointer; transition: opacity 0.15s ease;
+        }
+        .cal-btn-delete:hover { opacity: 0.88; }
       `}</style>
     </div>
   );
