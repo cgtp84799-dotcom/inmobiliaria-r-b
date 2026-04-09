@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, getDay, addHours, isSameDay } from 'date-fns';
+import { format, parse, startOfWeek, getDay, addHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   FaPlus, FaTimes, FaSpinner, FaWhatsapp,
   FaTrash, FaCheckCircle, FaSave, FaUserPlus,
   FaCalendarAlt, FaHome, FaPhone, FaUsers,
   FaFileContract, FaChevronLeft, FaChevronRight,
-  FaEllipsisV, FaCheck, FaClock, FaBan, FaRedo,
+  FaCheck, FaClock, FaBan, FaRedo,
   FaMapMarkerAlt, FaStickyNote, FaUser, FaBuilding,
 } from 'react-icons/fa';
 import {
@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import { USER_ROLES } from '../../users/types/user.types';
 import toast from 'react-hot-toast';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -92,11 +93,12 @@ function normalizeDoc(raw, source) {
 }
 
 // ─── Componente de evento personalizado ──────────────────────────────────────
-const CustomEvent = ({ event, agents, getAgentColor, getAgentName, onContextMenu }) => {
+// FIX #1: el tooltip se activa con onMouseEnter/onMouseLeave en el chip,
+// NO con onMouseOver en DnDCalendar (RBC no expone ese callback con el evento).
+const CustomEvent = ({ event, agents, getAgentColor, getAgentName, onContextMenu, onMouseEnter, onMouseLeave }) => {
   const r = event.resource || {};
   const status = r.status || 'pendiente';
   const meta = STATUS_META[status] || STATUS_META.pendiente;
-  const agentName = r._agentId ? getAgentName(r._agentId) : null;
   const isCompleted = ['completada', 'completed'].includes(status);
   const isCancelled = ['cancelada', 'rejected', 'cancelled'].includes(status);
 
@@ -104,10 +106,15 @@ const CustomEvent = ({ event, agents, getAgentColor, getAgentName, onContextMenu
     <div
       className="cal-event-chip"
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, event); }}
+      onMouseEnter={(e) => onMouseEnter && onMouseEnter(event, e)}
+      onMouseLeave={() => onMouseLeave && onMouseLeave()}
       style={{ opacity: isCompleted ? 0.65 : 1 }}
     >
       <span className="cal-event-chip-icon">{TYPE_ICONS[r._type] || '📌'}</span>
-      <span className="cal-event-chip-title" style={{ textDecoration: isCancelled ? 'line-through' : 'none' }}>
+      <span
+        className="cal-event-chip-title"
+        style={{ textDecoration: isCancelled ? 'line-through' : 'none' }}
+      >
         {event.title.replace(/^[^\s]+\s/, '')}
       </span>
       <span className="cal-event-chip-dot" style={{ backgroundColor: meta.color }} />
@@ -116,20 +123,22 @@ const CustomEvent = ({ event, agents, getAgentColor, getAgentName, onContextMenu
 };
 
 // ─── Tooltip flotante ─────────────────────────────────────────────────────────
-const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, getClientName, getPropertyTitle, onClose, onEdit, onComplete, onWhatsApp }) => {
+const EventTooltip = ({
+  event, position, getAgentColor, getAgentName, getClientName, getPropertyTitle,
+  onClose, onEdit, onComplete, onWhatsApp,
+}) => {
   const r = event?.resource || {};
   if (!event || !position) return null;
   const status = r.status || 'pendiente';
   const meta = STATUS_META[status] || STATUS_META.pendiente;
-  const agentName = r._agentId ? getAgentName(r._agentId) : 'Sin asignar';
-  const clientName = r._clientName || (r.clientId ? getClientName(r.clientId) : '');
-  const propName = r._propertyName || (r.propertyId ? getPropertyTitle(r.propertyId) : '');
-  const timeStr = r._time || format(event.start, 'HH:mm');
-  const dateStr = r._date || format(event.start, 'dd MMM yyyy');
-  const isCompleted = ['completada', 'completed'].includes(status);
-  const phone = r.clientPhone || '';
+  const agentName    = r._agentId ? getAgentName(r._agentId) : 'Sin asignar';
+  const clientName   = r._clientName || (r.clientId ? getClientName(r.clientId) : '');
+  const propName     = r._propertyName || (r.propertyId ? getPropertyTitle(r.propertyId) : '');
+  const timeStr      = r._time || format(event.start, 'HH:mm');
+  const dateStr      = r._date || format(event.start, 'dd MMM yyyy');
+  const isCompleted  = ['completada', 'completed'].includes(status);
+  const phone        = r.clientPhone || '';
 
-  // Posición: evitar que salga fuera de pantalla
   const left = Math.min(position.x + 12, window.innerWidth - 320);
   const top  = Math.min(position.y - 8,  window.innerHeight - 360);
 
@@ -143,7 +152,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
       style={{ left, top, position: 'fixed' }}
       onMouseLeave={onClose}
     >
-      {/* Header */}
       <div className="cal-tooltip-header" style={{ borderLeft: `3px solid ${event.color || '#f59e0b'}` }}>
         <span className="cal-tooltip-icon">{TYPE_ICONS[r._type] || '📌'}</span>
         <div className="cal-tooltip-title-block">
@@ -154,7 +162,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
         </div>
       </div>
 
-      {/* Info rows */}
       <div className="cal-tooltip-body">
         <div className="cal-tooltip-row">
           <FaClock className="cal-tooltip-row-icon" />
@@ -190,7 +197,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
         )}
       </div>
 
-      {/* Acciones rápidas */}
       <div className="cal-tooltip-actions">
         <button className="cal-tip-btn cal-tip-btn--primary" onClick={onEdit}>
           ✏️ Editar
@@ -215,13 +221,13 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
 };
 
 // ─── Menú contextual (click derecho) ─────────────────────────────────────────
-const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete, onWhatsApp }) => {
+const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete }) => {
   if (!position || !event) return null;
   const r = event.resource || {};
   const isCompleted = ['completada', 'completed'].includes(r.status);
   const phone = r.clientPhone || '';
-  const left = Math.min(position.x, window.innerWidth - 200);
-  const top  = Math.min(position.y, window.innerHeight - 220);
+  const left  = Math.min(position.x, window.innerWidth - 200);
+  const top   = Math.min(position.y, window.innerHeight - 220);
 
   return (
     <motion.div
@@ -258,7 +264,7 @@ const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete, o
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const CalendarPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin, canOperate } = useAuth();
 
   // ── State de datos ──────────────────────────────────────────────────────────
   const [appointments,  setAppointments]  = useState([]);
@@ -307,9 +313,31 @@ const CalendarPage = () => {
       () => checkLoaded(),
     );
 
-    const unsubVisits = onSnapshot(
+    // FIX #3: las visitas web usan 'pending' (inglés) pero las del CRM usan
+    // 'pendiente' (español). Traemos AMBAS para no perder ningún evento.
+    // Usamos dos queries separadas y las fusionamos para evitar el error de
+    // Firestore que no permite OR en where() con índices compuestos.
+    const unsubVisitsPending = onSnapshot(
       query(collection(db, 'visits'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
-      (s) => setOrphanVisits(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (s) => {
+        setOrphanVisits(prev => {
+          const fromCRM  = prev.filter(v => v._fromCRM);
+          const fromWeb  = s.docs.map((d) => ({ id: d.id, ...d.data(), _fromWeb: true }));
+          return [...fromWeb, ...fromCRM];
+        });
+      },
+      () => {},
+    );
+
+    const unsubVisitsPendiente = onSnapshot(
+      query(collection(db, 'visits'), where('status', '==', 'pendiente'), orderBy('createdAt', 'desc')),
+      (s) => {
+        setOrphanVisits(prev => {
+          const fromWeb  = prev.filter(v => v._fromWeb);
+          const fromCRM  = s.docs.map((d) => ({ id: d.id, ...d.data(), _fromCRM: true }));
+          return [...fromWeb, ...fromCRM];
+        });
+      },
       () => {},
     );
 
@@ -322,8 +350,8 @@ const CalendarPage = () => {
     const unsubClients = onSnapshot(query(collection(db, 'clients')), (s) => {
       setClients(s.docs.map((d) => ({
         id: d.id,
-        nombre:   d.data().nombre   || d.data().name     || '',
-        telefono: d.data().telefono || d.data().phone    || '',
+        nombre:   d.data().nombre   || d.data().name  || '',
+        telefono: d.data().telefono || d.data().phone  || '',
         email:    d.data().email    || '',
       })));
     });
@@ -334,25 +362,39 @@ const CalendarPage = () => {
       })));
     });
 
+    // FIX #4 (roles): el sistema real tiene admin, member y viewer.
+    // Los agentes operativos son admin + member. Usamos los USER_ROLES constants.
     const unsubMembers = onSnapshot(
-      query(collection(db, 'users'), where('role', 'in', ['member', 'admin'])),
+      query(
+        collection(db, 'users'),
+        where('role', 'in', [USER_ROLES.ADMIN, USER_ROLES.MEMBER]),
+      ),
       (s) => {
         setAgents(s.docs.map((d) => ({
           id: d.id,
-          name:  d.data().name || d.data().displayName || d.data().email || '',
+          name:  d.data().displayName || d.data().name || d.data().email || '',
           email: d.data().email || '',
           role:  d.data().role,
         })));
         checkLoaded();
       },
+      () => checkLoaded(),
     );
 
-    return () => { unsubAppts(); unsubVisits(); unsubContracts(); unsubClients(); unsubProps(); unsubMembers(); };
+    return () => {
+      unsubAppts();
+      unsubVisitsPending();
+      unsubVisitsPendiente();
+      unsubContracts();
+      unsubClients();
+      unsubProps();
+      unsubMembers();
+    };
   }, []);
 
   // ─── Cerrar tooltip/ctx al hacer click fuera ────────────────────────────────
   useEffect(() => {
-    const close = () => { setCtxMenu({ event: null, position: null }); };
+    const close = () => setCtxMenu({ event: null, position: null });
     window.addEventListener('click', close);
     return () => window.removeEventListener('click', close);
   }, []);
@@ -378,18 +420,18 @@ const CalendarPage = () => {
     }
     if (client && prop) return `${client} → ${prop}`;
     return client || prop || 'Evento sin título';
-  }, [clients, properties]);
+  }, [getClientName, getPropertyTitle]);
 
   // ─── Eventos unificados ──────────────────────────────────────────────────────
   const allEvents = useMemo(() => {
     const events = [];
 
     appointments.forEach((raw) => {
-      const norm = normalizeDoc(raw, 'crm');
-      const start = buildDateFromFields(norm._date, norm._time);
-      const end   = addHours(start, 1);
+      const norm    = normalizeDoc(raw, 'crm');
+      const start   = buildDateFromFields(norm._date, norm._time);
+      const end     = addHours(start, 1);
       const agentId = norm._agentId;
-      const isWeb = norm.sourceCollection === 'visits';
+      const isWeb   = norm.sourceCollection === 'visits';
 
       let color = getAgentColor(agentId);
       if (['cancelada', 'rejected'].includes(norm.status))     color = '#6b7280';
@@ -407,7 +449,7 @@ const CalendarPage = () => {
     });
 
     orphanVisits.forEach((raw) => {
-      const norm = normalizeDoc(raw, 'web');
+      const norm  = normalizeDoc(raw, 'web');
       const start = buildDateFromFields(norm._date, norm._time);
       const end   = addHours(start, 1);
       events.push({
@@ -422,7 +464,7 @@ const CalendarPage = () => {
       if (c.startDate) {
         const start = buildDateFromFields(c.startDate, '10:00');
         events.push({
-          id: `cs_${c.id}`,
+          id:    `cs_${c.id}`,
           title: `📋 Firma: ${c.propertyName || c.clientName || 'Contrato'}`,
           start, end: addHours(start, 1), color: '#059669',
           resource: { ...c, _type: 'contract_sign', _collection: 'contracts' },
@@ -434,7 +476,7 @@ const CalendarPage = () => {
         const diff = (end - now) / (1000 * 60 * 60 * 24);
         const color = diff < 0 ? '#dc2626' : diff < 30 ? '#d97706' : '#0ea5e9';
         events.push({
-          id: `ce_${c.id}`,
+          id:    `ce_${c.id}`,
           title: `⚠️ Vence: ${c.propertyName || c.clientName || 'Contrato'}`,
           start: end, end: addHours(end, 1), color,
           resource: { ...c, _type: 'contract_expiry', _collection: 'contracts' },
@@ -443,7 +485,7 @@ const CalendarPage = () => {
     });
 
     return events;
-  }, [appointments, orphanVisits, contracts, agents, buildTitle, getAgentColor]);
+  }, [appointments, orphanVisits, contracts, buildTitle, getAgentColor]);
 
   // ─── Filtrado ────────────────────────────────────────────────────────────────
   const filteredEvents = useMemo(() => allEvents.filter((ev) => {
@@ -452,23 +494,28 @@ const CalendarPage = () => {
       const aid = r._agentId || r.assignedAgentId || r.agentId || '';
       if (aid !== filterAgentId) return false;
     }
-    if (filterType   && r._type   !== filterType)   return false;
-    if (filterStatus && r.status  !== filterStatus) return false;
+    if (filterType   && r._type  !== filterType)   return false;
+    if (filterStatus && r.status !== filterStatus) return false;
     return true;
   }), [allEvents, filterAgentId, filterType, filterStatus]);
 
   // ─── Stats ───────────────────────────────────────────────────────────────────
   const totalEvents  = allEvents.length;
-  const pendingCount = allEvents.filter((e) => ['pendiente','pending','approved'].includes(e.resource?.status)).length;
-  const webCount     = allEvents.filter((e) => e.resource?.sourceCollection === 'visits' || e.resource?._source === 'web').length;
+  const pendingCount = allEvents.filter((e) =>
+    ['pendiente', 'pending', 'approved'].includes(e.resource?.status)
+  ).length;
+  const webCount = allEvents.filter((e) =>
+    e.resource?.sourceCollection === 'visits' || e.resource?._source === 'web'
+  ).length;
 
-  // ─── Drilldown: click en número de día → vista día ───────────────────────────
+  // ─── Drilldown: click en número de día ───────────────────────────────────────
   const handleDrillDown = useCallback((date) => {
     setCurrentDate(date);
     setView('day');
   }, []);
 
   // ─── Handlers tooltip ────────────────────────────────────────────────────────
+  // FIX #1 (continuación): estos handlers se pasan al CustomEvent directamente.
   const handleMouseEnterEvent = useCallback((event, e) => {
     clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
@@ -493,6 +540,13 @@ const CalendarPage = () => {
     setTooltip({ event: null, position: null });
   }, []);
 
+  // ─── handleCloseModals ────────────────────────────────────────────────────────
+  const handleCloseModals = useCallback(() => {
+    setShowEventModal(false);
+    setShowClientModal(false);
+    setSelectedEvent(null);
+  }, []);
+
   // ─── Handlers principales ────────────────────────────────────────────────────
   const openNewEvent = useCallback((slotInfo) => {
     setSelectedEvent(null);
@@ -508,7 +562,7 @@ const CalendarPage = () => {
   }, []);
 
   const openEditEvent = useCallback((ev) => {
-    const r = ev.resource;
+    const r       = ev.resource;
     const dateStr = r._date || format(ev.start, 'yyyy-MM-dd');
     const timeStr = (r._time || format(ev.start, 'HH:mm')).slice(0, 5);
     setSelectedEvent({ id: r.id, source: r._source, collection: r._collection, resource: r });
@@ -535,7 +589,7 @@ const CalendarPage = () => {
   }, [openEditEvent]);
 
   const handleEventDrop = useCallback(async ({ event, start }) => {
-    const r = event.resource;
+    const r       = event.resource;
     const colName = r._collection || 'appointments';
     if (colName === 'contracts') return;
     const date = format(start, 'yyyy-MM-dd');
@@ -550,32 +604,68 @@ const CalendarPage = () => {
     } catch { toast.error('Error al reagendar'); }
   }, []);
 
-  const handleMarkComplete = useCallback(async (ev) => {
-    const target = ev || ctxMenu.event || tooltip.event;
-    if (!target) return;
-    const r = target.resource;
+  // FIX #2: handleMarkComplete ahora recibe siempre el evento explícitamente.
+  // Ya no depende de closures sobre ctxMenu / tooltip para determinar qué evento marcar.
+  const handleMarkComplete = useCallback(async (targetEvent) => {
+    if (!targetEvent) {
+      toast.error('No se pudo identificar el evento');
+      return;
+    }
+    const r = targetEvent.resource;
+    if (!r?.id || !r?._collection) {
+      toast.error('Evento sin referencia válida');
+      return;
+    }
+    // Los contratos no se pueden marcar como completados desde el calendario
+    if (r._collection === 'contracts') {
+      toast.error('Los contratos se gestionan desde el módulo de Contratos');
+      return;
+    }
     try {
-      await updateDoc(doc(db, r._collection || 'appointments', r.id), {
-        status: 'completada', updatedAt: new Date().toISOString(),
+      await updateDoc(doc(db, r._collection, r.id), {
+        status: 'completada',
+        updatedAt: new Date().toISOString(),
+        ...(r._collection === 'visits' ? { completedAt: new Date().toISOString() } : {}),
       });
-      toast.success('Marcado como completado');
+      toast.success('✅ Marcado como completado');
       setTooltip({ event: null, position: null });
       setCtxMenu({ event: null, position: null });
-    } catch { toast.error('Error al actualizar'); }
-  }, [ctxMenu.event, tooltip.event]);
-
-  const handleDeleteEvent = useCallback(async (ev) => {
-    const target = ev || ctxMenu.event;
-    if (!target) return;
-    const r = target.resource;
-    if (!confirm('¿Eliminar este evento?')) return;
-    try {
-      await deleteDoc(doc(db, r._collection || 'appointments', r.id));
-      toast.success('Evento eliminado');
-      setCtxMenu({ event: null, position: null });
       handleCloseModals();
-    } catch { toast.error('Error al eliminar'); }
-  }, [ctxMenu.event]);
+    } catch (err) {
+      console.error('Error al completar evento:', err);
+      toast.error('Error al actualizar el estado');
+    }
+  }, [handleCloseModals]);
+
+  // FIX #2 (eliminar): handleDeleteEvent también recibe el evento explícitamente.
+  // Antes dependía de ctxMenu.event mediante closure, lo que causaba que el
+  // botón "Eliminar" del modal no funcionara si ctxMenu estaba vacío.
+  const handleDeleteEvent = useCallback(async (targetEvent) => {
+    if (!targetEvent) {
+      toast.error('No se pudo identificar el evento');
+      return;
+    }
+    const r = targetEvent.resource;
+    if (!r?.id || !r?._collection) {
+      toast.error('Evento sin referencia válida');
+      return;
+    }
+    if (r._collection === 'contracts') {
+      toast.error('Los contratos se eliminan desde el módulo de Contratos');
+      return;
+    }
+    if (!window.confirm('¿Eliminar este evento? Esta acción no se puede deshacer.')) return;
+    try {
+      await deleteDoc(doc(db, r._collection, r.id));
+      toast.success('🗑️ Evento eliminado');
+      setCtxMenu({ event: null, position: null });
+      setTooltip({ event: null, position: null });
+      handleCloseModals();
+    } catch (err) {
+      console.error('Error al eliminar evento:', err);
+      toast.error('Error al eliminar el evento');
+    }
+  }, [handleCloseModals]);
 
   const handleSaveEvent = async (e) => {
     e.preventDefault();
@@ -608,8 +698,12 @@ const CalendarPage = () => {
         toast.success('Evento creado');
       }
       handleCloseModals();
-    } catch (err) { console.error(err); toast.error('Error al guardar'); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleClientChange = (clientId) => {
@@ -624,9 +718,12 @@ const CalendarPage = () => {
     setSubmitting(true);
     try {
       const data = {
-        nombre: clientForm.nombre, telefono: clientForm.telefono,
-        email: clientForm.email || '', tipoCliente: 'Lead',
-        estado: 'Activo', createdAt: new Date().toISOString(),
+        nombre:      clientForm.nombre,
+        telefono:    clientForm.telefono,
+        email:       clientForm.email || '',
+        tipoCliente: 'Lead',
+        estado:      'Activo',
+        createdAt:   new Date().toISOString(),
       };
       const r = await addDoc(collection(db, 'clients'), data);
       setClients((p) => [...p, { id: r.id, ...data }]);
@@ -636,10 +733,6 @@ const CalendarPage = () => {
       toast.success('Cliente creado y vinculado');
     } catch { toast.error('Error al crear cliente'); }
     finally { setSubmitting(false); }
-  };
-
-  const handleCloseModals = () => {
-    setShowEventModal(false); setShowClientModal(false); setSelectedEvent(null);
   };
 
   // ─── Estilo de eventos ───────────────────────────────────────────────────────
@@ -656,7 +749,9 @@ const CalendarPage = () => {
     },
   }), []);
 
-  // ─── Componente de evento custom ─────────────────────────────────────────────
+  // ─── Componentes de RBC ────────────────────────────────────────────────────
+  // FIX #1 (cierre): los handlers de hover se pasan directamente al CustomEvent
+  // vía components.event para que onMouseEnter/onMouseLeave funcionen correctamente.
   const components = useMemo(() => ({
     toolbar: ({ label, onNavigate, onView, view: currentView }) => (
       <div className="rbc-custom-toolbar">
@@ -672,7 +767,8 @@ const CalendarPage = () => {
         </div>
         <div className="rbc-toolbar-views">
           {[['month','Mes'],['week','Semana'],['day','Día'],['agenda','Agenda']].map(([v, lbl]) => (
-            <button key={v}
+            <button
+              key={v}
               className={`rbc-view-btn ${currentView === v ? 'active' : ''}`}
               onClick={() => { onView(v); setView(v); }}
             >{lbl}</button>
@@ -687,9 +783,11 @@ const CalendarPage = () => {
         getAgentColor={getAgentColor}
         getAgentName={getAgentName}
         onContextMenu={handleContextMenu}
+        onMouseEnter={handleMouseEnterEvent}
+        onMouseLeave={handleMouseLeaveEvent}
       />
     ),
-  }), [agents, getAgentColor, getAgentName, handleContextMenu]);
+  }), [agents, getAgentColor, getAgentName, handleContextMenu, handleMouseEnterEvent, handleMouseLeaveEvent]);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -708,9 +806,12 @@ const CalendarPage = () => {
           </h1>
           <p className="cal-subtitle">Visitas, reuniones, contratos y seguimientos</p>
         </div>
-        <button onClick={() => openNewEvent(null)} className="button-gold inline-flex items-center gap-2 px-5 py-2.5 text-sm">
-          <FaPlus /> Nuevo evento
-        </button>
+        {/* Solo admin y member pueden crear eventos */}
+        {canOperate && (
+          <button onClick={() => openNewEvent(null)} className="button-gold inline-flex items-center gap-2 px-5 py-2.5 text-sm">
+            <FaPlus /> Nuevo evento
+          </button>
+        )}
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
@@ -758,7 +859,7 @@ const CalendarPage = () => {
             <label className="cal-label">Estado</label>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="cal-select">
               <option value="">Todos los estados</option>
-              <option value="pending">⏳ Pendiente</option>
+              <option value="pending">⏳ Pendiente (web)</option>
               <option value="pendiente">⏳ Pendiente (CRM)</option>
               <option value="approved">✅ Aprobada</option>
               <option value="completada">✔ Completada</option>
@@ -778,7 +879,9 @@ const CalendarPage = () => {
               <div key={agent.id} className="cal-agent-legend">
                 <span className="cal-agent-dot" style={{ backgroundColor: getAgentColor(agent.id) }} />
                 <span className="cal-agent-name">{agent.name}</span>
-                <span className="cal-agent-role">({agent.role === 'admin' ? 'admin' : 'member'})</span>
+                <span className="cal-agent-role">
+                  ({agent.role === USER_ROLES.ADMIN ? 'admin' : 'agente'})
+                </span>
               </div>
             ))}
             <div className="cal-agent-legend">
@@ -798,13 +901,7 @@ const CalendarPage = () => {
       )}
 
       {/* ── Calendario ─────────────────────────────────────────────────────── */}
-      <div
-        className="cal-wrapper"
-        onMouseOver={(e) => {
-          const el = e.target.closest('.rbc-event');
-          if (!el) return;
-        }}
-      >
+      <div className="cal-wrapper">
         <DnDCalendar
           localizer={localizer}
           culture="es"
@@ -813,17 +910,16 @@ const CalendarPage = () => {
           date={currentDate}
           onView={setView}
           onNavigate={setCurrentDate}
-          onSelectSlot={openNewEvent}
+          onSelectSlot={canOperate ? openNewEvent : undefined}
           onSelectEvent={handleSelectEvent}
-          onEventDrop={handleEventDrop}
-          onEventResize={handleEventDrop}
+          onEventDrop={canOperate ? handleEventDrop : undefined}
+          onEventResize={canOperate ? handleEventDrop : undefined}
           onDrillDown={handleDrillDown}
-          selectable
-          resizable
+          selectable={canOperate}
+          resizable={canOperate}
           popup
           components={components}
           eventPropGetter={eventStyleGetter}
-          onMouseOver={(event, e) => handleMouseEnterEvent(event, e)}
           messages={{
             noEventsInRange: 'No hay eventos en este período',
             showMore: (n) => `+${n} más`,
@@ -893,7 +989,11 @@ const CalendarPage = () => {
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="cal-modal-title">
                     {selectedEvent
-                      ? (selectedEvent.collection === 'visits' ? '🌐 Visita web' : selectedEvent.collection === 'contracts' ? '📋 Contrato' : '✏️ Editar evento')
+                      ? (selectedEvent.collection === 'visits'
+                          ? '🌐 Visita web'
+                          : selectedEvent.collection === 'contracts'
+                            ? '📋 Contrato'
+                            : '✏️ Editar evento')
                       : '➕ Nuevo evento'}
                   </h2>
                   {selectedEvent?.collection === 'visits' && (
@@ -909,16 +1009,20 @@ const CalendarPage = () => {
 
                     <div className="md:col-span-2">
                       <label className="cal-label">Título *</label>
-                      <input type="text" required value={eventForm.title}
+                      <input
+                        type="text" required value={eventForm.title}
                         onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                        className="cal-input" placeholder="Ej: Visita Apto 302 con Juan García" />
+                        className="cal-input" placeholder="Ej: Visita Apto 302 con Juan García"
+                      />
                     </div>
 
                     <div>
                       <label className="cal-label">Tipo</label>
-                      <select value={eventForm.type}
+                      <select
+                        value={eventForm.type}
                         onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
-                        className="cal-select">
+                        className="cal-select"
+                      >
                         <option value="visita">🏠 Visita</option>
                         <option value="reunion">🤝 Reunión</option>
                         <option value="llamada">📞 Llamada</option>
@@ -929,9 +1033,11 @@ const CalendarPage = () => {
 
                     <div>
                       <label className="cal-label">Estado</label>
-                      <select value={eventForm.status}
+                      <select
+                        value={eventForm.status}
                         onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
-                        className="cal-select">
+                        className="cal-select"
+                      >
                         <option value="pendiente">⏳ Pendiente</option>
                         <option value="approved">✅ Aprobada</option>
                         <option value="confirmada">✅ Confirmada</option>
@@ -943,20 +1049,26 @@ const CalendarPage = () => {
 
                     <div>
                       <label className="cal-label">Fecha y hora *</label>
-                      <input type="datetime-local" required
+                      <input
+                        type="datetime-local" required
                         value={format(new Date(eventForm.start), "yyyy-MM-dd'T'HH:mm")}
                         onChange={(e) => setEventForm({ ...eventForm, start: new Date(e.target.value) })}
-                        className="cal-input" />
+                        className="cal-input"
+                      />
                     </div>
 
                     <div>
                       <label className="cal-label">Agente asignado</label>
-                      <select value={eventForm.assignedAgentId}
+                      <select
+                        value={eventForm.assignedAgentId}
                         onChange={(e) => setEventForm({ ...eventForm, assignedAgentId: e.target.value })}
-                        className="cal-select">
+                        className="cal-select"
+                      >
                         <option value="">Sin asignar</option>
                         {agents.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name} ({a.role === 'admin' ? 'Admin' : 'Agente'})</option>
+                          <option key={a.id} value={a.id}>
+                            {a.name} ({a.role === USER_ROLES.ADMIN ? 'Admin' : 'Agente'})
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -964,28 +1076,43 @@ const CalendarPage = () => {
                     <div className="md:col-span-2">
                       <label className="cal-label">Cliente</label>
                       <div className="flex gap-2">
-                        <select value={eventForm.clientId} onChange={(e) => handleClientChange(e.target.value)} className="cal-select flex-1">
+                        <select
+                          value={eventForm.clientId}
+                          onChange={(e) => handleClientChange(e.target.value)}
+                          className="cal-select flex-1"
+                        >
                           <option value="">Seleccionar cliente...</option>
                           {clients.map((c) => (
-                            <option key={c.id} value={c.id}>{c.nombre}{c.telefono ? ` — ${c.telefono}` : ''}</option>
+                            <option key={c.id} value={c.id}>
+                              {c.nombre}{c.telefono ? ` — ${c.telefono}` : ''}
+                            </option>
                           ))}
                         </select>
-                        <button type="button" onClick={() => setShowClientModal(true)}
-                          className="px-3 py-2 bg-primary hover:opacity-90 text-slate-900 rounded-lg text-xs font-semibold flex items-center gap-1">
-                          <FaUserPlus /> Nuevo
-                        </button>
+                        {canOperate && (
+                          <button
+                            type="button"
+                            onClick={() => setShowClientModal(true)}
+                            className="px-3 py-2 bg-primary hover:opacity-90 text-slate-900 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          >
+                            <FaUserPlus /> Nuevo
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {['visita','seguimiento'].includes(eventForm.type) && (
+                    {['visita', 'seguimiento'].includes(eventForm.type) && (
                       <div className="md:col-span-2">
                         <label className="cal-label">Propiedad</label>
-                        <select value={eventForm.propertyId}
+                        <select
+                          value={eventForm.propertyId}
                           onChange={(e) => setEventForm({ ...eventForm, propertyId: e.target.value })}
-                          className="cal-select">
+                          className="cal-select"
+                        >
                           <option value="">Seleccionar propiedad...</option>
                           {properties.map((p) => (
-                            <option key={p.id} value={p.id}>{p.title}{p.city ? ` — ${p.city}` : ''}</option>
+                            <option key={p.id} value={p.id}>
+                              {p.title}{p.city ? ` — ${p.city}` : ''}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -993,16 +1120,20 @@ const CalendarPage = () => {
 
                     <div className="md:col-span-2">
                       <label className="cal-label">Dirección / lugar</label>
-                      <input type="text" value={eventForm.location}
+                      <input
+                        type="text" value={eventForm.location}
                         onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
-                        className="cal-input" placeholder="Dirección o lugar de encuentro" />
+                        className="cal-input" placeholder="Dirección o lugar de encuentro"
+                      />
                     </div>
 
                     <div className="md:col-span-2">
                       <label className="cal-label">Notas</label>
-                      <textarea rows={3} value={eventForm.notes}
+                      <textarea
+                        rows={3} value={eventForm.notes}
                         onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                        className="cal-input resize-none" placeholder="Detalles, instrucciones..." />
+                        className="cal-input resize-none" placeholder="Detalles, instrucciones..."
+                      />
                     </div>
                   </div>
 
@@ -1025,26 +1156,48 @@ const CalendarPage = () => {
                       <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
                         Cancelar
                       </button>
-                      <button type="submit" disabled={submitting} className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
-                        {submitting ? <><FaSpinner className="animate-spin" /> Guardando...</> : <><FaSave /> {selectedEvent ? 'Guardar cambios' : 'Crear evento'}</>}
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                      >
+                        {submitting
+                          ? <><FaSpinner className="animate-spin" /> Guardando...</>
+                          : <><FaSave /> {selectedEvent ? 'Guardar cambios' : 'Crear evento'}</>
+                        }
                       </button>
                     </div>
-                    {selectedEvent && selectedEvent.collection !== 'contracts' && (
+
+                    {/* FIX #2: botones de acción pasan el evento explícitamente */}
+                    {selectedEvent && selectedEvent.collection !== 'contracts' && canOperate && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         {eventForm.clientPhone && (
-                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g,'')}?text=Hola, te contacto sobre: ${eventForm.title}`}
-                            target="_blank" rel="noopener noreferrer" className="cal-btn-wa">
+                          <a
+                            href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g,'')}?text=Hola, te contacto sobre: ${eventForm.title}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="cal-btn-wa"
+                          >
                             <FaWhatsapp /> WhatsApp
                           </a>
                         )}
-                        {!['completada','completed'].includes(selectedEvent.resource?.status) && (
-                          <button type="button" onClick={() => handleMarkComplete()} className="cal-btn-complete">
+                        {!['completada','completed'].includes(eventForm.status) && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkComplete({ resource: selectedEvent.resource })}
+                            className="cal-btn-complete"
+                          >
                             <FaCheckCircle /> Completar
                           </button>
                         )}
-                        <button type="button" onClick={() => handleDeleteEvent()} className="cal-btn-delete">
-                          <FaTrash /> Eliminar
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEvent({ resource: selectedEvent.resource })}
+                            className="cal-btn-delete"
+                          >
+                            <FaTrash /> Eliminar
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1077,22 +1230,41 @@ const CalendarPage = () => {
                   </button>
                 </div>
                 <div className="space-y-3">
-                  {[['nombre','Nombre completo *','text','Nombre del cliente'],['telefono','Teléfono *','tel','3001234567'],['email','Email','email','correo@ejemplo.com']].map(([field, label, type, ph]) => (
+                  {[
+                    ['nombre',   'Nombre completo *', 'text',  'Nombre del cliente'],
+                    ['telefono', 'Teléfono *',        'tel',   '3001234567'],
+                    ['email',    'Email',             'email', 'correo@ejemplo.com'],
+                  ].map(([field, label, type, ph]) => (
                     <div key={field}>
                       <label className="cal-label">{label}</label>
-                      <input type={type} value={clientForm[field]}
+                      <input
+                        type={type}
+                        value={clientForm[field]}
                         onChange={(e) => setClientForm({ ...clientForm, [field]: e.target.value })}
-                        className="cal-input" placeholder={ph} />
+                        className="cal-input" placeholder={ph}
+                      />
                     </div>
                   ))}
                 </div>
                 <div className="flex gap-2 mt-5">
-                  <button type="button" onClick={() => setShowClientModal(false)} disabled={submitting} className="cal-btn-cancel">
+                  <button
+                    type="button"
+                    onClick={() => setShowClientModal(false)}
+                    disabled={submitting}
+                    className="cal-btn-cancel"
+                  >
                     Cancelar
                   </button>
-                  <button type="button" onClick={handleCreateClient} disabled={submitting}
-                    className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
-                    {submitting ? <><FaSpinner className="animate-spin" /> Creando...</> : <><FaUserPlus /> Crear</>}
+                  <button
+                    type="button"
+                    onClick={handleCreateClient}
+                    disabled={submitting}
+                    className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  >
+                    {submitting
+                      ? <><FaSpinner className="animate-spin" /> Creando...</>
+                      : <><FaUserPlus /> Crear</>
+                    }
                   </button>
                 </div>
               </div>
