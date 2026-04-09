@@ -34,7 +34,8 @@ async function sendMail(to, subject, html) {
 
 /**
  * Cabecera y pie compartidos para todos los correos.
- * Logo: logotipo R&B Inmobiliaria en dorado sobre negro.
+ * Logo: imagen real del logotipo R&B Inmobiliaria.
+ * Fallback a texto dorado si la imagen no carga (Outlook, clientes sin imágenes).
  * Compatible con Gmail, Outlook, Apple Mail, Yahoo.
  */
 function emailHeader(previewText = '') {
@@ -54,10 +55,9 @@ function emailHeader(previewText = '') {
     img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
     .email-wrapper{background:#f4f4f0;padding:32px 16px;}
     .email-card{background:#ffffff;border-radius:16px;overflow:hidden;max-width:560px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
-    .email-header{background:#0d0d0b;padding:32px 40px 28px;text-align:center;}
-    .brand-logo{display:inline-block;}
-    .brand-monogram{font-family:'Inter',Helvetica,Arial,sans-serif;font-size:28px;font-weight:700;letter-spacing:0.08em;color:#c8a44a;line-height:1;}
-    .brand-sub{font-family:'Inter',Helvetica,Arial,sans-serif;font-size:9px;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;color:#8a7a5a;margin-top:5px;display:block;}
+    .email-header{background:#0d0d0b;padding:28px 40px 24px;text-align:center;}
+    .brand-logo-img{display:block;margin:0 auto;}
+    .brand-sub{font-family:'Inter',Helvetica,Arial,sans-serif;font-size:9px;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;color:#8a7a5a;margin-top:8px;display:block;text-align:center;}
     .email-body{padding:36px 40px 32px;}
     .email-footer{background:#f9f8f6;border-top:1px solid #e8e5e0;padding:20px 40px;text-align:center;}
     .footer-text{font-size:12px;color:#a09a8e;line-height:1.7;margin:0;}
@@ -80,10 +80,11 @@ function emailHeader(previewText = '') {
     .greeting{font-size:16px;color:#3d3c38;margin:0 0 20px;}
     @media only screen and (max-width:600px){
       .email-body{padding:24px 20px 20px;}
-      .email-header{padding:24px 20px 20px;}
+      .email-header{padding:20px 20px 18px;}
       .email-footer{padding:16px 20px;}
       h1{font-size:20px;}
       .detail-label{min-width:80px;font-size:11px;}
+      .brand-logo-img{max-width:140px !important;}
     }
   </style>
 </head>
@@ -93,10 +94,22 @@ function emailHeader(previewText = '') {
 <div class="email-card">
   <!-- HEADER -->
   <div class="email-header">
-    <div class="brand-logo">
-      <div class="brand-monogram">R&amp;B</div>
-      <span class="brand-sub">Inmobiliaria &middot; Real Estate</span>
-    </div>
+    <!--[if mso]>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:0;">
+    <![endif]-->
+    <img
+      src="https://rybinmobiliaria.com/logo.png"
+      alt="R&amp;B Inmobiliaria"
+      width="160"
+      height="auto"
+      class="brand-logo-img"
+      style="display:block;margin:0 auto;max-width:160px;height:auto;"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+    />
+    <!-- Fallback texto si la imagen no carga (Outlook, clientes sin imágenes) -->
+    <div style="display:none;font-family:'Inter',Helvetica,Arial,sans-serif;font-size:26px;font-weight:700;letter-spacing:0.08em;color:#c8a44a;text-align:center;line-height:1;">R&amp;B</div>
+    <!--[if mso]></td></tr></table><![endif]-->
+    <span class="brand-sub">Inmobiliaria &middot; Real Estate</span>
   </div>`;
 }
 
@@ -580,9 +593,6 @@ export const visitService = {
   },
 
   // ── REAGENDAR visita ─────────────────────────────────────────────────
-  // FIX: antes se pasaba solo el visitId (string) desde useVisits,
-  // lo que hacía que typeof visit === 'object' fuera false y el
-  // correo nunca se enviara. Ahora siempre se recibe el objeto visit completo.
   async rescheduleVisit(visit, proposedDate, proposedTime, adminNotes = '') {
     const visitId = typeof visit === 'object' ? visit.id : visit;
     await updateDoc(ref(visitId), {
@@ -593,7 +603,6 @@ export const visitService = {
     });
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.RESCHEDULED, adminNotes);
 
-    // Datos del cliente (siempre desde el objeto visit)
     const clientEmail = typeof visit === 'object' ? visit.clientEmail  : null;
     const clientName  = typeof visit === 'object' ? visit.clientName   : null;
     const propName    = typeof visit === 'object' ? visit.propertyName : null;
@@ -601,7 +610,6 @@ export const visitService = {
     const origTime    = typeof visit === 'object' ? visit.requestedTime : null;
 
     if (clientEmail) {
-      // Notificación in-app
       notificationService.createNotification({
         userId:    clientEmail,
         type:      'visit_rescheduled',
@@ -610,7 +618,6 @@ export const visitService = {
         actionUrl: '/portal/visitas',
       }).catch(() => {});
 
-      // Correo premium al cliente
       await sendMail(
         clientEmail,
         `Nueva fecha propuesta para tu visita a "${propName}" · R&B Inmobiliaria`,
