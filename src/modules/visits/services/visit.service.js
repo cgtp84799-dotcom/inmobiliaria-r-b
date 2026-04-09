@@ -34,7 +34,7 @@ async function sendMail(to, subject, html) {
 
 /**
  * Cabecera y pie compartidos para todos los correos.
- * Logo: imagen real del logotipo R&B Inmobiliaria.
+ * Logo: imagen real del logotipo R&B Inmobiliaria (versión blanca).
  * Fallback a texto dorado si la imagen no carga (Outlook, clientes sin imágenes).
  * Compatible con Gmail, Outlook, Apple Mail, Yahoo.
  */
@@ -98,7 +98,7 @@ function emailHeader(previewText = '') {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:0;">
     <![endif]-->
     <img
-      src="https://rybinmobiliaria.com/logo.png"
+      src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
       alt="R&amp;B Inmobiliaria"
       width="160"
       height="auto"
@@ -383,7 +383,7 @@ export const visitService = {
         time:            payload.requestedTime,
         notes:           payload.notes           ?? '',
         agentId:         payload.agentId         ?? null,
-        agentName:       payload.agentName       ?? null,
+        agentName:       payload.agentName        ?? null,
         agentEmail:      payload.agentEmail       ?? null,
         status:          VISIT_STATUS.PENDING,
         createdAt:  serverTimestamp(),
