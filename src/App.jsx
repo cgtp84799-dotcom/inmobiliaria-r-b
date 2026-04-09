@@ -46,7 +46,8 @@ const ClientManagement   = lazy(() => import("./modules/clients/pages/ClientMana
 const ContractsPage      = lazy(() => import("./modules/contracts/pages/ContractsPage"));
 const DocumentsPage      = lazy(() => import("./modules/documents/pages/DocumentsPage"));
 const ContactsPage       = lazy(() => import("./modules/contacts/pages/ContactsPage"));
-const CalendarPage       = lazy(() => import("./modules/visits/pages/CalendarPage"));
+// ✅ CORREGIDO: apunta al módulo calendar (FullCalendar), no al módulo visits
+const CalendarPage       = lazy(() => import("./modules/calendar/pages/CalendarPage"));
 const UsersPage          = lazy(() => import("./modules/users/pages/UsersPage"));
 const RequestsPage       = lazy(() => import("./modules/users/pages/RequestsPage"));
 
@@ -387,7 +388,6 @@ function AppRoutes() {
         <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
 
         {/* ── Rutas privadas — admin, member y viewer ────────────────────────── */}
-        {/* ProtectedRoute sin allowedRoles = cualquier rol válido puede entrar  */}
         <Route
           element={
             <ProtectedRoute>
