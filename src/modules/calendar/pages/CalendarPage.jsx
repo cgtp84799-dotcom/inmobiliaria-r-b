@@ -26,30 +26,17 @@ const AGENT_COLORS = [
   '#06b6d4', '#ec4899', '#84cc16', '#6366f1',
 ];
 
-// Color por tipo de evento (visitas del formulario web vs eventos internos)
 const TYPE_ICONS = {
   visita:      '🏠',
   reunion:     '🤝',
   llamada:     '📞',
   seguimiento: '👥',
   otro:        '📌',
-  // tipos que vienen del formulario web de visitas
   web_visit:   '🌐',
 };
 
-const STATUS_COLORS = {
-  pendiente:   '',          // usa el color del agente
-  approved:    '',          // usa el color del agente
-  confirmada:  '',          // usa el color del agente
-  completada:  'opacity-60', // se desvanece
-  completed:   'opacity-60',
-  cancelada:   '#6b7280',   // gris
-  rejected:    '#6b7280',
-  rescheduled: '#f59e0b',   // amarillo reagendado
-  reagendada:  '#f59e0b',
-};
-
 const STATUS_LABELS = {
+  pending:     '⏳ Pendiente',
   pendiente:   '⏳ Pendiente',
   approved:    '✅ Aprobada',
   confirmada:  '✅ Confirmada',
@@ -61,16 +48,47 @@ const STATUS_LABELS = {
   reagendada:  '🔄 Reagendada',
 };
 
+// ─── Normalizar un documento de cualquier colección al formato interno ───────
+// visits → usa clientName, propertyName, requestedDate, requestedTime, agentId/agentName
+// appointments sin espejo → usa clientId/clientName, propertyId, date, time, assignedAgentId
+function normalizeDoc(raw, source) {
+  return {
+    ...raw,
+    _source: source,
+    // Nombre del visitante/cliente
+    _clientName:
+      raw.clientName || raw.visitorName || raw.nombre || '',
+    // Nombre de la propiedad
+    _propertyName:
+      raw.propertyName || raw.propertyTitle || '',
+    // Fecha normalizada (campo date para appointments, requestedDate para visits)
+    _date:
+      raw.date || raw.requestedDate || '',
+    // Hora normalizada
+    _time:
+      raw.time || raw.visitTime || raw.requestedTime || '09:00',
+    // Agente asignado normalizado
+    _agentId:
+      raw.assignedAgentId || raw.agentId || '',
+    _agentName:
+      raw.agentName || '',
+  };
+}
+
 const CalendarPage = () => {
   const { currentUser } = useAuth();
   const calendarRef = useRef(null);
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [appointments, setAppointments] = useState([]);  // colección appointments (CRM interno)
-  const [webVisits, setWebVisits]       = useState([]);  // colección visits (formulario web)
-  const [clients, setClients]           = useState([]);
-  const [properties, setProperties]     = useState([]);
-  const [agents, setAgents]             = useState([]);  // usuarios con role 'member' o 'admin'
+  // Solo leemos appointments — que ya contiene el espejo de visits (sourceCollection:'visits')
+  // y los eventos propios del CRM interno (sin sourceCollection)
+  const [appointments, setAppointments] = useState([]);
+  // visits: solo las que NO tienen espejo en appointments (status pending sin espejo)
+  const [orphanVisits, setOrphanVisits] = useState([]);
+
+  const [clients, setClients]       = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [agents, setAgents]         = useState([]);
 
   const [loading, setLoading]           = useState(true);
   const [showEventModal, setShowEventModal]   = useState(false);
@@ -93,11 +111,17 @@ const CalendarPage = () => {
   });
   const [clientForm, setClientForm] = useState({ nombre: '', telefono: '', email: '' });
 
-  // ─── Stats de resumen ────────────────────────────────────────────────────
-  const totalEvents  = appointments.length + webVisits.length;
-  const pendingCount = [...appointments, ...webVisits].filter(
+  // ─── Stats ────────────────────────────────────────────────────────────────
+  const allNormalized = [
+    ...appointments.map((d) => normalizeDoc(d, 'crm')),
+    ...orphanVisits.map((d) => normalizeDoc(d, 'web')),
+  ];
+  const totalEvents  = allNormalized.length;
+  const pendingCount = allNormalized.filter(
     (e) => ['pendiente', 'pending', 'approved'].includes(e.status)
   ).length;
+  const webVisitsCount = orphanVisits.length +
+    appointments.filter((a) => a.sourceCollection === 'visits').length;
 
   // ─── Firestore listeners ─────────────────────────────────────────────────
   useEffect(() => {
@@ -105,18 +129,26 @@ const CalendarPage = () => {
     let loaded = 0;
     const checkLoaded = () => { loaded++; if (loaded >= 2) setLoading(false); };
 
-    // 1. Appointments (eventos internos del CRM)
+    // 1. appointments — TODAS (incluye espejo de visits y eventos CRM propios)
     const unsubAppts = onSnapshot(
       query(collection(db, 'appointments'), orderBy('date', 'asc')),
-      (s) => { setAppointments(s.docs.map((d) => ({ id: d.id, _source: 'crm', ...d.data() }))); checkLoaded(); },
+      (s) => {
+        setAppointments(s.docs.map((d) => ({ id: d.id, ...d.data() })));
+        checkLoaded();
+      },
       (err) => { console.error('appointments:', err); checkLoaded(); },
     );
 
-    // 2. Visits (solicitudes del formulario web público)
+    // 2. visits — solo las pendientes sin espejo en appointments
+    // (las aprobadas ya tienen su espejo en appointments con sourceCollection:'visits')
     const unsubVisits = onSnapshot(
-      query(collection(db, 'visits'), orderBy('date', 'asc')),
-      (s) => { setWebVisits(s.docs.map((d) => ({ id: d.id, _source: 'web', ...d.data() }))); checkLoaded(); },
-      (err) => { console.error('visits:', err); checkLoaded(); },
+      query(collection(db, 'visits'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+      (snap) => {
+        // Filtrar las que YA tienen espejo (visitId en appointments)
+        // Para simplificar: mostramos todas las pending, el usuario verá el estado
+        setOrphanVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      (err) => { console.error('visits pending:', err); },
     );
 
     // 3. Clientes
@@ -138,7 +170,7 @@ const CalendarPage = () => {
       })));
     });
 
-    // 5. Usuarios con rol 'member' o 'admin' — CORREGIDO: era 'agent', ahora 'member'
+    // 5. Agentes (member + admin)
     const unsubMembers = onSnapshot(
       query(collection(db, 'users'), where('role', 'in', ['member', 'admin'])),
       (s) => {
@@ -148,6 +180,7 @@ const CalendarPage = () => {
           email: d.data().email || '',
           role: d.data().role,
         })));
+        checkLoaded();
       },
     );
 
@@ -166,63 +199,74 @@ const CalendarPage = () => {
   const getPropertyTitle = (id) => properties.find((p) => p.id === id)?.title || '';
   const getAgentName     = (id) => agents.find((a) => a.id === id)?.name || 'Sin asignar';
 
-  // Construir título inteligente para eventos sin título
-  const buildTitle = (raw) => {
-    if (raw.title && raw.title.trim()) return raw.title.trim();
-    // Visita del formulario web
-    if (raw._source === 'web') {
-      const name = raw.visitorName || raw.clientName || raw.nombre || '';
-      const prop = raw.propertyTitle || getPropertyTitle(raw.propertyId) || '';
-      if (name && prop) return `Visita: ${name} → ${prop}`;
-      if (name) return `Visita web: ${name}`;
+  // ─── buildTitle: usa los campos normalizados ──────────────────────────────
+  const buildTitle = (norm) => {
+    // Si tiene título explícito, usarlo
+    if (norm.title && norm.title.trim() && norm.title.trim() !== 'undefined') {
+      return norm.title.trim();
+    }
+    const client = norm._clientName || getClientName(norm.clientId) || '';
+    const prop   = norm._propertyName || getPropertyTitle(norm.propertyId) || '';
+
+    if (norm._source === 'web' || norm.sourceCollection === 'visits') {
+      if (client && prop) return `Visita: ${client} → ${prop}`;
+      if (client) return `Visita web: ${client}`;
       if (prop) return `Visita: ${prop}`;
       return 'Solicitud de visita';
     }
-    // Evento CRM sin título
-    const clientName = getClientName(raw.clientId);
-    const propTitle  = getPropertyTitle(raw.propertyId);
-    if (clientName && propTitle) return `${raw.type === 'visita' ? '🏠' : ''} ${clientName} → ${propTitle}`;
-    if (clientName) return clientName;
+    // Evento CRM interno
+    if (client && prop) return `${client} → ${prop}`;
+    if (client) return client;
+    if (prop) return prop;
     return 'Evento sin título';
   };
 
   // ─── Convertir a formato FullCalendar ────────────────────────────────────
-  const allRaw = [...appointments, ...webVisits];
-
-  const fcEvents = allRaw
-    .filter((raw) => {
-      if (filterAgentId && raw.assignedAgentId !== filterAgentId) return false;
-      if (filterType   && raw.type             !== filterType)    return false;
-      if (filterStatus && raw.status           !== filterStatus)  return false;
+  const fcEvents = allNormalized
+    .filter((norm) => {
+      if (filterAgentId) {
+        const aid = norm._agentId || norm.assignedAgentId || norm.agentId || '';
+        if (aid !== filterAgentId) return false;
+      }
+      if (filterType) {
+        const t = norm.type || (norm._source === 'web' || norm.sourceCollection === 'visits' ? 'visita' : '');
+        if (t !== filterType) return false;
+      }
+      if (filterStatus && norm.status !== filterStatus) return false;
       return true;
     })
-    .map((raw) => {
-      const dateStr = raw.date  || new Date().toISOString().split('T')[0];
-      const timeStr = raw.time  || raw.visitTime || '09:00';
-      const start   = `${dateStr}T${timeStr.slice(0, 5)}`;
-      const durationMs = (Number(raw.duration || 60)) * 60 * 1000;
-      const endDate    = new Date(new Date(start).getTime() + durationMs);
+    .map((norm) => {
+      const dateStr = norm._date || new Date().toISOString().split('T')[0];
+      const timeStr = (norm._time || '09:00').slice(0, 5);
+      const start   = `${dateStr}T${timeStr}`;
+      const endDate = new Date(new Date(start).getTime() + 60 * 60 * 1000);
 
-      // Color: gris si cancelado/rechazado, amarillo si reagendado, color agente si normal
-      let bg = getAgentColor(raw.assignedAgentId || '');
-      if (['cancelada', 'rejected'].includes(raw.status))   bg = '#6b7280';
-      if (['rescheduled', 'reagendada'].includes(raw.status)) bg = '#d97706';
-      // Visitas web sin agente asignado: color azul oscuro distinto
-      if (raw._source === 'web' && !raw.assignedAgentId)    bg = '#1d4ed8';
+      const isWebMirror = norm.sourceCollection === 'visits' || norm._source === 'web';
+      const agentId     = norm._agentId;
 
-      const icon        = TYPE_ICONS[raw.type] || (raw._source === 'web' ? '🌐' : '📌');
-      const statusLabel = STATUS_LABELS[raw.status] || '';
-      const titleText   = buildTitle(raw);
+      let bg = getAgentColor(agentId);
+      if (['cancelada', 'rejected'].includes(norm.status))       bg = '#6b7280';
+      if (['rescheduled', 'reagendada'].includes(norm.status))   bg = '#d97706';
+      if (isWebMirror && !agentId)                               bg = '#1d4ed8';
+
+      const icon = isWebMirror
+        ? (agentId ? '🏠' : '🌐')
+        : (TYPE_ICONS[norm.type] || '📌');
+      const titleText = buildTitle(norm);
 
       return {
-        id:              `${raw._source}_${raw.id}`,
+        id:              `${norm._source}_${norm.id}`,
         title:           `${icon} ${titleText}`,
         start,
         end:             endDate.toISOString(),
         backgroundColor: bg,
         borderColor:     bg,
         textColor:       '#ffffff',
-        extendedProps:   { ...raw, _statusLabel: statusLabel, _displayTitle: titleText },
+        extendedProps:   {
+          ...norm,
+          _statusLabel:   STATUS_LABELS[norm.status] || '',
+          _displayTitle:  titleText,
+        },
       };
     });
 
@@ -239,33 +283,39 @@ const CalendarPage = () => {
   }, []);
 
   const handleEventClick = useCallback((info) => {
-    const raw = info.event.extendedProps;
-    setSelectedEvent({ id: raw.id, source: raw._source, resource: raw });
-    const dateStr = raw.date || info.event.startStr.split('T')[0];
-    const timeStr = raw.time || raw.visitTime || (info.event.startStr.split('T')[1] || '09:00').slice(0, 5);
+    const norm = info.event.extendedProps;
+    setSelectedEvent({ id: norm.id, source: norm._source, resource: norm });
+    const dateStr = norm._date || info.event.startStr.split('T')[0];
+    const timeStr = (norm._time || '09:00').slice(0, 5);
     setEventForm({
-      title:           raw._displayTitle || raw.title || '',
-      clientId:        raw.clientId        || '',
-      propertyId:      raw.propertyId      || '',
-      start:           new Date(`${dateStr}T${timeStr.slice(0,5)}`),
-      location:        raw.location        || raw.address || '',
-      notes:           raw.notes           || raw.message || '',
-      status:          raw.status          || 'pendiente',
-      type:            raw.type            || (raw._source === 'web' ? 'visita' : 'otro'),
-      clientPhone:     raw.clientPhone     || raw.visitorPhone || raw.phone || '',
-      assignedAgentId: raw.assignedAgentId || '',
+      title:           norm._displayTitle || norm.title || '',
+      clientId:        norm.clientId        || '',
+      propertyId:      norm.propertyId      || '',
+      start:           new Date(`${dateStr}T${timeStr}`),
+      location:        norm.location        || norm.propertyAddress || '',
+      notes:           norm.notes           || norm.adminNotes || '',
+      status:          norm.status          || 'pendiente',
+      type:            norm.type            || 'visita',
+      clientPhone:     norm.clientPhone     || norm._clientName || '',
+      assignedAgentId: norm._agentId        || '',
     });
     setShowEventModal(true);
   }, []);
 
   const handleEventDrop = useCallback(async (info) => {
-    const raw = info.event.extendedProps;
-    const colName = raw._source === 'web' ? 'visits' : 'appointments';
+    const norm    = info.event.extendedProps;
+    const colName = (norm._source === 'web' && norm.sourceCollection !== 'visits')
+      ? 'visits'
+      : 'appointments';
     const newStart = info.event.start;
     const date = newStart.toISOString().split('T')[0];
     const time = newStart.toTimeString().slice(0, 5);
     try {
-      await updateDoc(doc(db, colName, raw.id), { date, time, updatedAt: new Date().toISOString() });
+      await updateDoc(doc(db, colName, norm.id), {
+        date, time,
+        ...(colName === 'visits' ? { requestedDate: date, requestedTime: time } : {}),
+        updatedAt: new Date().toISOString(),
+      });
       toast.success('Evento reagendado');
     } catch (e) {
       toast.error('Error al reagendar');
@@ -293,10 +343,10 @@ const CalendarPage = () => {
         createdBy: currentUser?.email || 'unknown',
         updatedAt: new Date().toISOString(),
       };
-
       if (selectedEvent) {
-        // Al editar una visita web, se actualiza en la colección correcta
-        const colName = selectedEvent.source === 'web' ? 'visits' : 'appointments';
+        const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
+          ? 'visits'
+          : 'appointments';
         await updateDoc(doc(db, colName, selectedEvent.id), payload);
         toast.success('Evento actualizado');
       } else {
@@ -315,7 +365,9 @@ const CalendarPage = () => {
   const handleDeleteEvent = async () => {
     if (!selectedEvent || !confirm('¿Eliminar este evento?')) return;
     try {
-      const colName = selectedEvent.source === 'web' ? 'visits' : 'appointments';
+      const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
+        ? 'visits'
+        : 'appointments';
       await deleteDoc(doc(db, colName, selectedEvent.id));
       toast.success('Evento eliminado');
       handleCloseModals();
@@ -325,7 +377,9 @@ const CalendarPage = () => {
   const handleMarkComplete = async () => {
     if (!selectedEvent) return;
     try {
-      const colName = selectedEvent.source === 'web' ? 'visits' : 'appointments';
+      const colName = (selectedEvent.source === 'web' && selectedEvent.resource?.sourceCollection !== 'visits')
+        ? 'visits'
+        : 'appointments';
       await updateDoc(doc(db, colName, selectedEvent.id), {
         status: 'completada', updatedAt: new Date().toISOString(),
       });
@@ -366,9 +420,9 @@ const CalendarPage = () => {
     setSelectedEvent(null);
   };
 
-  const goToday   = () => { setCurrentDate(new Date()); calendarRef.current?.getApi().today(); };
-  const goPrev    = () => { calendarRef.current?.getApi().prev();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
-  const goNext    = () => { calendarRef.current?.getApi().next();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
+  const goToday    = () => { setCurrentDate(new Date()); calendarRef.current?.getApi().today(); };
+  const goPrev     = () => { calendarRef.current?.getApi().prev();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
+  const goNext     = () => { calendarRef.current?.getApi().next();  setCurrentDate(calendarRef.current?.getApi().getDate()); };
   const changeView = (v) => { setView(v); calendarRef.current?.getApi().changeView(v); };
 
   if (loading) {
@@ -405,10 +459,10 @@ const CalendarPage = () => {
       {/* ─── Stats rápidas ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total eventos', value: totalEvents,             icon: FaCalendarAlt, color: 'text-primary' },
-          { label: 'Pendientes',    value: pendingCount,            icon: FaSpinner,     color: 'text-yellow-400' },
-          { label: 'Agentes activos', value: agents.length,          icon: FaUsers,       color: 'text-blue-400' },
-          { label: 'Visitas web',   value: webVisits.length,        icon: FaHome,        color: 'text-emerald-400' },
+          { label: 'Total eventos',   value: totalEvents,    icon: FaCalendarAlt, color: 'text-primary' },
+          { label: 'Pendientes',      value: pendingCount,   icon: FaSpinner,     color: 'text-yellow-400' },
+          { label: 'Agentes activos', value: agents.length,  icon: FaUsers,       color: 'text-blue-400' },
+          { label: 'Visitas web',     value: webVisitsCount, icon: FaHome,        color: 'text-emerald-400' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center gap-3">
             <Icon className={`text-2xl ${color} flex-shrink-0`} />
@@ -464,7 +518,7 @@ const CalendarPage = () => {
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-primary outline-none">
               <option value="">Todos los tipos</option>
-              <option value="visita">🏠 Visitas (CRM)</option>
+              <option value="visita">🏠 Visitas</option>
               <option value="reunion">🤝 Reuniones</option>
               <option value="llamada">📞 Llamadas</option>
               <option value="seguimiento">👥 Seguimientos</option>
@@ -475,9 +529,9 @@ const CalendarPage = () => {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-primary outline-none">
               <option value="">Todos los estados</option>
-              <option value="pendiente">⏳ Pendiente</option>
+              <option value="pending">⏳ Pendiente (web)</option>
+              <option value="pendiente">⏳ Pendiente (CRM)</option>
               <option value="approved">✅ Aprobada</option>
-              <option value="confirmada">✅ Confirmada</option>
               <option value="completada">✔ Completada</option>
               <option value="cancelada">✗ Cancelada</option>
               <option value="rescheduled">🔄 Reagendada</option>
@@ -490,12 +544,12 @@ const CalendarPage = () => {
       {agents.length > 0 && (
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Agentes por color</p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-4">
             {agents.map((agent) => (
               <div key={agent.id} className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getAgentColor(agent.id) }} />
-                <span className="text-slate-300 text-xs">{agent.name}</span>
-                <span className="text-slate-600 text-xs">({agent.role})</span>
+                <span className="text-slate-200 text-xs font-medium">{agent.name}</span>
+                <span className="text-slate-500 text-xs">({agent.role === 'admin' ? 'Admin' : 'Agente'})</span>
               </div>
             ))}
             <div className="flex items-center gap-2">
@@ -504,7 +558,7 @@ const CalendarPage = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-slate-500" />
-              <span className="text-slate-300 text-xs">Sin agente</span>
+              <span className="text-slate-300 text-xs">Sin agente asignado</span>
             </div>
           </div>
         </div>
@@ -576,12 +630,14 @@ const CalendarPage = () => {
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-xl font-bold text-primary">
                     {selectedEvent
-                      ? (selectedEvent.source === 'web' ? '🌐 Visita web' : '✏️ Editar evento')
+                      ? (selectedEvent.resource?.sourceCollection === 'visits' || selectedEvent.source === 'web'
+                          ? '🌐 Visita desde web'
+                          : '✏️ Editar evento')
                       : '➕ Nuevo evento'}
                   </h2>
-                  {selectedEvent?.source === 'web' && (
+                  {(selectedEvent?.resource?.sourceCollection === 'visits' || selectedEvent?.source === 'web') && (
                     <span className="text-xs bg-blue-900/50 text-blue-300 border border-blue-700 px-2 py-1 rounded-full">
-                      Desde formulario web
+                      Formulario web
                     </span>
                   )}
                   <button onClick={handleCloseModals}
@@ -718,7 +774,7 @@ const CalendarPage = () => {
                     </div>
                   )}
 
-                  {/* Botones de acción */}
+                  {/* Botones */}
                   <div className="space-y-2 pt-2">
                     <div className="flex gap-2">
                       <button type="button" onClick={handleCloseModals} disabled={submitting}
@@ -736,7 +792,7 @@ const CalendarPage = () => {
                     {selectedEvent && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         {eventForm.clientPhone && (
-                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g, '')}?text=Hola, te contacto sobre: ${eventForm.title}`}
+                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g, '')}?text=Hola, te contacto sobre tu visita: ${eventForm.title}`}
                             target="_blank" rel="noopener noreferrer"
                             className="px-3 py-2 bg-green-700 hover:bg-green-600 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
                             <FaWhatsapp /> WhatsApp
@@ -811,94 +867,49 @@ const CalendarPage = () => {
         )}
       </AnimatePresence>
 
-      {/* ─── CSS FullCalendar modo oscuro ─────────────────────────────────── */}
+      {/* ─── CSS FullCalendar dark mode ───────────────────────────────────── */}
       <style>{`
-        /* Base */
         .fc-dark-wrap { background: #0f172a; }
         .fc-dark-wrap .fc { background: #0f172a; color: #e2e8f0; }
-
-        /* Bordes */
         .fc-dark-wrap .fc-theme-standard td,
         .fc-dark-wrap .fc-theme-standard th,
         .fc-dark-wrap .fc-theme-standard .fc-scrollgrid { border-color: #1e293b !important; }
-
-        /* Encabezado días */
         .fc-dark-wrap .fc-col-header-cell {
-          background: #0d1526;
-          color: #94a3b8;
-          font-weight: 600;
-          font-size: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          padding: 8px 0;
+          background: #0d1526; color: #94a3b8;
+          font-weight: 600; font-size: 12px;
+          text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 0;
         }
         .fc-dark-wrap .fc-col-header-cell a { color: #94a3b8 !important; text-decoration: none; }
-
-        /* Celdas de días */
         .fc-dark-wrap .fc-daygrid-day { background: #0f172a; }
         .fc-dark-wrap .fc-daygrid-day:hover { background: #111827; cursor: pointer; }
         .fc-dark-wrap .fc-day-today { background: oklch(0.35 0.08 85 / 0.15) !important; }
-        .fc-dark-wrap .fc-day-today .fc-daygrid-day-number {
-          color: #d4af37 !important;
-          font-weight: 700;
-        }
+        .fc-dark-wrap .fc-day-today .fc-daygrid-day-number { color: #d4af37 !important; font-weight: 700; }
         .fc-dark-wrap .fc-day-other .fc-daygrid-day-number { color: #334155 !important; }
-        .fc-dark-wrap .fc-daygrid-day-number {
-          color: #cbd5e1 !important;
-          font-size: 13px;
-          padding: 6px 8px;
-        }
+        .fc-dark-wrap .fc-daygrid-day-number { color: #cbd5e1 !important; font-size: 13px; padding: 6px 8px; }
         .fc-dark-wrap .fc-daygrid-day-number:hover { color: #d4af37 !important; }
-
-        /* Eventos */
-        .fc-dark-wrap .fc-event {
-          border: none !important;
-          border-radius: 5px;
-          font-size: 11px;
-          cursor: pointer;
-        }
+        .fc-dark-wrap .fc-event { border: none !important; border-radius: 5px; font-size: 11px; cursor: pointer; }
         .fc-dark-wrap .fc-event:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        .fc-dark-wrap .fc-event * { color: #fff !important; }
         .fc-dark-wrap .fc-event .fc-event-title { color: #fff !important; font-weight: 600; }
         .fc-dark-wrap .fc-event .fc-event-time  { color: rgba(255,255,255,0.8) !important; font-size: 10px; }
         .fc-dark-wrap .fc-more-link { color: #d4af37 !important; font-weight: 700; font-size: 11px; }
         .fc-dark-wrap .fc-more-link:hover { color: #fbbf24 !important; }
-
-        /* Vista semana/día */
         .fc-dark-wrap .fc-timegrid-slot { background: #0f172a; border-color: #1e293b !important; }
         .fc-dark-wrap .fc-timegrid-slot-minor { border-color: #161e2e !important; }
         .fc-dark-wrap .fc-timegrid-axis { background: #0d1526; color: #64748b; font-size: 11px; }
         .fc-dark-wrap .fc-timegrid-now-indicator-line { border-color: #d4af37 !important; }
         .fc-dark-wrap .fc-timegrid-now-indicator-arrow { border-top-color: #d4af37 !important; }
-
-        /* Vista agenda/lista */
-        .fc-dark-wrap .fc-list-day-cushion {
-          background: #0d1526 !important;
-          color: #94a3b8 !important;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
+        .fc-dark-wrap .fc-list-day-cushion { background: #0d1526 !important; color: #94a3b8 !important; font-size: 12px; font-weight: 700; text-transform: uppercase; }
         .fc-dark-wrap .fc-list-event:hover td { background: #1e293b !important; }
         .fc-dark-wrap .fc-list-event td { border-color: #1e293b !important; color: #e2e8f0 !important; }
         .fc-dark-wrap .fc-list-event-title a { color: #e2e8f0 !important; text-decoration: none; }
         .fc-dark-wrap .fc-list-empty { background: #0f172a !important; color: #64748b !important; padding: 40px; text-align: center; }
-
-        /* Scroller */
         .fc-dark-wrap .fc-scroller { background: #0f172a; }
         .fc-dark-wrap ::-webkit-scrollbar { width: 5px; height: 5px; }
         .fc-dark-wrap ::-webkit-scrollbar-track { background: #0f172a; }
         .fc-dark-wrap ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-
-        /* Selección de rango */
         .fc-dark-wrap .fc-highlight { background: oklch(0.6 0.12 85 / 0.2) !important; }
-
-        /* Popover */
-        .fc-dark-wrap .fc-popover {
-          background: #1e293b !important;
-          border-color: #334155 !important;
-          border-radius: 10px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-        }
+        .fc-dark-wrap .fc-popover { background: #1e293b !important; border-color: #334155 !important; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
         .fc-dark-wrap .fc-popover-header { background: #0d1526 !important; color: #e2e8f0 !important; border-radius: 10px 10px 0 0; padding: 8px 12px; }
         .fc-dark-wrap .fc-popover-close { color: #94a3b8 !important; }
         .fc-dark-wrap .fc-popover-body { padding: 8px; }
