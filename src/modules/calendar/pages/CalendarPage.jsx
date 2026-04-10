@@ -116,6 +116,13 @@ function normalizeDoc(raw, source) {
   };
 }
 
+// ─── Helpers globales ────────────────────────────────────────────────────────
+function cleanPhone(p = '') {
+  const digits = String(p).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('57') ? digits : `57${digits}`;
+}
+
 // ─── Componente de evento personalizado ──────────────────────────────────────
 const CustomEvent = ({ event, agents, getAgentColor, getAgentName, onContextMenu }) => {
   const r = event.resource || {};
@@ -227,7 +234,7 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
         )}
         {phone && (
           <a
-            href={`https://wa.me/57${phone.replace(/\D/g, '')}?text=Hola, te contacto sobre tu visita del ${dateStr}`}
+            href={`https://wa.me/${cleanPhone(phone)}?text=Hola, te contacto sobre tu visita del ${dateStr}`}
             target="_blank" rel="noopener noreferrer"
             className="cal-tip-btn cal-tip-btn--wa"
           >
@@ -265,7 +272,7 @@ const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete, o
       )}
       {phone && (
         <a
-          href={`https://wa.me/57${phone.replace(/\D/g, '')}?text=Hola, te contacto sobre: ${event.title}`}
+          href={`https://wa.me/${cleanPhone(phone)}?text=Hola, te contacto sobre: ${event.title}`}
           target="_blank" rel="noopener noreferrer"
           className="cal-ctx-item cal-ctx-item--wa"
           onClick={onClose}
@@ -370,6 +377,7 @@ const CalendarPage = () => {
         })));
         checkLoaded();
       },
+      (err) => { console.error('[Calendar] Error cargando agentes:', err); checkLoaded(); },
     );
 
     return () => { unsubAppts(); unsubVisits(); unsubContracts(); unsubClients(); unsubProps(); unsubMembers(); };
@@ -577,7 +585,7 @@ const CalendarPage = () => {
     try {
       await updateDoc(doc(db, colName, r.id), {
         date, time,
-        ...(colName === 'visits' ? { requestedDate: date, requestedTime: time } : {}),
+        ...(colName === 'visits' ? { requestedDate: date, requestedTime: time, status: 'rescheduled' } : {}),
         updatedAt: new Date().toISOString(),
       });
       toast.success('Evento reagendado');
@@ -703,41 +711,37 @@ const CalendarPage = () => {
   // ─── Estilo de eventos ───────────────────────────────────────────────────────
   const eventStyleGetter = useCallback((event) => ({
     style: {
-      backgroundColor: event.color || '#6b7280',
-      borderColor:     event.color || '#6b7280',
-      color:           '#ffffff',
-      border:          'none',
-      borderRadius:    '6px',
-      padding:         '0',
-      cursor:          'pointer',
-      boxShadow:       `0 1px 4px ${(event.color || '#6b7280')}55`,
+      backgroundColor: event.color || '#f59e0b',
+      border: 'none',
+      borderRadius: '6px',
+      color: '#fff',
+      fontSize: '12px',
+      padding: '1px 4px',
     },
   }), []);
 
-  // ─── Componente de evento custom ─────────────────────────────────────────────
-  const components = useMemo(() => ({
-    toolbar: ({ label, onNavigate, onView, view: currentView }) => (
-      <div className="rbc-custom-toolbar">
-        <div className="rbc-toolbar-left">
-          <button className="rbc-nav-btn" onClick={() => onNavigate('PREV')} aria-label="Anterior">
-            <FaChevronLeft size={12} />
-          </button>
-          <button className="rbc-nav-today" onClick={() => onNavigate('TODAY')}>Hoy</button>
-          <button className="rbc-nav-btn" onClick={() => onNavigate('NEXT')} aria-label="Siguiente">
-            <FaChevronRight size={12} />
-          </button>
-          <span className="rbc-current-label">{label}</span>
-        </div>
-        <div className="rbc-toolbar-views">
-          {[['month','Mes'],['week','Semana'],['day','Día'],['agenda','Agenda']].map(([v, lbl]) => (
-            <button key={v}
-              className={`rbc-view-btn ${currentView === v ? 'active' : ''}`}
-              onClick={() => { onView(v); setView(v); }}
-            >{lbl}</button>
-          ))}
-        </div>
+  // ─── Toolbar personalizada ───────────────────────────────────────────────────
+  const CustomToolbar = useCallback(({ label, onNavigate, onView, view: currentView }) => (
+    <div className="rbc-custom-toolbar">
+      <div className="rbc-toolbar-left">
+        <button className="rbc-nav-btn" onClick={() => onNavigate('PREV')}><FaChevronLeft size={10} /></button>
+        <button className="rbc-nav-today" onClick={() => onNavigate('TODAY')}>Hoy</button>
+        <button className="rbc-nav-btn" onClick={() => onNavigate('NEXT')}><FaChevronRight size={10} /></button>
+        <span className="rbc-current-label">{label}</span>
       </div>
-    ),
+      <div className="rbc-toolbar-views">
+        {['month', 'week', 'day', 'agenda'].map((v) => (
+          <button key={v} className={`rbc-view-btn${currentView === v ? ' active' : ''}`} onClick={() => onView(v)}>
+            {{ month: 'Mes', week: 'Semana', day: 'Día', agenda: 'Agenda' }[v]}
+          </button>
+        ))}
+      </div>
+    </div>
+  ), []);
+
+  // ─── Componentes del calendario ──────────────────────────────────────────────
+  const components = useMemo(() => ({
+    toolbar: CustomToolbar,
     event: (props) => (
       <CustomEvent
         {...props}
@@ -747,54 +751,61 @@ const CalendarPage = () => {
         onContextMenu={handleContextMenu}
       />
     ),
-    eventWrapper: ({ event, children }) => (
+    eventWrapper: (props) => (
       <div
-        onMouseEnter={(e) => handleMouseEnterEvent(event, e)}
+        onMouseEnter={(e) => handleMouseEnterEvent(props.event, e)}
         onMouseLeave={handleMouseLeaveEvent}
       >
-        {children}
+        {props.children}
       </div>
     ),
-  }), [agents, getAgentColor, getAgentName, handleContextMenu, handleMouseEnterEvent, handleMouseLeaveEvent]);
+  }), [CustomToolbar, agents, getAgentColor, getAgentName, handleContextMenu, handleMouseEnterEvent, handleMouseLeaveEvent]);
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <FaSpinner className="animate-spin text-5xl text-primary" />
-    </div>
-  );
+  // ─── Loading ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <FaSpinner className="animate-spin text-3xl text-amber-500" />
+      </div>
+    );
+  }
 
+  // ─── Render principal ────────────────────────────────────────────────────────
   return (
-    <div className="cal-page space-y-5" onClick={() => setCtxMenu({ event: null, position: null })}>
+    <div className="cal-page">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="cal-header">
         <div>
           <h1 className="cal-title">
-            <FaCalendarAlt className="cal-title-icon" /> Agenda inmobiliaria
+            <FaCalendarAlt className="cal-title-icon" />
+            Calendario Operativo
           </h1>
-          <p className="cal-subtitle">Visitas, reuniones, contratos y seguimientos</p>
+          <p className="cal-subtitle">Centro de gestión de visitas, reuniones y contratos</p>
         </div>
-        <button onClick={() => openNewEvent(null)} className="button-gold inline-flex items-center gap-2 px-5 py-2.5 text-sm">
-          <FaPlus /> Nuevo evento
+        <button onClick={() => openNewEvent(null)} className="cal-btn-primary">
+          <FaPlus size={12} /> Nuevo evento
         </button>
       </div>
 
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Total eventos',   value: totalEvents,   icon: FaCalendarAlt, cls: 'cal-stat-icon--primary' },
-          { label: 'Pendientes',      value: pendingCount,  icon: FaSpinner,     cls: 'cal-stat-icon--warn' },
-          { label: 'Agentes activos', value: agents.length, icon: FaUsers,       cls: 'cal-stat-icon--blue' },
-          { label: 'Visitas web',     value: webCount,      icon: FaHome,        cls: 'cal-stat-icon--green' },
-        ].map(({ label, value, icon: Icon, cls }) => (
-          <div key={label} className="cal-stat-card">
-            <Icon className={`cal-stat-icon ${cls}`} />
-            <div>
-              <p className="cal-stat-label">{label}</p>
-              <p className="cal-stat-value">{value}</p>
-            </div>
-          </div>
-        ))}
+      {/* ── KPIs ───────────────────────────────────────────────────────────── */}
+      <div className="cal-kpi-row">
+        <div className="cal-kpi">
+          <span className="cal-kpi-icon">📅</span>
+          <div><p className="cal-kpi-num">{totalEvents}</p><p className="cal-kpi-label">Total eventos</p></div>
+        </div>
+        <div className="cal-kpi">
+          <span className="cal-kpi-icon">⏳</span>
+          <div><p className="cal-kpi-num cal-kpi-num--amber">{pendingCount}</p><p className="cal-kpi-label">Pendientes</p></div>
+        </div>
+        <div className="cal-kpi">
+          <span className="cal-kpi-icon">🌐</span>
+          <div><p className="cal-kpi-num cal-kpi-num--blue">{webCount}</p><p className="cal-kpi-label">Solicitudes web</p></div>
+        </div>
+        <div className="cal-kpi">
+          <span className="cal-kpi-icon">👥</span>
+          <div><p className="cal-kpi-num">{agents.length}</p><p className="cal-kpi-label">Agentes activos</p></div>
+        </div>
       </div>
 
       {/* ── Filtros ────────────────────────────────────────────────────────── */}
@@ -825,10 +836,9 @@ const CalendarPage = () => {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="cal-select">
               <option value="">Todos los estados</option>
               <option value="pending">⏳ Pendiente</option>
-              <option value="pendiente">⏳ Pendiente (CRM)</option>
               <option value="approved">✅ Aprobada</option>
-              <option value="completada">✔ Completada</option>
-              <option value="cancelada">✗ Cancelada</option>
+              <option value="completed">✔ Completada</option>
+              <option value="rejected">✗ Cancelada</option>
               <option value="rescheduled">🔄 Reagendada</option>
             </select>
           </div>
@@ -864,13 +874,7 @@ const CalendarPage = () => {
       )}
 
       {/* ── Calendario ─────────────────────────────────────────────────────── */}
-      <div
-        className="cal-wrapper"
-        onMouseOver={(e) => {
-          const el = e.target.closest('.rbc-event');
-          if (!el) return;
-        }}
-      >
+      <div className="cal-wrapper">
         <DnDCalendar
           localizer={localizer}
           culture="es"
@@ -1020,98 +1024,97 @@ const CalendarPage = () => {
                         onChange={(e) => setEventForm({ ...eventForm, assignedAgentId: e.target.value })}
                         className="cal-select">
                         <option value="">Sin asignar</option>
-                        {agents.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name} ({a.role === 'admin' ? 'Admin' : 'Agente'})</option>
-                        ))}
+                        {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     </div>
 
-                    <div className="md:col-span-2">
-                      <label className="cal-label">Cliente</label>
-                      <div className="flex gap-2">
-                        <select value={eventForm.clientId} onChange={(e) => handleClientChange(e.target.value)} className="cal-select flex-1">
-                          <option value="">Seleccionar cliente...</option>
-                          {clients.map((c) => (
-                            <option key={c.id} value={c.id}>{c.nombre}{c.telefono ? ` — ${c.telefono}` : ''}</option>
-                          ))}
-                        </select>
+                    <div>
+                      <label className="cal-label">
+                        Cliente
                         <button type="button" onClick={() => setShowClientModal(true)}
-                          className="px-3 py-2 bg-primary hover:opacity-90 text-slate-900 rounded-lg text-xs font-semibold flex items-center gap-1">
-                          <FaUserPlus /> Nuevo
+                          className="cal-label-action">
+                          <FaUserPlus size={10} /> Nuevo
                         </button>
-                      </div>
+                      </label>
+                      <select value={eventForm.clientId}
+                        onChange={(e) => handleClientChange(e.target.value)}
+                        className="cal-select">
+                        <option value="">Seleccionar cliente</option>
+                        {clients.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
                     </div>
 
-                    {['visita','seguimiento'].includes(eventForm.type) && (
-                      <div className="md:col-span-2">
-                        <label className="cal-label">Propiedad</label>
-                        <select value={eventForm.propertyId}
-                          onChange={(e) => setEventForm({ ...eventForm, propertyId: e.target.value })}
-                          className="cal-select">
-                          <option value="">Seleccionar propiedad...</option>
-                          {properties.map((p) => (
-                            <option key={p.id} value={p.id}>{p.title}{p.city ? ` — ${p.city}` : ''}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                    <div>
+                      <label className="cal-label">Propiedad</label>
+                      <select value={eventForm.propertyId}
+                        onChange={(e) => setEventForm({ ...eventForm, propertyId: e.target.value })}
+                        className="cal-select">
+                        <option value="">Seleccionar propiedad</option>
+                        {properties.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                      </select>
+                    </div>
 
-                    <div className="md:col-span-2">
-                      <label className="cal-label">Dirección / lugar</label>
+                    <div>
+                      <label className="cal-label">
+                        <FaPhone size={10} className="inline mr-1" />
+                        Teléfono cliente
+                      </label>
+                      <input type="tel" value={eventForm.clientPhone}
+                        onChange={(e) => setEventForm({ ...eventForm, clientPhone: e.target.value })}
+                        className="cal-input" placeholder="3001234567" />
+                    </div>
+
+                    <div>
+                      <label className="cal-label">
+                        <FaMapMarkerAlt size={10} className="inline mr-1" />
+                        Ubicación
+                      </label>
                       <input type="text" value={eventForm.location}
                         onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
-                        className="cal-input" placeholder="Dirección o lugar de encuentro" />
+                        className="cal-input" placeholder="Dirección o lugar de reunión" />
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="cal-label">Notas</label>
-                      <textarea rows={3} value={eventForm.notes}
+                      <label className="cal-label">
+                        <FaStickyNote size={10} className="inline mr-1" />
+                        Notas
+                      </label>
+                      <textarea value={eventForm.notes}
                         onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                        className="cal-input resize-none" placeholder="Detalles, instrucciones..." />
+                        className="cal-input cal-textarea" rows={3}
+                        placeholder="Observaciones, instrucciones de acceso, etc." />
                     </div>
+
                   </div>
 
-                  {(eventForm.clientId || eventForm.propertyId || eventForm.assignedAgentId) && (
-                    <div className="cal-summary">
-                      {eventForm.clientId && <p>👤 Cliente: <strong>{getClientName(eventForm.clientId)}</strong></p>}
-                      {eventForm.propertyId && <p>🏠 Propiedad: <strong>{getPropertyTitle(eventForm.propertyId)}</strong></p>}
-                      {eventForm.assignedAgentId && (
-                        <p className="flex items-center gap-2">
-                          🧑‍💼 Agente:
-                          <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: getAgentColor(eventForm.assignedAgentId) }} />
-                          <strong>{getAgentName(eventForm.assignedAgentId)}</strong>
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2 pt-2">
-                    <div className="flex gap-2">
-                      <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
-                        Cancelar
-                      </button>
-                      <button type="submit" disabled={submitting} className="button-gold flex-1 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
-                        {submitting ? <><FaSpinner className="animate-spin" /> Guardando...</> : <><FaSave /> {selectedEvent ? 'Guardar cambios' : 'Crear evento'}</>}
-                      </button>
-                    </div>
-                    {selectedEvent && selectedEvent.collection !== 'contracts' && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        {eventForm.clientPhone && (
-                          <a href={`https://wa.me/57${eventForm.clientPhone.replace(/\D/g,'')}?text=Hola, te contacto sobre: ${eventForm.title}`}
-                            target="_blank" rel="noopener noreferrer" className="cal-btn-wa">
-                            <FaWhatsapp /> WhatsApp
-                          </a>
-                        )}
-                        {!['completada','completed'].includes(selectedEvent.resource?.status) && (
-                          <button type="button" onClick={() => handleMarkComplete()} className="cal-btn-complete">
-                            <FaCheckCircle /> Completar
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
+                      Cancelar
+                    </button>
+                    <div className="flex gap-2 ml-auto">
+                      {selectedEvent && selectedEvent.collection !== 'contracts' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {eventForm.clientPhone && (
+                            <a href={`https://wa.me/${cleanPhone(eventForm.clientPhone)}?text=Hola, te contacto sobre: ${eventForm.title}`}
+                              target="_blank" rel="noopener noreferrer" className="cal-btn-wa">
+                              <FaWhatsapp /> WhatsApp
+                            </a>
+                          )}
+                          {!['completada','completed'].includes(selectedEvent.resource?.status) && (
+                            <button type="button" onClick={() => handleMarkComplete({ resource: selectedEvent.resource })} className="cal-btn-complete">
+                              <FaCheckCircle /> Completar
+                            </button>
+                          )}
+                          <button type="button" onClick={() => handleDeleteEvent({ resource: selectedEvent.resource })} className="cal-btn-delete">
+                            <FaTrash /> Eliminar
                           </button>
-                        )}
-                        <button type="button" onClick={() => handleDeleteEvent()} className="cal-btn-delete">
-                          <FaTrash /> Eliminar
-                        </button>
-                      </div>
-                    )}
+                        </div>
+                      )}
+                      <button type="submit" disabled={submitting}
+                        className="button-gold inline-flex items-center gap-2 text-sm disabled:opacity-50">
+                        {submitting ? <><FaSpinner className="animate-spin" /> Guardando...</> : <><FaSave /> Guardar</>}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -1289,263 +1292,256 @@ const CalendarPage = () => {
           color: var(--color-text-faint); padding: 2rem; text-align: center; font-size: 13px;
         }
 
-        /* ── Eventos ─────────────────────────────────────────────────── */
-        .cal-wrapper .rbc-event { border: none !important; border-radius: 6px !important; padding: 0 !important; overflow: visible !important; }
-        .cal-wrapper .rbc-event:focus { outline: 2px solid #f59e0b; outline-offset: 1px; }
-        .cal-wrapper .rbc-selected { box-shadow: 0 0 0 2px #f59e0b !important; }
-
-        /* ── Chip de evento custom ────────────────────────────────────── */
+        /* ── Event chip ───────────────────────────────────────────────── */
         .cal-event-chip {
-          display: flex; align-items: center; gap: 4px;
-          padding: 2px 6px; width: 100%; height: 100%;
-          overflow: hidden; border-radius: 6px;
+          display: flex; align-items: center; gap: 3px;
+          padding: 1px 5px; border-radius: 4px;
+          font-size: 11px; font-weight: 600;
+          overflow: hidden; white-space: nowrap;
+          width: 100%; min-width: 0;
         }
-        .cal-event-chip-icon { font-size: 10px; flex-shrink: 0; line-height: 1; }
-        .cal-event-chip-title {
-          font-size: 11px; font-weight: 600; color: #fff;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          flex: 1; line-height: 1.3;
-        }
+        .cal-event-chip-icon { font-size: 10px; flex-shrink: 0; }
+        .cal-event-chip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .cal-event-chip-dot {
-          width: 6px; height: 6px; border-radius: 50%;
-          flex-shrink: 0; border: 1px solid rgba(255,255,255,0.5);
+          width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+          box-shadow: 0 0 0 1px rgba(255,255,255,0.3);
         }
 
-        /* ── Popover RBC ──────────────────────────────────────────────── */
-        .cal-wrapper .rbc-overlay {
-          background: var(--color-modal-bg) !important;
-          border: 1px solid var(--color-border) !important;
-          border-radius: 0.75rem !important;
-          box-shadow: var(--shadow-lg) !important;
-          padding: 0.75rem !important;
-        }
-        .cal-wrapper .rbc-overlay-header {
-          color: var(--color-text) !important; font-weight: 700;
-          border-bottom: 1px solid var(--color-border);
-          padding-bottom: 0.5rem; margin-bottom: 0.5rem;
-        }
-
-        /* ── Drag & drop ──────────────────────────────────────────────── */
-        .rbc-addons-dnd .rbc-addons-dnd-drag-preview { opacity: 0.75; }
-        .rbc-addons-dnd-resizable { cursor: ns-resize; }
-
-        /* ── Scrollbar ─────────────────────────────────────────────────── */
-        .cal-wrapper ::-webkit-scrollbar { width: 5px; height: 5px; }
-        .cal-wrapper ::-webkit-scrollbar-track { background: var(--color-surface); }
-        .cal-wrapper ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
-
-        /* ── Tooltip flotante ─────────────────────────────────────────── */
+        /* ── Tooltip ──────────────────────────────────────────────────── */
         .cal-tooltip {
-          z-index: 9999;
-          width: 300px;
-          background: var(--color-modal-bg);
+          z-index: 9999; width: 300px;
+          background: var(--color-surface-2);
           border: 1px solid var(--color-border);
-          border-radius: 0.875rem;
+          border-radius: 0.75rem;
           box-shadow: var(--shadow-lg);
           overflow: hidden;
           pointer-events: auto;
         }
         .cal-tooltip-header {
-          display: flex; align-items: flex-start; gap: 10px;
-          padding: 12px 14px 10px;
-          background: var(--color-surface-2);
+          display: flex; align-items: flex-start; gap: 8px;
+          padding: 10px 12px 8px;
+          background: var(--color-surface);
           border-bottom: 1px solid var(--color-border);
-          padding-left: 14px;
         }
-        .cal-tooltip-icon { font-size: 18px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+        .cal-tooltip-icon { font-size: 16px; line-height: 1; margin-top: 1px; }
         .cal-tooltip-title-block { flex: 1; min-width: 0; }
         .cal-tooltip-title {
-          font-size: 13px; font-weight: 700;
-          color: var(--color-text);
+          font-size: 13px; font-weight: 700; color: var(--color-text);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          margin-bottom: 4px;
+          margin-bottom: 2px;
         }
         .cal-tooltip-badge {
-          display: inline-block;
-          font-size: 10px; font-weight: 600;
-          padding: 2px 7px; border-radius: 9999px;
-          letter-spacing: 0.03em;
+          display: inline-block; font-size: 10px; font-weight: 700;
+          padding: 1px 6px; border-radius: 9999px;
         }
-        .cal-tooltip-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+        .cal-tooltip-body { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
         .cal-tooltip-row {
-          display: flex; align-items: flex-start; gap: 7px;
+          display: flex; align-items: center; gap: 6px;
           font-size: 12px; color: var(--color-text-muted);
         }
-        .cal-tooltip-row-icon { color: var(--color-text-faint); flex-shrink: 0; margin-top: 2px; font-size: 10px; }
-        .cal-tooltip-notes { opacity: 0.75; font-style: italic; }
+        .cal-tooltip-row-icon { width: 12px; flex-shrink: 0; color: var(--color-text-faint); }
+        .cal-tooltip-notes { align-items: flex-start; }
+        .cal-tooltip-notes span { font-style: italic; }
         .cal-tooltip-actions {
-          display: flex; gap: 6px; flex-wrap: wrap;
-          padding: 8px 14px 12px;
+          display: flex; gap: 6px; padding: 8px 12px;
           border-top: 1px solid var(--color-border);
+          background: var(--color-surface);
         }
         .cal-tip-btn {
           display: inline-flex; align-items: center; gap: 4px;
-          padding: 4px 10px; border-radius: 6px;
-          font-size: 11px; font-weight: 600; cursor: pointer;
-          transition: opacity 0.15s ease, transform 0.1s ease;
+          padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+          cursor: pointer; border: none; transition: opacity 0.15s ease;
           text-decoration: none;
-          border: none;
         }
-        .cal-tip-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+        .cal-tip-btn:hover { opacity: 0.82; }
         .cal-tip-btn--primary { background: rgba(245,158,11,0.15); color: #f59e0b; }
         .cal-tip-btn--success { background: rgba(16,185,129,0.15); color: #10b981; }
-        .cal-tip-btn--wa      { background: rgba(37,211,102,0.15); color: #25d366; }
+        .cal-tip-btn--wa     { background: rgba(37,211,102,0.15); color: #25D366; }
 
-        /* ── Menú contextual ──────────────────────────────────────────── */
+        /* ── Context menu ─────────────────────────────────────────────── */
         .cal-context-menu {
-          z-index: 9999; min-width: 190px;
-          background: var(--color-modal-bg);
+          z-index: 9999; min-width: 180px;
+          background: var(--color-surface-2);
           border: 1px solid var(--color-border);
-          border-radius: 0.75rem;
+          border-radius: 0.625rem;
           box-shadow: var(--shadow-lg);
-          overflow: hidden;
           padding: 4px;
+          overflow: hidden;
         }
         .cal-ctx-item {
           display: flex; align-items: center; gap: 8px;
-          width: 100%; padding: 8px 12px;
-          font-size: 12px; font-weight: 500;
-          color: var(--color-text-muted);
-          background: none; border: none; cursor: pointer;
-          border-radius: 0.5rem;
-          text-decoration: none;
+          width: 100%; padding: 7px 10px;
+          font-size: 12px; font-weight: 500; color: var(--color-text);
+          border-radius: 0.375rem; cursor: pointer; border: none;
+          background: transparent; text-decoration: none;
           transition: background 0.12s ease, color 0.12s ease;
-          text-align: left;
         }
-        .cal-ctx-item:hover { background: var(--color-row-hover); color: var(--color-text); }
+        .cal-ctx-item:hover { background: var(--color-row-hover); }
         .cal-ctx-item--success { color: #10b981; }
-        .cal-ctx-item--success:hover { background: rgba(16,185,129,0.10); }
-        .cal-ctx-item--wa { color: #25d366; }
-        .cal-ctx-item--wa:hover { background: rgba(37,211,102,0.10); }
+        .cal-ctx-item--success:hover { background: rgba(16,185,129,0.1); }
+        .cal-ctx-item--wa { color: #25D366; }
+        .cal-ctx-item--wa:hover { background: rgba(37,211,102,0.1); }
         .cal-ctx-item--danger { color: #ef4444; }
-        .cal-ctx-item--danger:hover { background: rgba(239,68,68,0.10); }
+        .cal-ctx-item--danger:hover { background: rgba(239,68,68,0.1); }
         .cal-ctx-divider { height: 1px; background: var(--color-border); margin: 3px 0; }
 
-        /* ── Clases utilitarias del componente ─────────────────────────── */
-        .cal-page .cal-title {
-          font-size: 1.5rem; font-weight: 800; color: #f59e0b;
-          display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;
+        /* ── Page layout ──────────────────────────────────────────────── */
+        .cal-page { display: flex; flex-direction: column; gap: 1.25rem; padding: 1.5rem; }
+        .cal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+        .cal-title {
+          display: flex; align-items: center; gap: 0.5rem;
+          font-size: 1.375rem; font-weight: 800; color: var(--color-text); margin: 0;
         }
-        .cal-title-icon { font-size: 1.25rem; }
-        .cal-subtitle { color: var(--color-text-muted); font-size: 0.875rem; }
+        .cal-title-icon { color: #f59e0b; }
+        .cal-subtitle { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
+        .cal-btn-primary {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0.5rem 1rem; border-radius: 0.5rem;
+          background: #f59e0b; color: #111827;
+          font-size: 13px; font-weight: 700; border: none; cursor: pointer;
+          transition: background 0.15s ease, transform 0.1s ease;
+          white-space: nowrap;
+        }
+        .cal-btn-primary:hover { background: #d97706; }
+        .cal-btn-primary:active { transform: scale(0.97); }
 
-        .cal-stat-card {
+        /* ── KPIs ─────────────────────────────────────────────────────── */
+        .cal-kpi-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .cal-kpi {
+          display: flex; align-items: center; gap: 0.75rem;
+          flex: 1 1 160px; min-width: 0;
+          padding: 0.875rem 1rem;
           background: var(--color-surface);
           border: 1px solid var(--color-border);
+          border-radius: 0.75rem;
           box-shadow: var(--shadow-sm);
-          border-radius: 0.875rem; padding: 1rem;
-          display: flex; align-items: center; gap: 0.75rem;
-          transition: background 0.25s ease;
         }
-        .cal-stat-icon { font-size: 1.5rem; flex-shrink: 0; }
-        .cal-stat-icon--primary { color: #f59e0b; }
-        .cal-stat-icon--warn    { color: #facc15; }
-        .cal-stat-icon--blue    { color: #60a5fa; }
-        .cal-stat-icon--green   { color: #4ade80; }
-        .cal-stat-label { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
-        .cal-stat-value { font-size: 1.5rem; font-weight: 800; color: var(--color-text); line-height: 1.1; }
+        .cal-kpi-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+        .cal-kpi-num {
+          font-size: 1.5rem; font-weight: 800; color: var(--color-text); line-height: 1;
+        }
+        .cal-kpi-num--amber { color: #f59e0b; }
+        .cal-kpi-num--blue  { color: #3b82f6; }
+        .cal-kpi-label { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; font-weight: 500; }
 
+        /* ── Filters card ─────────────────────────────────────────────── */
         .cal-filters-card {
           background: var(--color-surface);
           border: 1px solid var(--color-border);
+          border-radius: 0.75rem;
+          padding: 1rem;
           box-shadow: var(--shadow-sm);
-          border-radius: 0.875rem; padding: 1rem 1.25rem;
         }
-        .cal-section-title { font-size: 11px; font-weight: 700; color: var(--color-text-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.625rem; }
-        .cal-label { display: block; font-size: 11px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .cal-select {
-          width: 100%; padding: 0.45rem 0.75rem;
-          background: var(--color-input-bg);
-          border: 1px solid var(--color-input-border);
-          color: var(--color-input-text);
+        .cal-section-title {
+          font-size: 11px; font-weight: 700; color: var(--color-text-muted);
+          text-transform: uppercase; letter-spacing: 0.06em;
+          margin-bottom: 0.625rem;
+        }
+        .cal-label {
+          display: flex; align-items: center; gap: 4px;
+          font-size: 12px; font-weight: 600; color: var(--color-text-muted);
+          margin-bottom: 4px;
+        }
+        .cal-label-action {
+          display: inline-flex; align-items: center; gap: 3px;
+          margin-left: auto; font-size: 11px; font-weight: 600;
+          color: #f59e0b; background: rgba(245,158,11,0.12);
+          border: none; border-radius: 4px; padding: 1px 6px;
+          cursor: pointer; transition: background 0.15s ease;
+        }
+        .cal-label-action:hover { background: rgba(245,158,11,0.22); }
+        .cal-select, .cal-input {
+          width: 100%; padding: 0.5rem 0.625rem;
+          background: var(--color-surface-2);
+          border: 1px solid var(--color-border);
+          color: var(--color-text);
           border-radius: 0.5rem; font-size: 13px;
-          cursor: pointer;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
-        .cal-select:focus { outline: none; border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+        .cal-select:focus, .cal-input:focus {
+          outline: none;
+          border-color: #f59e0b;
+          box-shadow: 0 0 0 2px rgba(245,158,11,0.2);
+        }
+        .cal-textarea { resize: vertical; min-height: 72px; }
 
-        .cal-agent-legend { display: flex; align-items: center; gap: 6px; }
+        /* ── Agent legend ─────────────────────────────────────────────── */
+        .cal-agent-legend { display: flex; align-items: center; gap: 6px; font-size: 12px; }
         .cal-agent-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .cal-agent-name { font-size: 12px; color: var(--color-text-muted); font-weight: 500; }
-        .cal-agent-role { font-size: 11px; color: var(--color-text-faint); }
+        .cal-agent-name { font-weight: 600; color: var(--color-text); }
+        .cal-agent-role { color: var(--color-text-faint); font-size: 11px; }
 
+        /* ── Modal ────────────────────────────────────────────────────── */
         .cal-modal {
-          background: var(--color-modal-bg);
-          border: 1px solid var(--color-modal-border);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
           border-radius: 1rem;
-          width: 100%; max-width: 640px; max-height: 90vh;
-          overflow-y: auto;
+          width: 100%; max-width: 680px;
+          max-height: 90vh; overflow-y: auto;
           box-shadow: var(--shadow-lg);
         }
-        .cal-modal-title { font-size: 1rem; font-weight: 700; color: var(--color-text); }
-        .cal-badge-web { font-size: 10px; font-weight: 600; padding: 2px 8px; background: rgba(29,78,216,0.15); color: #60a5fa; border-radius: 9999px; }
+        .cal-modal-title {
+          font-size: 1rem; font-weight: 800; color: var(--color-text);
+        }
+        .cal-badge-web {
+          font-size: 10px; font-weight: 700;
+          background: rgba(29,78,216,0.15); color: #3b82f6;
+          padding: 2px 8px; border-radius: 9999px;
+        }
         .cal-close-btn {
           display: flex; align-items: center; justify-content: center;
-          width: 1.75rem; height: 1.75rem;
-          background: var(--color-surface-off); color: var(--color-text-muted);
-          border: none; border-radius: 0.5rem; cursor: pointer;
-          transition: background 0.15s ease, color 0.15s ease;
-        }
-        .cal-close-btn:hover { background: rgba(239,68,68,0.12); color: #ef4444; }
-        .cal-input {
-          width: 100%; padding: 0.5rem 0.75rem;
-          background: var(--color-input-bg);
-          border: 1px solid var(--color-input-border);
-          color: var(--color-input-text);
-          border-radius: 0.5rem; font-size: 13px;
-        }
-        .cal-input:focus { outline: none; border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
-        .cal-input::placeholder { color: var(--color-text-faint); }
-
-        .cal-summary {
-          background: var(--color-inner-card);
-          border: 1px solid var(--color-inner-border);
-          border-radius: 0.625rem; padding: 0.75rem 1rem;
-          font-size: 12px; color: var(--color-text-muted);
-          display: flex; flex-direction: column; gap: 4px;
-        }
-        .cal-summary strong { color: var(--color-text); }
-
-        .cal-btn-cancel {
-          flex: 1; padding: 0.5rem; border-radius: 0.5rem; font-size: 13px; font-weight: 600;
-          background: var(--color-surface-off);
+          width: 28px; height: 28px; border-radius: 50%;
+          background: var(--color-surface-2);
           border: 1px solid var(--color-border);
           color: var(--color-text-muted); cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease;
+        }
+        .cal-close-btn:hover { background: var(--color-row-hover); color: var(--color-text); }
+
+        /* ── Modal action buttons ─────────────────────────────────────── */
+        .cal-btn-cancel {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0.5rem 1rem; border-radius: 0.5rem;
+          background: var(--color-surface-2);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-muted);
+          font-size: 13px; font-weight: 600; cursor: pointer;
           transition: background 0.15s ease;
         }
         .cal-btn-cancel:hover { background: var(--color-row-hover); }
-
-        .cal-btn-wa {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          padding: 0.5rem; border-radius: 0.5rem; font-size: 12px; font-weight: 600;
-          background: rgba(37,211,102,0.12); color: #25d366;
-          text-decoration: none; transition: background 0.15s ease;
-        }
-        .cal-btn-wa:hover { background: rgba(37,211,102,0.22); }
-
         .cal-btn-complete {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          padding: 0.5rem; border-radius: 0.5rem; font-size: 12px; font-weight: 600;
-          background: rgba(16,185,129,0.12); color: #10b981;
-          border: none; cursor: pointer; transition: background 0.15s ease;
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0.5rem 0.875rem; border-radius: 0.5rem;
+          background: rgba(16,185,129,0.12);
+          border: 1px solid rgba(16,185,129,0.3);
+          color: #10b981;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          transition: background 0.15s ease;
         }
-        .cal-btn-complete:hover { background: rgba(16,185,129,0.22); }
-
+        .cal-btn-complete:hover { background: rgba(16,185,129,0.2); }
         .cal-btn-delete {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          padding: 0.5rem; border-radius: 0.5rem; font-size: 12px; font-weight: 600;
-          background: rgba(239,68,68,0.10); color: #ef4444;
-          border: none; cursor: pointer; transition: background 0.15s ease;
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0.5rem 0.875rem; border-radius: 0.5rem;
+          background: rgba(239,68,68,0.10);
+          border: 1px solid rgba(239,68,68,0.25);
+          color: #ef4444;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          transition: background 0.15s ease;
         }
-        .cal-btn-delete:hover { background: rgba(239,68,68,0.20); }
-
-        /* ── Responsive ──────────────────────────────────────────────── */
-        @media (max-width: 640px) {
-          .cal-tooltip { width: calc(100vw - 32px); }
-          .rbc-custom-toolbar { flex-direction: column; align-items: flex-start; }
-          .rbc-toolbar-views { width: 100%; }
-          .rbc-view-btn { flex: 1; text-align: center; }
+        .cal-btn-delete:hover { background: rgba(239,68,68,0.18); }
+        .cal-btn-wa {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0.5rem 0.875rem; border-radius: 0.5rem;
+          background: rgba(37,211,102,0.12);
+          border: 1px solid rgba(37,211,102,0.3);
+          color: #25D366;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          text-decoration: none;
+          transition: background 0.15s ease;
         }
+        .cal-btn-wa:hover { background: rgba(37,211,102,0.2); }
       `}</style>
+
     </div>
   );
 };
