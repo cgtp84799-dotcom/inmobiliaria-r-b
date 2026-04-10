@@ -69,6 +69,20 @@ const STATUS_META = {
   cancelled:   { label: 'Cancelado',   color: '#ef4444', dot: '🔴' },
 };
 
+const STATUS_ALIASES = {
+  pending: 'pending',
+  pendiente: 'pending',
+  approved: 'approved',
+  confirmada: 'approved',
+  completed: 'completed',
+  completada: 'completed',
+  rejected: 'rejected',
+  cancelada: 'rejected',
+  cancelled: 'rejected',
+  rescheduled: 'rescheduled',
+  reagendada: 'rescheduled',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function buildDateFromFields(dateStr, timeStr) {
   if (!dateStr) return new Date();
@@ -76,6 +90,17 @@ function buildDateFromFields(dateStr, timeStr) {
     const t = (timeStr || '09:00').slice(0, 5);
     return new Date(`${dateStr}T${t}:00`);
   } catch { return new Date(); }
+}
+
+function normalizeStatus(status) {
+  const key = String(status || '').toLowerCase();
+  return STATUS_ALIASES[key] || key || 'pending';
+}
+
+function toCollectionStatus(status, collectionName = 'appointments') {
+  const normalized = normalizeStatus(status);
+  if (collectionName === 'visits') return normalized || 'pending';
+  return normalized === 'completed' ? 'completada' : normalized;
 }
 
 function normalizeDoc(raw, source) {
@@ -86,7 +111,7 @@ function normalizeDoc(raw, source) {
     _propertyName: raw.propertyName || raw.propertyTitle || '',
     _date: raw.date || raw.requestedDate || '',
     _time: raw.time || raw.visitTime || raw.requestedTime || '09:00',
-    _agentId:   raw.assignedAgentId || raw.agentId || '',
+    _agentId:   raw.assignedAgentId || raw.agentId || raw.agentEmail || '',
     _agentName: raw.agentName || '',
   };
 }
@@ -358,15 +383,20 @@ const CalendarPage = () => {
   }, []);
 
   // ─── Helpers de lookup ──────────────────────────────────────────────────────
+  const findAgentByKey = useCallback((agentKey) => (
+    agents.find((a) => a.id === agentKey || a.email === agentKey)
+  ), [agents]);
+
   const getAgentColor = useCallback((agentId) => {
     if (!agentId) return '#6b7280';
-    const idx = agents.findIndex((a) => a.id === agentId);
+    const agent = findAgentByKey(agentId);
+    const idx = agent ? agents.findIndex((a) => a.id === agent.id) : -1;
     return idx === -1 ? '#6b7280' : AGENT_COLORS[idx % AGENT_COLORS.length];
-  }, [agents]);
+  }, [agents, findAgentByKey]);
 
   const getClientName    = useCallback((id) => clients.find((c) => c.id === id)?.nombre || '', [clients]);
   const getPropertyTitle = useCallback((id) => properties.find((p) => p.id === id)?.title || '', [properties]);
-  const getAgentName     = useCallback((id) => agents.find((a) => a.id === id)?.name || 'Sin asignar', [agents]);
+  const getAgentName     = useCallback((id) => findAgentByKey(id)?.name || 'Sin asignar', [findAgentByKey]);
 
   const buildTitle = useCallback((norm) => {
     if (norm.title?.trim() && norm.title.trim() !== 'undefined') return norm.title.trim();
@@ -450,16 +480,17 @@ const CalendarPage = () => {
     const r = ev.resource;
     if (filterAgentId) {
       const aid = r._agentId || r.assignedAgentId || r.agentId || '';
-      if (aid !== filterAgentId) return false;
+      const resolvedAgentId = findAgentByKey(aid)?.id || aid;
+      if (resolvedAgentId !== filterAgentId) return false;
     }
     if (filterType   && r._type   !== filterType)   return false;
-    if (filterStatus && r.status  !== filterStatus) return false;
+    if (filterStatus && normalizeStatus(r.status) !== normalizeStatus(filterStatus)) return false;
     return true;
-  }), [allEvents, filterAgentId, filterType, filterStatus]);
+  }), [allEvents, filterAgentId, filterType, filterStatus, findAgentByKey]);
 
   // ─── Stats ───────────────────────────────────────────────────────────────────
   const totalEvents  = allEvents.length;
-  const pendingCount = allEvents.filter((e) => ['pendiente','pending','approved'].includes(e.resource?.status)).length;
+  const pendingCount = allEvents.filter((e) => ['pending', 'approved'].includes(normalizeStatus(e.resource?.status))).length;
   const webCount     = allEvents.filter((e) => e.resource?.sourceCollection === 'visits' || e.resource?._source === 'web').length;
 
   // ─── Drilldown: click en número de día → vista día ───────────────────────────
@@ -471,8 +502,11 @@ const CalendarPage = () => {
   // ─── Handlers tooltip ────────────────────────────────────────────────────────
   const handleMouseEnterEvent = useCallback((event, e) => {
     clearTimeout(tooltipTimer.current);
+    const rect = e?.currentTarget?.getBoundingClientRect?.();
+    const x = e?.clientX ?? (rect ? rect.left + rect.width / 2 : 0);
+    const y = e?.clientY ?? (rect ? rect.top : 0);
     tooltipTimer.current = setTimeout(() => {
-      setTooltip({ event, position: { x: e.clientX, y: e.clientY } });
+      setTooltip({ event, position: { x, y } });
     }, 350);
   }, []);
 
@@ -551,23 +585,32 @@ const CalendarPage = () => {
   }, []);
 
   const handleMarkComplete = useCallback(async (ev) => {
-    const target = ev || ctxMenu.event || tooltip.event;
+    const target = ev || ctxMenu.event || tooltip.event || (selectedEvent ? { resource: selectedEvent.resource } : null);
     if (!target) return;
     const r = target.resource;
+    if (r._collection === 'contracts') {
+      toast.error('Los contratos se gestionan desde el módulo de contratos');
+      return;
+    }
+    const status = toCollectionStatus('completed', r._collection);
     try {
       await updateDoc(doc(db, r._collection || 'appointments', r.id), {
-        status: 'completada', updatedAt: new Date().toISOString(),
+        status, updatedAt: new Date().toISOString(),
       });
       toast.success('Marcado como completado');
       setTooltip({ event: null, position: null });
       setCtxMenu({ event: null, position: null });
     } catch { toast.error('Error al actualizar'); }
-  }, [ctxMenu.event, tooltip.event]);
+  }, [ctxMenu.event, selectedEvent, tooltip.event]);
 
   const handleDeleteEvent = useCallback(async (ev) => {
-    const target = ev || ctxMenu.event;
+    const target = ev || ctxMenu.event || (selectedEvent ? { resource: selectedEvent.resource } : null);
     if (!target) return;
     const r = target.resource;
+    if (r._collection === 'contracts') {
+      toast.error('No puedes eliminar contratos desde el calendario');
+      return;
+    }
     if (!confirm('¿Eliminar este evento?')) return;
     try {
       await deleteDoc(doc(db, r._collection || 'appointments', r.id));
@@ -575,7 +618,7 @@ const CalendarPage = () => {
       setCtxMenu({ event: null, position: null });
       handleCloseModals();
     } catch { toast.error('Error al eliminar'); }
-  }, [ctxMenu.event]);
+  }, [ctxMenu.event, selectedEvent]);
 
   const handleSaveEvent = async (e) => {
     e.preventDefault();
@@ -592,7 +635,7 @@ const CalendarPage = () => {
         date, time, duration: 60,
         location:        eventForm.location,
         notes:           eventForm.notes,
-        status:          eventForm.status,
+        status:          toCollectionStatus(eventForm.status, selectedEvent?.collection || 'appointments'),
         type:            eventForm.type,
         clientPhone:     eventForm.clientPhone,
         assignedAgentId: eventForm.assignedAgentId || '',
@@ -601,7 +644,22 @@ const CalendarPage = () => {
       };
       if (selectedEvent) {
         const colName = selectedEvent.collection || 'appointments';
-        await updateDoc(doc(db, colName, selectedEvent.id), payload);
+        if (colName === 'contracts') {
+          toast.error('Edita contratos desde el módulo de contratos');
+          return;
+        }
+        const assignedAgent = findAgentByKey(eventForm.assignedAgentId);
+        const specificPayload = colName === 'visits'
+          ? {
+              ...payload,
+              requestedDate: date,
+              requestedTime: time,
+              agentId: assignedAgent?.id || eventForm.assignedAgentId || null,
+              agentName: assignedAgent?.name || null,
+              agentEmail: assignedAgent?.email || null,
+            }
+          : payload;
+        await updateDoc(doc(db, colName, selectedEvent.id), specificPayload);
         toast.success('Evento actualizado');
       } else {
         await addDoc(collection(db, 'appointments'), { ...payload, createdAt: new Date().toISOString() });
@@ -689,7 +747,15 @@ const CalendarPage = () => {
         onContextMenu={handleContextMenu}
       />
     ),
-  }), [agents, getAgentColor, getAgentName, handleContextMenu]);
+    eventWrapper: ({ event, children }) => (
+      <div
+        onMouseEnter={(e) => handleMouseEnterEvent(event, e)}
+        onMouseLeave={handleMouseLeaveEvent}
+      >
+        {children}
+      </div>
+    ),
+  }), [agents, getAgentColor, getAgentName, handleContextMenu, handleMouseEnterEvent, handleMouseLeaveEvent]);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -823,7 +889,6 @@ const CalendarPage = () => {
           popup
           components={components}
           eventPropGetter={eventStyleGetter}
-          onMouseOver={(event, e) => handleMouseEnterEvent(event, e)}
           messages={{
             noEventsInRange: 'No hay eventos en este período',
             showMore: (n) => `+${n} más`,
