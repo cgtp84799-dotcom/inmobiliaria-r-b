@@ -339,10 +339,12 @@ const CalendarPage = () => {
       () => checkLoaded(),
     );
 
+    // FIX 1: el listener de visits ahora tiene error handler con log explícito
+    // (antes era () => {} silencioso — errores de permisos o índice pasaban desapercibidos)
     const unsubVisits = onSnapshot(
       query(collection(db, 'visits'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
       (s) => setOrphanVisits(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      () => {},
+      (err) => { console.warn('[Calendar] visits listener error (no bloquea carga):', err.message); },
     );
 
     const unsubContracts = onSnapshot(
@@ -611,6 +613,8 @@ const CalendarPage = () => {
     } catch { toast.error('Error al actualizar'); }
   }, [ctxMenu.event, selectedEvent, tooltip.event]);
 
+  // FIX 2: handleDeleteEvent cierra el modal ANTES del deleteDoc para evitar
+  // re-render con referencia a documento ya eliminado en Firestore
   const handleDeleteEvent = useCallback(async (ev) => {
     const target = ev || ctxMenu.event || (selectedEvent ? { resource: selectedEvent.resource } : null);
     if (!target) return;
@@ -620,14 +624,17 @@ const CalendarPage = () => {
       return;
     }
     if (!confirm('¿Eliminar este evento?')) return;
+    // Cerrar UI primero para evitar re-render con ref muerta
+    setCtxMenu({ event: null, position: null });
+    handleCloseModals();
     try {
       await deleteDoc(doc(db, r._collection || 'appointments', r.id));
       toast.success('Evento eliminado');
-      setCtxMenu({ event: null, position: null });
-      handleCloseModals();
     } catch { toast.error('Error al eliminar'); }
   }, [ctxMenu.event, selectedEvent]);
 
+  // FIX 3: handleSaveEvent — cuando una visita web se actualiza con agente asignado,
+  // se crea automáticamente un appointment vinculado y se actualiza el status de la visita
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     if (!eventForm.title.trim()) { toast.error('El título es obligatorio'); return; }
@@ -657,18 +664,50 @@ const CalendarPage = () => {
           return;
         }
         const assignedAgent = findAgentByKey(eventForm.assignedAgentId);
-        const specificPayload = colName === 'visits'
-          ? {
-              ...payload,
-              requestedDate: date,
-              requestedTime: time,
-              agentId: assignedAgent?.id || eventForm.assignedAgentId || null,
-              agentName: assignedAgent?.name || null,
-              agentEmail: assignedAgent?.email || null,
-            }
-          : payload;
-        await updateDoc(doc(db, colName, selectedEvent.id), specificPayload);
-        toast.success('Evento actualizado');
+
+        if (colName === 'visits') {
+          const visitPayload = {
+            ...payload,
+            requestedDate: date,
+            requestedTime: time,
+            agentId:    assignedAgent?.id    || eventForm.assignedAgentId || null,
+            agentName:  assignedAgent?.name  || null,
+            agentEmail: assignedAgent?.email || null,
+          };
+          await updateDoc(doc(db, 'visits', selectedEvent.id), visitPayload);
+
+          // FIX 3: Si se asigna agente a una visita web, crear appointment vinculado
+          // para que quede reflejado en el módulo de citas y no desaparezca del calendario
+          // cuando el status de la visita cambie de 'pending'
+          if (eventForm.assignedAgentId && !selectedEvent.resource?.assignedAgentId) {
+            const apptPayload = {
+              title:           eventForm.title,
+              clientId:        eventForm.clientId    || selectedEvent.resource?.clientId    || '',
+              propertyId:      eventForm.propertyId  || selectedEvent.resource?.propertyId  || '',
+              clientPhone:     eventForm.clientPhone || selectedEvent.resource?.clientPhone || '',
+              date, time, duration: 60,
+              location:        eventForm.location,
+              notes:           eventForm.notes,
+              status:          'approved',
+              type:            'visita',
+              assignedAgentId: assignedAgent?.id    || eventForm.assignedAgentId,
+              agentName:       assignedAgent?.name  || '',
+              agentEmail:      assignedAgent?.email || '',
+              sourceCollection: 'visits',
+              sourceVisitId:   selectedEvent.id,
+              createdBy:       currentUser?.email || 'unknown',
+              createdAt:       new Date().toISOString(),
+              updatedAt:       new Date().toISOString(),
+            };
+            await addDoc(collection(db, 'appointments'), apptPayload);
+            toast.success('Visita asignada y cita creada en el sistema ✓');
+          } else {
+            toast.success('Visita actualizada');
+          }
+        } else {
+          await updateDoc(doc(db, colName, selectedEvent.id), payload);
+          toast.success('Evento actualizado');
+        }
       } else {
         await addDoc(collection(db, 'appointments'), { ...payload, createdAt: new Date().toISOString() });
         toast.success('Evento creado');
@@ -1087,13 +1126,16 @@ const CalendarPage = () => {
 
                   </div>
 
+                  {/* FIX 4: Layout de botones de acción del modal — flex en lugar de
+                      grid condicional para evitar espacios vacíos cuando algún botón
+                      no se renderiza (ej: sin teléfono, sin botón WhatsApp) */}
                   <div className="flex items-center justify-between gap-3 pt-2">
                     <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
                       Cancelar
                     </button>
-                    <div className="flex gap-2 ml-auto">
+                    <div className="flex flex-wrap gap-2 ml-auto items-center">
                       {selectedEvent && selectedEvent.collection !== 'contracts' && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <>
                           {eventForm.clientPhone && (
                             <a href={`https://wa.me/${cleanPhone(eventForm.clientPhone)}?text=Hola, te contacto sobre: ${eventForm.title}`}
                               target="_blank" rel="noopener noreferrer" className="cal-btn-wa">
@@ -1108,7 +1150,7 @@ const CalendarPage = () => {
                           <button type="button" onClick={() => handleDeleteEvent({ resource: selectedEvent.resource })} className="cal-btn-delete">
                             <FaTrash /> Eliminar
                           </button>
-                        </div>
+                        </>
                       )}
                       <button type="submit" disabled={submitting}
                         className="button-gold inline-flex items-center gap-2 text-sm disabled:opacity-50">
