@@ -1,129 +1,214 @@
+// src/shared/components/UI/SettingsFab.jsx
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate }    from 'react-router-dom';
 import { FaCog, FaHome, FaUser, FaSignOutAlt } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../../core/contexts/AuthContext';
-import { PRIVATE_ROUTES } from '../../../core/config/routes.config'; // ✅ fix #1
+import { useAuth }        from '../../../core/contexts/AuthContext';
+import { PRIVATE_ROUTES } from '../../../core/config/routes.config';
 
-const SettingsFab = () => {
-  const [open, setOpen] = useState(false);
+/* ─── Estilos del panel — variables semánticas ──────────────── */
+const PANEL = {
+  bg:         'var(--color-surface)',
+  border:     'var(--color-border)',
+  text:       'var(--color-text)',
+  muted:      'var(--color-text-muted)',
+  faint:      'var(--color-text-faint)',
+  itemBg:     'var(--color-surface-offset)',
+  itemHover:  'var(--color-surface-dynamic)',
+  itemBorder: 'var(--color-divider)',
+};
+
+export default function SettingsFab() {
+  const [open, setOpen]         = useState(false);
   const { currentUser, userData, signOut } = useAuth();
-  const navigate = useNavigate();
-  const wrapperRef = useRef(null);
+  const navigate                = useNavigate();
+  const wrapperRef              = useRef(null);
 
-  // ✅ fix #5: sin useMemo para strings baratos
   const displayName =
-    userData?.displayName || currentUser?.displayName || currentUser?.email || 'Usuario';
+    userData?.displayName ||
+    currentUser?.displayName ||
+    currentUser?.email ||
+    'Usuario';
 
+  /* ── Acciones ───────────────────────────────────────────────── */
   const handleGoPublic = () => { navigate('/propiedades'); setOpen(false); };
   const handleProfile  = () => { navigate(PRIVATE_ROUTES.PROFILE); setOpen(false); };
-
-  // ✅ fix #6: cerrar antes del await para evitar setState en componente desmontado
-  const handleLogout = async () => {
-    setOpen(false);
+  const handleLogout   = async () => {
+    setOpen(false);           // cierra antes del await
     await signOut();
     navigate('/');
   };
 
-  // ✅ fix #3: useEffect ANTES del return condicional
+  /* ── Click fuera + Escape ───────────────────────────────────── */
   useEffect(() => {
     if (!open) return;
-    const onPointerDown = (e) => {
-      if (!wrapperRef.current?.contains(e.target)) setOpen(false);
-    };
-    const onKeyDown = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    const onPtr = (e) => { if (!wrapperRef.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPtr);
+    document.addEventListener('keydown',     onKey);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPtr);
+      document.removeEventListener('keydown',     onKey);
     };
   }, [open]);
 
-  // Todos los hooks están arriba — ahora sí es seguro el early return
+  /* ── Early return — todos los hooks ya están arriba ────────── */
   if (!currentUser) return null;
+
+  /* ── Helpers de hover inline ────────────────────────────────── */
+  const itemEnter = (e) => (e.currentTarget.style.backgroundColor = PANEL.itemHover);
+  const itemLeave = (e) => (e.currentTarget.style.backgroundColor = PANEL.itemBg);
 
   return (
     <div ref={wrapperRef} className="fixed bottom-4 right-4 z-30">
+
+      {/* ── Botón FAB ─────────────────────────────────────────── */}
       <motion.button
         onClick={() => setOpen((v) => !v)}
         whileTap={{ scale: 0.92 }}
-        className="
-          w-12 h-12 rounded-full
-          bg-black/80 border border-primary/40
-          flex items-center justify-center text-primary
-          shadow-xl backdrop-blur-sm
-          hover:bg-black/90 hover:border-primary/60
-          transition-colors
-        "
         aria-label="Configuración rápida"
         aria-expanded={open}
+        aria-haspopup="true"
+        className="w-12 h-12 rounded-full flex items-center justify-center
+                   shadow-xl transition-all duration-150
+                   focus-visible:outline-none focus-visible:ring-2
+                   focus-visible:ring-offset-2"
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          border:          '1px solid var(--color-primary)',
+          color:           'var(--color-primary)',
+          '--tw-ring-color':        'var(--color-primary)',
+          '--tw-ring-offset-color': 'var(--color-bg)',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-offset)')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface)')}
       >
-        {/* ✅ fix #4: animate-spin estándar (animate-spin-slow no está definido en el config) */}
-        <FaCog className={open ? 'animate-spin' : ''} />
+        <FaCog
+          size={18}
+          aria-hidden="true"
+          className={open ? 'animate-spin' : ''}
+          style={{ transition: 'transform 0.3s ease' }}
+        />
       </motion.button>
 
+      {/* ── Panel desplegable ─────────────────────────────────── */}
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            transition={{ duration: 0.16 }}
-            className="
-              mt-3
-              w-[min(18rem,calc(100vw-2rem))]
-              max-w-[18rem]
-              bg-black/95 border border-primary/40
-              rounded-2xl shadow-2xl p-4
-              text-sm text-slate-100
-              backdrop-blur-md
-              origin-bottom-right
-            "
+            role="menu"
+            aria-label="Menú de configuración"
+            initial={{ opacity: 0, y: 10,  scale: 0.97 }}
+            animate={{ opacity: 1, y: 0,   scale: 1    }}
+            exit={{    opacity: 0, y: 10,  scale: 0.97 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="absolute bottom-full right-0 mb-3
+                       w-[min(18rem,calc(100vw-2rem))]
+                       rounded-2xl p-4 shadow-2xl origin-bottom-right"
+            style={{
+              backgroundColor: PANEL.bg,
+              border:          `1px solid ${PANEL.border}`,
+              color:           PANEL.text,
+            }}
           >
-            <div className="mb-3">
-              <p className="font-semibold text-primary">Configuración rápida</p>
-              <p className="text-slate-400 mt-1 text-xs truncate">{displayName}</p>
+            {/* Cabecera */}
+            <div className="mb-3 pb-3" style={{ borderBottom: `1px solid ${PANEL.itemBorder}` }}>
+              <p className="font-semibold text-sm" style={{ color: 'var(--color-primary)' }}>
+                Configuración rápida
+              </p>
+              <p className="mt-0.5 text-xs truncate" style={{ color: PANEL.muted }}>
+                {displayName}
+              </p>
             </div>
 
-            <div className="space-y-2">
+            {/* Acciones */}
+            <div className="space-y-1.5">
+
+              {/* Ver catálogo */}
               <button
+                role="menuitem"
                 onClick={handleGoPublic}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl
-                  bg-slate-800/70 hover:bg-slate-700/70 text-xs border border-slate-700 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+                           text-xs font-medium transition-colors duration-150
+                           focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-primary/40"
+                style={{
+                  backgroundColor: PANEL.itemBg,
+                  border:          `1px solid ${PANEL.itemBorder}`,
+                  color:           PANEL.text,
+                }}
+                onMouseEnter={itemEnter}
+                onMouseLeave={itemLeave}
               >
-                <FaHome className="text-primary" />
+                <FaHome
+                  size={12}
+                  aria-hidden="true"
+                  style={{ color: 'var(--color-primary)', flexShrink: 0 }}
+                />
                 <span className="flex-1 text-left">Ver como cliente (catálogo)</span>
               </button>
 
-              {/* ✅ fix #2: label corregido a "Mi perfil" */}
+              {/* Mi perfil */}
               <button
+                role="menuitem"
                 onClick={handleProfile}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl
-                  bg-slate-800/70 hover:bg-slate-700/70 text-xs border border-slate-700 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+                           text-xs font-medium transition-colors duration-150
+                           focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-primary/40"
+                style={{
+                  backgroundColor: PANEL.itemBg,
+                  border:          `1px solid ${PANEL.itemBorder}`,
+                  color:           PANEL.text,
+                }}
+                onMouseEnter={itemEnter}
+                onMouseLeave={itemLeave}
               >
-                <FaUser className="text-primary" />
+                <FaUser
+                  size={12}
+                  aria-hidden="true"
+                  style={{ color: 'var(--color-primary)', flexShrink: 0 }}
+                />
                 <span className="flex-1 text-left">Mi perfil</span>
               </button>
 
+              {/* Cerrar sesión */}
               <button
+                role="menuitem"
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl
-                  bg-red-600/90 hover:bg-red-500 text-xs text-white transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+                           text-xs font-medium transition-colors duration-150
+                           focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-red-400/40"
+                style={{
+                  backgroundColor: 'var(--color-error)',
+                  border:          'none',
+                  color:           '#fff',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-error-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-error)')}
               >
-                <FaSignOutAlt />
+                <FaSignOutAlt size={12} aria-hidden="true" style={{ flexShrink: 0 }} />
                 <span className="flex-1 text-left">Cerrar sesión</span>
               </button>
             </div>
 
-            <p className="mt-3 text-[10px] text-slate-500 leading-snug">
-              Tip: presiona Esc para cerrar.
+            {/* Tip */}
+            <p
+              className="mt-3 text-[10px] leading-snug"
+              style={{ color: PANEL.faint }}
+            >
+              Presiona <kbd
+                className="px-1 py-0.5 rounded text-[9px] font-mono"
+                style={{
+                  backgroundColor: 'var(--color-surface-offset)',
+                  border:          `1px solid ${PANEL.itemBorder}`,
+                  color:           PANEL.muted,
+                }}
+              >Esc</kbd> para cerrar.
             </p>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-};
-
-export default SettingsFab;
+}

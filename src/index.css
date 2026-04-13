@@ -4,76 +4,94 @@
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    VARIABLES SEMÁNTICAS
-   :root = modo CLARO (beige cálido)
-   .dark = colores oscuros originales del proyecto
+   :root = modo CLARO (beige cálido + dorado premium)
+   .dark = modo OSCURO (azul medianoche original)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 :root {
-  --color-bg:             #f5f4f0;
-  --color-surface:        #faf9f7;
+  /* ── Superficies — capas cálidas con profundidad ── */
+  --color-bg:             #f5f3ee;
+  --color-surface:        #faf9f6;
   --color-surface-2:      #ffffff;
-  --color-surface-off:    #edecea;
-  --color-border:         rgba(0,0,0,0.09);
-  --color-divider:        rgba(0,0,0,0.07);
+  --color-surface-off:    #ede9e3;
+  --color-border:         rgba(120, 100, 60, 0.13);
+  --color-divider:        rgba(120, 100, 60, 0.09);
 
-  --color-text:           #1a1916;
-  --color-text-muted:     #6b6b68;
-  --color-text-faint:     #a8a7a4;
-  --color-text-inverse:   #f5f4f0;
+  /* ── Texto ── */
+  --color-text:           #1c1a16;
+  --color-text-muted:     #68645c;
+  --color-text-faint:     #a8a49c;
+  --color-text-inverse:   #f5f3ee;
 
-  /* Sidebar siempre oscuro */
-  --color-sidebar-bg:         #1e1c1a;
-  --color-sidebar-border:     rgba(255,255,255,0.06);
-  --color-sidebar-text:       #c9c7c4;
-  --color-sidebar-muted:      #7a7875;
-  --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
-  --color-sidebar-active-bg:  rgba(245,158,11,0.18);
+  /* ── Sidebar — siempre oscuro, elegante ── */
+  --color-sidebar-bg:         #191714;
+  --color-sidebar-border:     rgba(255,255,255,0.07);
+  --color-sidebar-text:       #ccc9c4;
+  --color-sidebar-muted:      #7a7672;
+  --color-sidebar-hover-bg:   rgba(255,255,255,0.055);
+  --color-sidebar-active-bg:  rgba(245,158,11,0.20);
 
-  /* Footer siempre oscuro */
-  --color-footer-bg:      #1a1816;
+  /* ── Footer — siempre oscuro ── */
+  --color-footer-bg:      #17140f;
   --color-footer-border:  rgba(255,255,255,0.07);
-  --color-footer-text:    #c9c7c4;
-  --color-footer-muted:   #7a7875;
+  --color-footer-text:    #ccc9c4;
+  --color-footer-muted:   #7a7672;
 
-  --color-nav-bg:         rgba(245,244,240,0.92);
-  --color-nav-border:     rgba(0,0,0,0.09);
-  --color-nav-text:       #1a1916;
-  --color-nav-text-sub:   #6b6b68;
+  /* ── Navbar pública ── */
+  --color-nav-bg:         rgba(250,248,244,0.93);
+  --color-nav-border:     rgba(120,100,60,0.11);
+  --color-nav-text:       #1c1a16;
+  --color-nav-text-sub:   #68645c;
 
-  --color-topbar-bg:      rgba(250,249,247,0.92);
-  --color-topbar-border:  rgba(0,0,0,0.09);
+  /* ── Topbar admin ── */
+  --color-topbar-bg:      rgba(250,249,246,0.93);
+  --color-topbar-border:  rgba(120,100,60,0.10);
 
+  /* ── Inputs ── */
   --color-input-bg:       #ffffff;
-  --color-input-border:   rgba(0,0,0,0.15);
-  --color-input-text:     #1a1916;
-  --color-input-focus:    #f59e0b;
+  --color-input-border:   rgba(120,100,60,0.18);
+  --color-input-text:     #1c1a16;
+  --color-input-focus:    #d97706;
 
+  /* ── Modales ── */
   --color-modal-bg:       #ffffff;
-  --color-modal-border:   rgba(0,0,0,0.10);
+  --color-modal-border:   rgba(120,100,60,0.12);
 
-  --color-row-hover:      rgba(0,0,0,0.035);
-  --color-row-stripe:     rgba(0,0,0,0.02);
-  --color-inner-card:     rgba(0,0,0,0.025);
-  --color-inner-border:   rgba(0,0,0,0.07);
+  /* ── Estados de filas/tablas ── */
+  --color-row-hover:      rgba(120,100,60,0.045);
+  --color-row-stripe:     rgba(120,100,60,0.025);
+  --color-inner-card:     rgba(120,100,60,0.035);
+  --color-inner-border:   rgba(120,100,60,0.09);
 
-  --color-banner-from:    rgba(245,158,11,0.09);
-  --color-banner-to:      #f5f4f0;
+  /* ── Banner perfil — dorado cálido en claro ── */
+  --color-banner-from:    rgba(245,158,11,0.12);
+  --color-banner-mid:     rgba(251,191,36,0.06);
+  --color-banner-to:      #f5f3ee;
 
-  --shadow-sm:   0 1px 2px rgba(0,0,0,0.05);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 6px 18px rgba(0,0,0,0.04);
-  --shadow-lg:   0 12px 40px rgba(0,0,0,0.10);
+  /* ── Sombras ── */
+  --shadow-sm:   0 1px 2px rgba(60,40,10,0.07);
+  --shadow-card: 0 1px 3px rgba(60,40,10,0.07), 0 6px 20px rgba(60,40,10,0.05);
+  --shadow-lg:   0 8px 24px rgba(60,40,10,0.10), 0 24px 56px rgba(60,40,10,0.07);
+  --shadow-glow-gold: 0 0 0 3px rgba(245,158,11,0.20), 0 4px 16px rgba(245,158,11,0.15);
 
-  --color-toggle-bg:    rgba(0,0,0,0.07);
-  --color-toggle-hover: rgba(0,0,0,0.12);
-  --color-toggle-icon:  #6b6b68;
+  /* ── Toggle de tema ── */
+  --color-toggle-bg:    rgba(120,100,60,0.10);
+  --color-toggle-hover: rgba(120,100,60,0.17);
+  --color-toggle-icon:  #68645c;
 
-  /* Paleta heredada (usada en JSX antiguo) — CLARO */
-  --tw-text-light:        #1a1916;
-  --tw-text-light-70:     #5a5a57;
-  --tw-text-light-50:     #a8a7a4;
-  --tw-bg-dark-90:        rgba(245,244,240,0.92);
+  /* ── Gradientes reutilizables ── */
+  --gradient-gold:        linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #d97706 100%);
+  --gradient-gold-subtle: linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(245,158,11,0.06) 100%);
+  --gradient-surface:     linear-gradient(160deg, #faf9f6 0%, #f5f3ee 100%);
+  --gradient-card-hover:  linear-gradient(160deg, rgba(251,191,36,0.06) 0%, rgba(245,158,11,0.02) 100%);
+
+  /* ── Paleta heredada — modo CLARO ── */
+  --tw-text-light:        #1c1a16;
+  --tw-text-light-70:     rgba(28,26,22,0.68);
+  --tw-text-light-50:     rgba(28,26,22,0.45);
+  --tw-bg-dark-90:        rgba(245,243,238,0.93);
   --tw-bg-black-80:       rgba(0,0,0,0.45);
-  --tw-bg-black-60:       rgba(0,0,0,0.06);
-  --tw-bg-black-40:       rgba(250,249,247,0.9);
+  --tw-bg-black-60:       rgba(0,0,0,0.07);
+  --tw-bg-black-40:       rgba(250,249,246,0.90);
   --tw-bg-white-5:        rgba(0,0,0,0.03);
   --tw-primary:           #f59e0b;
   --tw-primary-10:        rgba(245,158,11,0.10);
@@ -84,68 +102,90 @@
   --tw-primary-50:        rgba(245,158,11,0.50);
 }
 
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MODO OSCURO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .dark {
+  /* ── Superficies — azul medianoche con profundidad ── */
   --color-bg:             #020617;
-  --color-surface:        #0f172a;
-  --color-surface-2:      #1e293b;
+  --color-surface:        #0b1120;
+  --color-surface-2:      #111827;
   --color-surface-off:    #1e293b;
-  --color-border:         rgba(255,255,255,0.08);
-  --color-divider:        rgba(255,255,255,0.06);
+  --color-border:         rgba(148,163,184,0.10);
+  --color-divider:        rgba(148,163,184,0.07);
 
-  --color-text:           #e5e7eb;
+  /* ── Texto ── */
+  --color-text:           #e2e8f0;
   --color-text-muted:     #94a3b8;
-  --color-text-faint:     #475569;
+  --color-text-faint:     #4b5563;
   --color-text-inverse:   #020617;
 
-  --color-sidebar-bg:         #0b1120;
-  --color-sidebar-border:     rgba(255,255,255,0.06);
-  --color-sidebar-text:       #c9c7c4;
-  --color-sidebar-muted:      #5a5856;
-  --color-sidebar-hover-bg:   rgba(255,255,255,0.05);
-  --color-sidebar-active-bg:  rgba(245,158,11,0.18);
+  /* ── Sidebar ── */
+  --color-sidebar-bg:         #070d1c;
+  --color-sidebar-border:     rgba(255,255,255,0.065);
+  --color-sidebar-text:       #ccc9c4;
+  --color-sidebar-muted:      #555250;
+  --color-sidebar-hover-bg:   rgba(255,255,255,0.055);
+  --color-sidebar-active-bg:  rgba(245,158,11,0.20);
 
-  /* Footer modo oscuro */
-  --color-footer-bg:      #060d1e;
-  --color-footer-border:  rgba(255,255,255,0.06);
-  --color-footer-text:    #c9c7c4;
-  --color-footer-muted:   #5a5856;
+  /* ── Footer ── */
+  --color-footer-bg:      #040810;
+  --color-footer-border:  rgba(255,255,255,0.065);
+  --color-footer-text:    #ccc9c4;
+  --color-footer-muted:   #555250;
 
-  --color-nav-bg:         rgba(2,6,23,0.92);
-  --color-nav-border:     rgba(255,255,255,0.07);
-  --color-nav-text:       #e5e7eb;
+  /* ── Navbar ── */
+  --color-nav-bg:         rgba(2,6,23,0.93);
+  --color-nav-border:     rgba(148,163,184,0.09);
+  --color-nav-text:       #e2e8f0;
   --color-nav-text-sub:   #94a3b8;
 
-  --color-topbar-bg:      rgba(2,6,23,0.92);
-  --color-topbar-border:  rgba(255,255,255,0.07);
+  /* ── Topbar ── */
+  --color-topbar-bg:      rgba(7,13,28,0.93);
+  --color-topbar-border:  rgba(148,163,184,0.08);
 
-  --color-input-bg:       #1e293b;
-  --color-input-border:   rgba(255,255,255,0.12);
-  --color-input-text:     #e5e7eb;
+  /* ── Inputs ── */
+  --color-input-bg:       #111827;
+  --color-input-border:   rgba(148,163,184,0.15);
+  --color-input-text:     #e2e8f0;
   --color-input-focus:    #f59e0b;
 
-  --color-modal-bg:       #0f172a;
-  --color-modal-border:   rgba(255,255,255,0.08);
+  /* ── Modales ── */
+  --color-modal-bg:       #0b1120;
+  --color-modal-border:   rgba(148,163,184,0.10);
 
+  /* ── Filas/tablas ── */
   --color-row-hover:      rgba(255,255,255,0.04);
   --color-row-stripe:     rgba(255,255,255,0.02);
-  --color-inner-card:     rgba(255,255,255,0.04);
+  --color-inner-card:     rgba(255,255,255,0.035);
   --color-inner-border:   rgba(255,255,255,0.08);
 
-  --color-banner-from:    rgba(239,68,68,0.25);
+  /* ── Banner perfil — azul oscuro en dark ── */
+  --color-banner-from:    rgba(245,158,11,0.18);
+  --color-banner-mid:     rgba(30,41,59,0.80);
   --color-banner-to:      #020617;
 
-  --shadow-sm:   0 1px 2px rgba(0,0,0,0.30);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.35), 0 6px 18px rgba(0,0,0,0.25);
-  --shadow-lg:   0 12px 40px rgba(0,0,0,0.55);
+  /* ── Sombras ── */
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.35);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.40), 0 6px 20px rgba(0,0,0,0.28);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,0.50), 0 24px 56px rgba(0,0,0,0.38);
+  --shadow-glow-gold: 0 0 0 3px rgba(245,158,11,0.25), 0 4px 20px rgba(245,158,11,0.18);
 
-  --color-toggle-bg:    rgba(255,255,255,0.07);
-  --color-toggle-hover: rgba(255,255,255,0.12);
+  /* ── Toggle ── */
+  --color-toggle-bg:    rgba(255,255,255,0.08);
+  --color-toggle-hover: rgba(255,255,255,0.13);
   --color-toggle-icon:  #94a3b8;
 
-  /* Paleta heredada — OSCURO (valores originales del proyecto) */
+  /* ── Gradientes dark ── */
+  --gradient-gold:        linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #d97706 100%);
+  --gradient-gold-subtle: linear-gradient(135deg, rgba(251,191,36,0.14) 0%, rgba(245,158,11,0.07) 100%);
+  --gradient-surface:     linear-gradient(160deg, #0b1120 0%, #020617 100%);
+  --gradient-card-hover:  linear-gradient(160deg, rgba(245,158,11,0.06) 0%, rgba(251,191,36,0.02) 100%);
+
+  /* ── Paleta heredada — modo OSCURO ── */
   --tw-text-light:        #e2e8f0;
-  --tw-text-light-70:     rgba(226,232,240,0.7);
-  --tw-text-light-50:     rgba(226,232,240,0.5);
+  --tw-text-light-70:     rgba(226,232,240,0.70);
+  --tw-text-light-50:     rgba(226,232,240,0.50);
   --tw-bg-dark-90:        rgba(2,6,23,0.90);
   --tw-bg-black-80:       rgba(0,0,0,0.80);
   --tw-bg-black-60:       rgba(0,0,0,0.60);
@@ -160,109 +200,142 @@
   --tw-primary-50:        rgba(245,158,11,0.50);
 }
 
-/* ━━━ BASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-*, *::before, *::after { box-sizing: border-box; }
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BASE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-padding-top: 5rem;
+  hanging-punctuation: first last;
+}
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: Inter, system-ui, -apple-system, sans-serif;
   min-height: 100dvh;
+  line-height: 1.6;
   transition:
-    background-color 0.3s cubic-bezier(0.4,0,0.2,1),
-    color 0.25s cubic-bezier(0.4,0,0.2,1);
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 #root { min-height: 100dvh; }
 
-/* ━━━ OVERRIDES GLOBALES: clases Tailwind hardcodeadas → variables semánticas
-
-   REGLA FUNDAMENTAL: .text-white y .text-slate-* sólo se sobreescriben
-   en secciones de fondo CLARO. Cualquier elemento dentro de una sección
-   con bg-slate-950 / bg-slate-900 / bg-gradient-to-br (hero oscuro) DEBE
-   mantener el blanco original para legibilidad.
-
-   Patrón: excluimos secciones oscuras con :not() contextual.
-   Los overrides de bg-slate-* ya mueven esos fondos a beige en modo claro,
-   por lo que el texto también debe seguir la variable del tema.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-/* ── Textos ──
-   FIX: .text-white se acota a elementos dentro de contenedores que YA
-   fueron reasignados a fondo claro (bg-slate-950 → var(--color-bg)).
-   El hero, sidebar y footer tienen fondos oscuros explícitos con style={{}},
-   por lo que esta regla no los afecta cuando el navegador resuelve estilos.
-   Se elimina el override global destructivo y se usa una selección más precisa. */
-.bg-slate-950 .text-white,
-.bg-slate-900 .text-white {
-  color: var(--color-text) !important;
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
 }
 
-/* Solo .text-light (clase personalizada del proyecto) se sobrescribe siempre */
-.text-light         { color: var(--color-text) !important; }
-.text-slate-100     { color: var(--color-text) !important; }
-.text-slate-200     { color: var(--color-text) !important; }
-.text-slate-300     { color: var(--color-text-muted) !important; }
-.text-slate-400     { color: var(--color-text-muted) !important; }
-.text-slate-500     { color: var(--color-text-faint) !important; }
-.text-light\/70,
-.text-light70       { color: var(--tw-text-light-70) !important; }
-.text-light\/50,
-.text-light50       { color: var(--tw-text-light-50) !important; }
+input, button, textarea, select { font: inherit; color: inherit; }
 
-/* ── Fondos (surface layer)
-   Jerarquía: 950 → fondo base | 900 → tarjeta | 800 → item interno
-   En claro: beige cálido escalonado
-   En oscuro: valores Slate originales
-── */
-.bg-slate-950     { background-color: var(--color-bg)        !important; }
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+  line-height: 1.2;
+}
+
+p, li, figcaption { text-wrap: pretty; max-width: 72ch; }
+
+button { cursor: pointer; background: none; border: none; }
+
+::selection {
+  background: rgba(245, 158, 11, 0.22);
+  color: var(--color-text);
+}
+
+:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 3px;
+  border-radius: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   OVERRIDES DE CLASES TAILWIND HARDCODEADAS
+   Solo afectan al modo CLARO; en .dark Tailwind
+   mantiene los valores originales slate-*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Texto ── */
+.text-light         { color: var(--color-text)       !important; }
+.text-slate-100     { color: var(--color-text)        !important; }
+.text-slate-200     { color: var(--color-text)        !important; }
+.text-slate-300     { color: var(--color-text-muted)  !important; }
+.text-slate-400     { color: var(--color-text-muted)  !important; }
+.text-slate-500     { color: var(--color-text-faint)  !important; }
+.text-light\/70,
+.text-light70       { color: var(--tw-text-light-70)  !important; }
+.text-light\/50,
+.text-light50       { color: var(--tw-text-light-50)  !important; }
+
+/* ── Fondos (jerarquía de superficies) ── */
+.bg-slate-950       { background-color: var(--color-bg)        !important; }
 .bg-dark\/90,
-.bg-dark90        { background-color: var(--color-nav-bg)    !important; }
+.bg-dark90          { background-color: var(--color-nav-bg)    !important; }
 .bg-slate-900,
 .bg-slate-900\/50,
-.bg-slate-90050   { background-color: var(--color-surface)   !important; }
+.bg-slate-90050     { background-color: var(--color-surface)   !important; }
 .bg-slate-800,
 .bg-slate-800\/50,
 .bg-slate-80050,
 .bg-slate-800\/30,
 .bg-slate-80030,
 .bg-slate-800\/70,
-.bg-slate-80070   { background-color: var(--color-surface-2) !important; }
+.bg-slate-80070     { background-color: var(--color-surface-2) !important; }
 .bg-black\/80,
-.bg-black80       { background-color: var(--tw-bg-black-80)  !important; }
+.bg-black80         { background-color: var(--tw-bg-black-80)  !important; }
 .bg-black\/60,
-.bg-black60       { background-color: var(--tw-bg-black-60)  !important; }
+.bg-black60         { background-color: var(--tw-bg-black-60)  !important; }
 .bg-black\/40,
-.bg-black40       { background-color: var(--tw-bg-black-40)  !important; }
+.bg-black40         { background-color: var(--tw-bg-black-40)  !important; }
 .bg-white\/5,
-.bg-white5        { background-color: var(--tw-bg-white-5)   !important; }
+.bg-white5          { background-color: var(--tw-bg-white-5)   !important; }
 
 /* ── Bordes ── */
 .border-slate-700,
 .border-slate-800,
-.border-slate-900 { border-color: var(--color-border)        !important; }
-.border-slate-700\/30,
+.border-slate-900   { border-color: var(--color-border)        !important; }
 .border-primary\/20,
-.border-primary20 { border-color: var(--tw-primary-20)       !important; }
+.border-primary20   { border-color: var(--tw-primary-20)       !important; }
+.border-primary\/30,
+.border-primary30   { border-color: var(--tw-primary-30)       !important; }
 .border-primary\/40,
-.border-primary40 { border-color: var(--tw-primary-40)       !important; }
+.border-primary40   { border-color: var(--tw-primary-40)       !important; }
 .border-primary\/50,
-.border-primary50 { border-color: var(--tw-primary-50)       !important; }
+.border-primary50   { border-color: var(--tw-primary-50)       !important; }
 
-/* ── Hover fondos slate ── */
+/* ── Hover de filas ── */
 .hover\:bg-slate-900:hover,
 .hover\:bg-slate-800:hover,
 .hover\:bg-slate-700:hover { background-color: var(--color-row-hover) !important; }
 
-/* ── Inputs y selects ── */
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+/* ── Inputs y selects globales ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 textarea,
 select {
   background-color: var(--color-input-bg)     !important;
   border-color:     var(--color-input-border) !important;
   color:            var(--color-input-text)   !important;
-  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color     0.25s ease,
+    box-shadow       0.2s  ease;
 }
 input::placeholder,
 textarea::placeholder { color: var(--color-text-faint) !important; }
@@ -270,41 +343,70 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--color-input-focus) !important;
-  box-shadow: 0 0 0 3px rgba(245,158,11,0.18) !important;
+  box-shadow: var(--shadow-glow-gold)    !important;
+  outline: none;
 }
 
 /* ── Navbar pública ── */
-nav.sticky { background-color: var(--color-nav-bg) !important; }
-nav .text-light { color: var(--color-nav-text) !important; }
-nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
+nav.sticky {
+  background-color: var(--color-nav-bg) !important;
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+nav .text-light      { color: var(--color-nav-text)     !important; }
+nav .text-slate-400  { color: var(--color-nav-text-sub) !important; }
 
-/* ── Modales ── */
+/* ── Modales con rounding ── */
 .bg-slate-900.rounded-2xl,
 .bg-slate-900.rounded-xl {
-  background-color: var(--color-modal-bg) !important;
-  border-color: var(--color-modal-border) !important;
+  background-color: var(--color-modal-bg)     !important;
+  border-color:     var(--color-modal-border) !important;
 }
 
-/* ━━━ LAYER: COMPONENTS — clases semánticas reutilizables ━━━━━━━━━━━ */
+/* ── Patrón general: cards con bg-slate + border + rounded ── */
+[class*="bg-slate-900"][class*="rounded"][class*="border"] {
+  background-color: var(--color-surface) !important;
+  border-color:     var(--color-border)  !important;
+  color:            var(--color-text)    !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   @layer components — CLASES SEMÁNTICAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 @layer components {
 
+  /* ── Cards ── */
   .card-soft {
     background-color: var(--color-surface);
+    background-image: var(--gradient-surface);
     border: 1px solid var(--color-border);
     box-shadow: var(--shadow-card);
-    border-radius: 0.75rem;
-    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 0.875rem;
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.25s ease,
+      transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .card-soft:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+    border-color: rgba(245, 158, 11, 0.20);
   }
 
   .card-inner {
     background-color: var(--color-inner-card);
     border: 1px solid var(--color-inner-border);
     border-radius: 0.75rem;
-    transition: background-color 0.25s ease, border-color 0.25s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
   }
-  .card-inner:hover { background-color: var(--color-row-hover); }
+  .card-inner:hover {
+    background-color: var(--color-row-hover);
+    border-color: rgba(245, 158, 11, 0.18);
+  }
 
-  .t-heading  { color: var(--color-text);       font-weight: 800; }
+  /* ── Tipografía semántica ── */
+  .t-heading  { color: var(--color-text);        font-weight: 800; letter-spacing: -0.01em; }
   .t-body     { color: var(--color-text); }
   .t-muted    { color: var(--color-text-muted); }
   .t-faint    { color: var(--color-text-faint); }
@@ -312,12 +414,20 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
   .text-faint      { color: var(--color-text-faint); }
   .text-muted-soft { color: var(--color-text-faint); }
 
+  /* ── Divisores ── */
   .divider {
     height: 1px;
-    background-color: var(--color-divider);
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-divider) 20%,
+      var(--color-divider) 80%,
+      transparent
+    );
     border: none;
   }
 
+  /* ── Input temático ── */
   .input-themed {
     background-color: var(--color-input-bg);
     border: 1px solid var(--color-input-border);
@@ -325,49 +435,92 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     border-radius: 0.5rem;
     padding: 0.5rem 0.75rem;
     width: 100%;
-    transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.2s ease;
+    transition:
+      background-color 0.25s ease,
+      border-color     0.25s ease,
+      box-shadow       0.2s  ease;
   }
   .input-themed::placeholder { color: var(--color-text-faint); }
   .input-themed:focus {
     outline: none;
     border-color: var(--color-input-focus);
-    box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
+    box-shadow: var(--shadow-glow-gold);
   }
 
+  /* ── Botón dorado premium ── */
   .button-gold {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    gap: 0.4rem;
+    font-weight: 700;
     border-radius: 9999px;
-    padding: 0.5rem 1.25rem;
+    padding: 0.5rem 1.375rem;
     font-size: 0.875rem;
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    background: var(--gradient-gold);
     color: #111827;
-    border: 1px solid #facc15;
-    box-shadow: 0 2px 8px rgba(245,158,11,0.30);
+    border: 1px solid rgba(251, 191, 36, 0.6);
+    box-shadow: 0 2px 8px rgba(245,158,11,0.30), 0 1px 2px rgba(0,0,0,0.10);
     cursor: pointer;
     text-decoration: none;
-    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    letter-spacing: 0.01em;
+    position: relative;
+    overflow: hidden;
+    transition:
+      filter    0.15s ease,
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
-  .button-gold:hover  { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.40); }
-  .button-gold:active { transform: translateY(0); filter: brightness(0.97); }
+  .button-gold::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .button-gold:hover {
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 18px rgba(245,158,11,0.42), 0 2px 4px rgba(0,0,0,0.12);
+  }
+  .button-gold:active {
+    transform: translateY(0);
+    filter: brightness(0.96);
+    box-shadow: 0 1px 4px rgba(245,158,11,0.25);
+  }
 
+  /* ── Botón paginación ── */
   .btn-page {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
-    border-radius: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color     0.2s ease,
+      color            0.2s ease,
+      box-shadow       0.2s ease;
   }
-  .btn-page:hover     { border-color: #f59e0b; color: #f59e0b; }
-  .btn-page.active    { background-color: #f59e0b; color: #111827; border-color: #f59e0b; }
-  .btn-page:disabled  { opacity: 0.4; cursor: not-allowed; }
+  .btn-page:hover {
+    border-color: rgba(245, 158, 11, 0.50);
+    color: #d97706;
+    background-color: rgba(245, 158, 11, 0.06);
+  }
+  .btn-page.active {
+    background: var(--gradient-gold);
+    color: #111827;
+    border-color: #f59e0b;
+    box-shadow: 0 2px 8px rgba(245,158,11,0.28);
+    font-weight: 700;
+  }
+  .btn-page:disabled { opacity: 0.38; cursor: not-allowed; }
 
+  /* ── Toggle de tema ── */
   .theme-toggle {
     display: inline-flex;
     align-items: center;
@@ -377,102 +530,223 @@ nav .text-slate-400 { color: var(--color-nav-text-sub) !important; }
     border-radius: 0.625rem;
     background: var(--color-toggle-bg);
     color: var(--color-toggle-icon);
-    border: none;
+    border: 1px solid var(--color-border);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    transition:
+      background   0.2s ease,
+      color        0.2s ease,
+      border-color 0.2s ease,
+      transform    0.15s ease;
   }
-  .theme-toggle:hover  { background: var(--color-toggle-hover); transform: scale(1.08); }
-  .theme-toggle:active { transform: scale(0.95); }
+  .theme-toggle:hover {
+    background: var(--color-toggle-hover);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.30);
+    transform: scale(1.08);
+  }
+  .theme-toggle:active { transform: scale(0.94); }
 
+  /* ── Tooltip ── */
   .tooltip-surface {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
     box-shadow: var(--shadow-lg);
     color: var(--color-text);
     border-radius: 0.75rem;
+    backdrop-filter: blur(10px);
     transition: background-color 0.25s ease;
   }
 
+  /* ── Línea de sección ── */
   .section-divider-line {
     flex: 1;
     height: 1px;
-    background-color: var(--color-divider);
+    background: linear-gradient(
+      to right,
+      var(--color-divider),
+      transparent
+    );
   }
 
+  /* ── Banner de perfil ── */
   .profile-banner {
-    background: linear-gradient(to bottom, var(--color-banner-from), var(--color-banner-to));
-    transition: background 0.3s ease;
+    background: linear-gradient(
+      175deg,
+      var(--color-banner-from)  0%,
+      var(--color-banner-mid)  45%,
+      var(--color-banner-to)  100%
+    );
+    transition: background 0.4s ease;
   }
 
+  /* ── Stat pill ── */
   .stat-pill {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 0.75rem;
-    padding: 0.625rem 1rem;
-    backdrop-filter: blur(4px);
-    transition: background-color 0.25s ease, border-color 0.25s ease;
+    border-radius: 0.875rem;
+    padding: 0.5rem 1rem;
+    backdrop-filter: blur(6px);
+    box-shadow: var(--shadow-sm);
+    transition:
+      background-color 0.25s ease,
+      border-color     0.25s ease,
+      box-shadow       0.2s  ease;
+  }
+  .stat-pill:hover {
+    border-color: rgba(245, 158, 11, 0.28);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.08), var(--shadow-sm);
   }
 
+  /* ── Barra de completitud ── */
   .completion-track {
     height: 0.5rem;
-    background-color: var(--color-surface-off);
+    background: linear-gradient(
+      to right,
+      var(--color-surface-off),
+      var(--color-inner-card)
+    );
     border-radius: 9999px;
     overflow: hidden;
   }
 
+  /* ── Recharts tooltip ── */
   .recharts-tooltip-themed {
     background-color: var(--color-surface-2) !important;
-    border: 1px solid var(--color-border) !important;
-    border-radius: 0.625rem !important;
-    color: var(--color-text) !important;
+    border: 1px solid var(--color-border)    !important;
+    border-radius: 0.625rem                  !important;
+    color: var(--color-text)                 !important;
+    box-shadow: var(--shadow-lg)             !important;
   }
 
+  /* ── Settings FAB panel ── */
   .settings-fab-panel {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
     color: var(--color-text);
-    border-radius: 1rem;
+    border-radius: 1.125rem;
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
   }
   .settings-fab-btn {
     background-color: var(--color-surface-off);
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
     border-radius: 0.75rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color     0.2s ease,
+      color            0.2s ease;
   }
-  .settings-fab-btn:hover { background-color: var(--color-row-hover); border-color: var(--color-text-faint); }
+  .settings-fab-btn:hover {
+    background-color: var(--color-row-hover);
+    border-color: rgba(245, 158, 11, 0.28);
+    color: #d97706;
+  }
+
+  /* ── Badge de estado ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+  }
+
+  /* ── Tabla ── */
+  .table-themed tbody tr {
+    border-bottom: 1px solid var(--color-divider);
+    transition: background-color 0.15s ease;
+  }
+  .table-themed tbody tr:hover {
+    background-color: var(--color-row-hover);
+  }
+  .table-themed tbody tr:nth-child(even) {
+    background-color: var(--color-row-stripe);
+  }
+
+  /* ── Scrollbar personalizado ── */
+  .scrollbar-thin::-webkit-scrollbar       { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.35);
+  }
 }
 
-/* ━━━ OVERRIDES ESPECÍFICOS por componente ━━━━━━━━━━━━━━━━━━━━━ */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   OVERRIDES ESPECÍFICOS POR COMPONENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* Navbar */
 nav.sticky .text-light,
 nav.sticky .hover\:text-primary {
   color: var(--color-nav-text);
 }
 
+/* Property cards */
 .property-card-info {
   background-color: var(--color-surface) !important;
-  color: var(--color-text) !important;
+  color: var(--color-text)               !important;
 }
 
-[class*="bg-slate-900"][class*="rounded"][class*="border"] {
-  background-color: var(--color-surface) !important;
-  border-color: var(--color-border) !important;
-  color: var(--color-text-muted) !important;
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ANIMACIONES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+@keyframes spin-slow {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
 }
 
-/* ━━━ ANIMACIONES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-@keyframes spin-slow  { from { transform: rotate(0deg);   } to { transform: rotate(360deg); } }
-@keyframes fade-in    { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes shimmer    { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-.animate-spin-slow { animation: spin-slow 8s linear infinite; }
-.animate-fade-in   { animation: fade-in 0.3s ease forwards; }
-.page-transition   { animation: fade-in 0.25s cubic-bezier(0.4,0,0.2,1) forwards; }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.0); }
+  50%       { box-shadow: 0 0 0 6px rgba(245,158,11,0.12); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+.animate-spin-slow  { animation: spin-slow  8s linear infinite; }
+.animate-fade-in    { animation: fade-in    0.3s ease forwards; }
+.animate-fade-up    { animation: fade-up    0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+.animate-scale-in   { animation: scale-in   0.25s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.animate-pulse-gold { animation: pulse-gold 2.4s ease-in-out infinite; }
+.page-transition    { animation: fade-in    0.28s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+/* ── Skeleton loader ── */
 .skeleton {
-  background: linear-gradient(90deg,var(--color-surface-off) 25%,var(--color-row-hover) 50%,var(--color-surface-off) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-off) 25%,
+    var(--color-row-hover)   50%,
+    var(--color-surface-off) 75%
+  );
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.6s ease-in-out infinite;
   border-radius: 0.375rem;
 }

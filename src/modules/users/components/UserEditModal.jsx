@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
   FaTimes, FaUser, FaLock, FaShieldAlt, FaCheckCircle,
-  FaExclamationTriangle, FaEye, FaEyeSlash,
-  FaUserShield, FaUsers,
+  FaExclamationTriangle, FaEye as FaEyeIcon, FaEyeSlash,
+  FaUserShield, FaUsers, FaEye,
 } from 'react-icons/fa';
 import {
   USER_ROLES,
@@ -21,7 +21,8 @@ import {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const EMPTY_FORM = {
+// ✅ Factory function en lugar de objeto compartido — evita mutaciones accidentales
+const makeEmptyForm = () => ({
   displayName:     '',
   email:           '',
   phone:           '',
@@ -29,22 +30,23 @@ const EMPTY_FORM = {
   status:          USER_STATUS.ACTIVE,
   password:        '',
   confirmPassword: '',
-};
+});
 
-// ✅ Solo los 3 roles que existen — sin SUPER_ADMIN ni MANAGER
+
 const getRoleIcon = (role) => {
   switch (role) {
     case USER_ROLES.ADMIN:  return <FaShieldAlt />;
     case USER_ROLES.MEMBER: return <FaUsers />;
-    case USER_ROLES.VIEWER: return <FaEye />;
+    case USER_ROLES.VIEWER: return <FaEye />;        // ← ícono del rol viewer
     default:                return <FaUser />;
   }
 };
 
-// ✅ Clases completas pre-generadas para que Tailwind no las purgue
-// Tailwind purga bg-red-500/10, text-red-500 etc. si no aparecen como strings completos
+
+// ✅ Ahora incluye 'green' para MEMBER — coincide con USER_ROLE_COLORS
 const ROLE_STYLE = {
   red:   { border: 'border-red-500',   bg: 'bg-red-500/10',   icon: 'bg-red-500/20 text-red-500',   check: 'text-red-500'   },
+  green: { border: 'border-green-500', bg: 'bg-green-500/10', icon: 'bg-green-500/20 text-green-500', check: 'text-green-500' },
   blue:  { border: 'border-blue-500',  bg: 'bg-blue-500/10',  icon: 'bg-blue-500/20 text-blue-500',  check: 'text-blue-500'  },
   slate: { border: 'border-slate-500', bg: 'bg-slate-500/10', icon: 'bg-slate-500/20 text-slate-500', check: 'text-slate-500' },
 };
@@ -52,24 +54,15 @@ const ROLE_STYLE = {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-/**
- * Modal de creación/edición de usuario.
- *
- * @prop {object|null} editingUser      - Usuario a editar. null → modo creación.
- * @prop {boolean}     isOpen           - Controla visibilidad.
- * @prop {function}    onClose          - Cierra el modal sin guardar.
- * @prop {function}    onSave(formData, editingUser) → Promise
- * @prop {string}      currentUserRole  - Rol del usuario autenticado (de userData).
- */
 const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }) => {
   const isEditMode = !!editingUser;
 
-  const [formData, setFormData]         = useState(EMPTY_FORM);
+  const [formData, setFormData]         = useState(makeEmptyForm);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors]             = useState({});
   const [loading, setLoading]           = useState(false);
 
-  // Sincroniza el formulario cuando se abre o cambia el usuario
+
   useEffect(() => {
     if (!isOpen) return;
     setErrors({});
@@ -85,11 +78,11 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
             password:        '',
             confirmPassword: '',
           }
-        : EMPTY_FORM
+        : makeEmptyForm()   // ✅ nueva instancia cada vez
     );
   }, [isOpen, editingUser, isEditMode]);
 
-  // Cerrar con Escape
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -97,13 +90,13 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  // Setter genérico sin stale closure
+
   const setField = useCallback(
     (field) => (e) => setFormData(prev => ({ ...prev, [field]: e.target.value })),
     []
   );
 
-  // Validación local — errores inline, no toast
+
   const validateForm = () => {
     const e = {};
 
@@ -134,6 +127,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
     return Object.keys(e).length === 0;
   };
 
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!validateForm()) return;
@@ -153,6 +147,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
       setLoading(false);
     }
   };
+
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -298,13 +293,14 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                             focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all
                             ${errors.password ? 'border-red-500' : 'border-slate-700 focus:border-primary'}`}
                         />
+                        {/* ✅ FaEyeIcon (alias) para el toggle — no confunde con el ícono del rol Viewer */}
                         <button
                           type="button"
                           onClick={() => setShowPassword(v => !v)}
                           aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-light transition-colors"
                         >
-                          {showPassword ? <FaEyeSlash /> : <FaEye />}
+                          {showPassword ? <FaEyeSlash /> : <FaEyeIcon />}
                         </button>
                       </div>
                       <FieldError msg={errors.password} />

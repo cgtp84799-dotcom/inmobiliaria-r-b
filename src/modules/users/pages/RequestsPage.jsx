@@ -19,7 +19,8 @@ import { useAuth }        from '../../../core/contexts/AuthContext';
 import { USER_ROLES, USER_ROLE_LABELS } from '../types/user.types';
 import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
 
-// Contraseña temporal aleatoria — el usuario la reemplaza con el reset email
+
+// ─── Contraseña temporal aleatoria ───────────────────────────────────────────
 const generateTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
   return Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -33,11 +34,42 @@ const formatDate = (date) => {
   }).format(date instanceof Date ? date : date.toDate?.() ?? new Date(date));
 };
 
-const STATUS_LABELS = {
-  pending:  { label: 'Pendiente',  color: 'yellow' },
-  approved: { label: 'Aprobada',   color: 'green'  },
-  rejected: { label: 'Rechazada',  color: 'red'    },
+
+// ─── Mapas de clases COMPLETAS — Tailwind JIT no puede generar clases dinámicas
+// ❌ MAL: `text-${color}-400`  →  Tailwind lo purga
+// ✅ BIEN: objeto con strings completos que Tailwind sí incluye en el bundle
+
+const STAT_COLOR_MAP = {
+  primary:     'text-primary',
+  'yellow-400':'text-yellow-400',
+  'green-400': 'text-green-400',
+  'red-400':   'text-red-400',
 };
+
+// Reemplaza STATUS_LABELS: ahora lleva las clases Tailwind completas por estado
+const STATUS_STYLES = {
+  pending: {
+    label:  'Pendiente',
+    badge:  'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20',
+    dot:    'bg-yellow-400',
+  },
+  approved: {
+    label:  'Aprobada',
+    badge:  'bg-green-400/10 text-green-400 border border-green-400/20',
+    dot:    'bg-green-400',
+  },
+  rejected: {
+    label:  'Rechazada',
+    badge:  'bg-red-400/10 text-red-400 border border-red-400/20',
+    dot:    'bg-red-400',
+  },
+};
+
+// Lista de filtros derivada del mismo mapa (fuente única de verdad)
+const FILTER_OPTIONS = [
+  { value: '', label: 'Todas' },
+  ...Object.entries(STATUS_STYLES).map(([value, { label }]) => ({ value, label })),
+];
 
 const ROLE_ICONS = {
   [USER_ROLES.ADMIN]:  FaShieldAlt,
@@ -45,6 +77,8 @@ const ROLE_ICONS = {
   [USER_ROLES.VIEWER]: FaEye,
 };
 
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const RequestsPage = () => {
   const { userData } = useAuth();
@@ -93,7 +127,6 @@ const RequestsPage = () => {
 
   const handleApprove = (request) => {
     const role = approveState[request.id] || USER_ROLES.MEMBER;
-    const RoleIcon = ROLE_ICONS[role];
 
     setConfirmModal({
       isOpen: true,
@@ -129,9 +162,7 @@ const RequestsPage = () => {
           );
           loadRequests();
         } catch (error) {
-          // Error de email duplicado en Auth
           if (error.code === 'auth/email-already-in-use') {
-            // El usuario ya tiene cuenta — solo aprobar la solicitud
             await requestService.approveRequest(request.id, role, userData?.email).catch(() => {});
             toast.success(
               `${request.name} ya tiene cuenta. Solicitud marcada como aprobada.`,
@@ -220,14 +251,17 @@ const RequestsPage = () => {
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
         {[
-          { label: 'Total',     value: stats.total,    color: 'primary' },
-          { label: 'Pendientes',value: stats.pending,  color: 'yellow-400' },
-          { label: 'Aprobadas', value: stats.approved, color: 'green-400' },
-          { label: 'Rechazadas',value: stats.rejected, color: 'red-400' },
+          { label: 'Total',      value: stats.total,    color: 'primary'    },
+          { label: 'Pendientes', value: stats.pending,  color: 'yellow-400' },
+          { label: 'Aprobadas',  value: stats.approved, color: 'green-400'  },
+          { label: 'Rechazadas', value: stats.rejected, color: 'red-400'    },
         ].map(({ label, value, color }) => (
           <div key={label} className="card-soft p-4">
-            <p className="text-xs text-slate-400 mb-1">{label}</p>
-            <p className={`text-2xl font-bold text-${color} tabular-nums`}>{value}</p>
+            {/* ✅ Clase obtenida del mapa — Tailwind sí la incluye */}
+            <p className="text-xs text-muted mb-1">{label}</p>
+            <p className={`text-2xl font-bold tabular-nums ${STAT_COLOR_MAP[color]}`}>
+              {value}
+            </p>
           </div>
         ))}
       </motion.div>
@@ -239,41 +273,42 @@ const RequestsPage = () => {
         transition={{ delay: 0.15 }}
         className="flex items-center gap-2 flex-wrap"
       >
-        <FaFilter className="text-slate-400 text-sm" />
-        {[{ value: '', label: 'Todas' }, ...Object.entries(STATUS_LABELS).map(([v, { label }]) => ({ value: v, label }))]
-          .map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setFilterStatus(value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
-                ${ filterStatus === value
-                  ? 'bg-primary text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700' }`}
-            >
-              {label}
-            </button>
-          ))
-        }
+        <FaFilter className="text-muted text-sm" />
+        {FILTER_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setFilterStatus(value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
+              ${filterStatus === value
+                // ✅ Activo: acento de marca
+                ? 'bg-primary text-white'
+                // ✅ Inactivo: usa variables CSS del tema en lugar de slate hardcodeado
+                : 'bg-[var(--color-surface-offset)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dynamic)]'
+              }`}
+          >
+            {label}
+          </button>
+        ))}
       </motion.div>
 
       {/* Listado */}
       {loading ? (
         <div className="card-soft py-16 text-center">
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
-          <p className="text-slate-400">Cargando solicitudes...</p>
+          <p className="text-muted text-sm">Cargando solicitudes...</p>
         </div>
 
       ) : requests.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="card-soft py-16 px-6 text-center border border-dashed border-slate-700"
+          className="card-soft py-16 px-6 text-center border border-dashed border-[var(--color-border)]"
         >
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <FaInbox className="text-primary text-3xl" />
           </div>
           <h2 className="text-2xl font-bold text-light mb-2">Sin solicitudes</h2>
-          <p className="text-slate-400 max-w-sm mx-auto">
+          <p className="text-muted max-w-sm mx-auto text-sm">
             {filterStatus === 'pending'
               ? 'No hay solicitudes pendientes por revisar.'
               : 'No hay solicitudes en este estado.'}
@@ -284,7 +319,8 @@ const RequestsPage = () => {
         <AnimatePresence mode="popLayout">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {requests.map((req) => {
-              const statusInfo   = STATUS_LABELS[req.status] ?? STATUS_LABELS.pending;
+              // ✅ Obtiene estilos del mapa — sin interpolación dinámica
+              const statusStyle = STATUS_STYLES[req.status] ?? STATUS_STYLES.pending;
               const selectedRole = approveState[req.id] || USER_ROLES.MEMBER;
 
               return (
@@ -294,7 +330,7 @@ const RequestsPage = () => {
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-                  className="card-soft border border-slate-800/80 flex flex-col gap-4"
+                  className="card-soft border border-[var(--color-border)] flex flex-col gap-4"
                 >
                   {/* Cabecera de tarjeta */}
                   <div className="flex items-start justify-between gap-3">
@@ -304,33 +340,34 @@ const RequestsPage = () => {
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-light truncate">{req.name || '—'}</p>
-                        <p className="text-xs text-slate-400">
-                          <FaClock className="inline mr-1" />
+                        <p className="text-xs text-muted flex items-center gap-1">
+                          <FaClock className="inline" />
                           {formatDate(req.createdAt)}
                         </p>
                       </div>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0
-                      bg-${statusInfo.color}-400/10 text-${statusInfo.color}-400`}>
-                      {statusInfo.label}
+
+                    {/* ✅ Badge con clases completas del mapa STATUS_STYLES */}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${statusStyle.badge}`}>
+                      {statusStyle.label}
                     </span>
                   </div>
 
                   {/* Datos de contacto */}
                   <div className="space-y-1.5 text-sm">
-                    <p className="text-slate-300 flex items-center gap-2">
-                      <FaEnvelope className="text-slate-500 flex-shrink-0" />
+                    <p className="text-[var(--color-text)] flex items-center gap-2">
+                      <FaEnvelope className="text-muted flex-shrink-0" />
                       <span className="truncate">{req.email}</span>
                     </p>
                     {req.phone && (
-                      <p className="text-slate-300 flex items-center gap-2">
-                        <FaPhone className="text-slate-500 flex-shrink-0" />
+                      <p className="text-[var(--color-text)] flex items-center gap-2">
+                        <FaPhone className="text-muted flex-shrink-0" />
                         {req.phone}
                       </p>
                     )}
                     {req.message && (
-                      <p className="text-slate-400 flex items-start gap-2 text-xs mt-2">
-                        <FaCommentAlt className="text-slate-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-muted flex items-start gap-2 text-xs mt-2">
+                        <FaCommentAlt className="text-muted mt-0.5 flex-shrink-0" />
                         <span className="line-clamp-3">{req.message}</span>
                       </p>
                     )}
@@ -338,15 +375,16 @@ const RequestsPage = () => {
 
                   {/* Acciones — solo para pendientes */}
                   {req.status === 'pending' && (
-                    <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-800">
-                      {/* Selector de rol */}
+                    <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[var(--color-border)]">
+                      {/* ✅ Selector de rol con variables del tema */}
                       <select
                         value={selectedRole}
                         onChange={(e) =>
                           setApproveState(prev => ({ ...prev, [req.id]: e.target.value }))
                         }
-                        className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg
-                          py-2 px-3 text-sm text-light focus:outline-none focus:border-primary"
+                        className="flex-1 min-w-0 bg-[var(--color-surface)] border border-[var(--color-border)]
+                          rounded-lg py-2 px-3 text-sm text-[var(--color-text)]
+                          focus:outline-none focus:border-primary transition-colors"
                       >
                         {Object.entries(USER_ROLE_LABELS).map(([key, label]) => (
                           <option key={key} value={key}>{label}</option>
@@ -375,9 +413,9 @@ const RequestsPage = () => {
 
                   {/* Info si ya fue procesada */}
                   {req.status !== 'pending' && req.approvedBy && (
-                    <p className="text-xs text-slate-500 border-t border-slate-800 pt-2">
+                    <p className="text-xs text-muted border-t border-[var(--color-border)] pt-2">
                       {req.status === 'approved' ? 'Aprobada' : 'Rechazada'} por{' '}
-                      <span className="text-slate-400">{req.approvedBy}</span>
+                      <span className="text-[var(--color-text)]">{req.approvedBy}</span>
                     </p>
                   )}
 
@@ -385,7 +423,7 @@ const RequestsPage = () => {
                   {req.status !== 'pending' && (
                     <button
                       onClick={() => handleDelete(req)}
-                      className="text-xs text-slate-500 hover:text-red-400 transition-colors self-end"
+                      className="text-xs text-muted hover:text-red-400 transition-colors self-end"
                     >
                       Eliminar registro
                     </button>
