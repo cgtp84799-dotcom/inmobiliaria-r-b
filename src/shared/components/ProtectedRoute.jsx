@@ -35,28 +35,51 @@ const AccessDenied = () => (
 );
 
 /**
- * ProtectedRoute — guarda todas las rutas privadas.
+ * ProtectedRoute — guarda rutas privadas.
  *
- * Sin allowedRoles: cualquier usuario autenticado con rol válido puede entrar.
- * Con allowedRoles: solo los roles listados pueden entrar.
+ * Lógica de redirección según rol:
+ *   - No autenticado              → /login
+ *   - viewer (cliente)            → si intenta entrar a ruta admin, va a /portal
+ *   - admin/member                → acceso normal al dashboard
+ *   - allowedRoles especificados  → verifica el rol exacto
  *
- * Los viewers tienen acceso al panel pero no a rutas admin-only
- * como /usuarios y /solicitudes (que pasan allowedRoles=['admin']).
+ * Props:
+ *   clientOnly  — si true, solo permite viewer (para /portal)
+ *   agentOnly   — si true, solo permite admin/member (para rutas del panel)
+ *   allowedRoles — array de roles permitidos (para rutas muy específicas)
  */
-const ProtectedRoute = ({ children, allowedRoles }) => {
+const ProtectedRoute = ({ children, allowedRoles, clientOnly, agentOnly }) => {
   const { currentUser, userData, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
+
+  // No autenticado
   if (!currentUser) return <Navigate to={AUTH_ROUTES.LOGIN} replace />;
 
   const role = userData?.role;
   const validRoles = Object.values(USER_ROLES);
 
-  // Si el rol no existe o no es válido → acceso denegado
+  // Rol no válido
   if (!role || !validRoles.includes(role)) return <AccessDenied />;
 
-  // Si se especifican roles permitidos → verificar
-  if (allowedRoles?.length && !allowedRoles.includes(role)) return <AccessDenied />;
+  // Ruta solo para clientes (viewer)
+  if (clientOnly && role !== USER_ROLES.VIEWER) {
+    // Admin/member que intenta ir a /portal → dashboard
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Ruta solo para agentes/admin (panel interno)
+  if (agentOnly && role === USER_ROLES.VIEWER) {
+    // Cliente que intenta entrar al dashboard → su portal
+    return <Navigate to="/portal" replace />;
+  }
+
+  // Roles específicos
+  if (allowedRoles?.length && !allowedRoles.includes(role)) {
+    // viewer intentando entrar a ruta admin-only → su portal
+    if (role === USER_ROLES.VIEWER) return <Navigate to="/portal" replace />;
+    return <AccessDenied />;
+  }
 
   return children ? children : <Outlet />;
 };

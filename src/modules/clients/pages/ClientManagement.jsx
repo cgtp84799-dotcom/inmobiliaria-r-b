@@ -1,217 +1,172 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaPlus, FaSearch, FaUser, FaEdit, FaTrash,
-  FaPhone, FaEnvelope, FaMapMarkerAlt, FaDollarSign, FaHome,
-  FaExclamationTriangle, FaSpinner, FaEye, FaWhatsapp,
-  FaStickyNote, FaTimes, FaClock, FaCheckCircle, FaCalendarAlt,
-  FaUsers, FaClipboardList, FaBan, FaUserTie,
-  FaChevronLeft, FaChevronRight, FaFileContract, FaCalendarCheck,
-  FaTimesCircle, FaHistory,
+  FaPhone, FaEnvelope, FaSpinner, FaWhatsapp,
+  FaTimes, FaFilter, FaCalendarCheck, FaUsers,
+  FaFileContract, FaHistory, FaTable, FaTh,
+  FaChevronLeft, FaChevronRight,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import {
   collection, addDoc, updateDoc, deleteDoc, doc,
-  onSnapshot, query, where, getDoc, getDocs,
-  orderBy, limit, startAfter, getCountFromServer,
+  onSnapshot, query, orderBy, serverTimestamp,
+  getDocs, limit,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
-import { parseISO, format, isValid } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { hasPermission } from '../../users/types/user.types';
 import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
-import ContractStatusBadge from '../../contracts/components/ContractStatusBadge';
-import ContractTypeBadge  from '../../contracts/components/ContractTypeBadge';
-import { formatCOP }      from '../../../shared/utils/formatCurrency';
-import { formatShort }    from '../../../shared/utils/formatDate';
+import ClientDetail from '../components/ClientDetail';
+import { formatCOP } from '../../../shared/utils/formatCurrency';
+import { formatShort } from '../../../shared/utils/formatDate';
+import { parseISO, format, isValid } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-const PAGE_SIZE = 12;
-
-// ─── Helpers de fecha ────────────────────────────────────────────────────────
-function toDate(val) {
-  if (!val) return null;
-  if (val?.toDate) return val.toDate();
-  if (val instanceof Date) return val;
-  if (typeof val === 'string') { const d = parseISO(val); return isValid(d) ? d : null; }
-  return null;
-}
-function formatEventDate(item) {
-  if (item.date) {
-    const d = parseISO(`${item.date}T${item.time || '00:00'}`);
-    if (isValid(d)) return format(d, 'd MMM yyyy, HH:mm', { locale: es });
-  }
-  const d = toDate(item.createdAt);
-  if (d) return format(d, 'd MMM yyyy, HH:mm', { locale: es });
-  return '—';
-}
-
-// ─── Badges ───────────────────────────────────────────────────────────────────
+// ── Badges ────────────────────────────────────────────────────────────────────
 const TipoBadge = ({ tipo }) => {
-  const styles = {
+  const s = {
     Lead: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-    lead: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
     Comprador: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     Arrendatario: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     Propietario: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
   };
-  return <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[tipo] || styles.Lead}`}>{tipo}</span>;
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${s[tipo] || s.Lead}`}>{tipo}</span>;
 };
 
 const EstadoBadge = ({ estado }) => {
-  const styles = {
+  const s = {
     Activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    active: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     Inactivo: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     Convertido: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
   };
-  return <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold border ${styles[estado] || styles.Activo}`}>{estado}</span>;
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${s[estado] || s.Activo}`}>{estado}</span>;
 };
 
-// ─── Config de tipos de historial ────────────────────────────────────────────
-const TYPE_CONFIG = {
-  visita:             { icon: FaEye,          color: 'text-blue-400',    border: 'border-blue-400',    bg: 'bg-blue-400',    label: 'Visita' },
-  visit_approved:     { icon: FaCheckCircle,  color: 'text-emerald-400', border: 'border-emerald-400', bg: 'bg-emerald-400', label: 'Visita aprobada' },
-  visit_completed:    { icon: FaCheckCircle,  color: 'text-green-400',   border: 'border-green-400',   bg: 'bg-green-400',   label: 'Visita completada' },
-  visit_rescheduled:  { icon: FaCalendarAlt,  color: 'text-blue-300',    border: 'border-blue-300',    bg: 'bg-blue-300',    label: 'Reagendada' },
-  visit_rejected:     { icon: FaTimesCircle,  color: 'text-red-400',     border: 'border-red-400',     bg: 'bg-red-400',     label: 'Visita rechazada' },
-  reunion:            { icon: FaUsers,        color: 'text-purple-400',  border: 'border-purple-400',  bg: 'bg-purple-400',  label: 'Reunión' },
-  llamada:            { icon: FaPhone,        color: 'text-green-400',   border: 'border-green-400',   bg: 'bg-green-400',   label: 'Llamada' },
-  seguimiento:        { icon: FaClipboardList,color: 'text-orange-400',  border: 'border-orange-400',  bg: 'bg-orange-400',  label: 'Seguimiento' },
-  otro:               { icon: FaCalendarAlt,  color: 'text-slate-400',   border: 'border-slate-400',   bg: 'bg-slate-400',   label: 'Otro' },
-};
-const DEFAULT_TYPE = TYPE_CONFIG.otro;
-
-const STATUS_CONFIG = {
-  pendiente:   { icon: FaClock,         color: 'text-yellow-400', label: 'Pendiente' },
-  confirmada:  { icon: FaCheckCircle,   color: 'text-blue-400',   label: 'Confirmada' },
-  completada:  { icon: FaCheckCircle,   color: 'text-green-400',  label: 'Completada' },
-  cancelada:   { icon: FaBan,           color: 'text-red-400',    label: 'Cancelada' },
-  approved:    { icon: FaCheckCircle,   color: 'text-emerald-400',label: 'Aprobada' },
-  completed:   { icon: FaCheckCircle,   color: 'text-green-400',  label: 'Completada' },
-  rejected:    { icon: FaTimesCircle,   color: 'text-red-400',    label: 'Rechazada' },
-  rescheduled: { icon: FaCalendarAlt,   color: 'text-blue-300',   label: 'Reagendada' },
-};
-const DEFAULT_STATUS = STATUS_CONFIG.pendiente;
-
-// ─── Pestaña contratos del cliente ────────────────────────────────────────────
-const ClientContracts = ({ clientId }) => {
-  const [contracts, setContracts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!clientId) return;
-    setLoading(true);
-    const q = query(collection(db, 'contracts'), where('clientId', '==', clientId), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => { setContracts(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); setLoading(false); }, () => setLoading(false));
-    return () => unsub();
-  }, [clientId]);
-  if (loading) return <div className="py-8 flex justify-center"><FaSpinner className="animate-spin text-yellow-400 text-2xl" /></div>;
-  if (contracts.length === 0) return (
-    <div className="py-10 text-center">
-      <FaFileContract className="text-slate-600 text-4xl mx-auto mb-3" />
-      <p className="text-slate-400 text-sm">No hay contratos registrados para este cliente</p>
-    </div>
-  );
-  return (
-    <div className="space-y-3">
-      {contracts.map((c) => (
-        <div key={c.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 hover:border-yellow-500/30 transition-colors">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2 flex-wrap"><ContractTypeBadge type={c.type} /><ContractStatusBadge status={c.status} /></div>
-            <p className="text-slate-400 text-xs whitespace-nowrap">{formatShort(c.startDate) || '—'}</p>
-          </div>
-          <p className="text-white text-sm font-semibold truncate mb-1">{c.propertyName || 'Propiedad sin nombre'}</p>
-          {c.propertyAddress && <p className="text-slate-500 text-xs truncate mb-2">{c.propertyAddress}</p>}
-          <div className="flex items-center justify-between">
-            <p className="text-yellow-400 text-sm font-bold">{formatCOP(c.value)}</p>
-            {c.agentName && <span className="text-xs text-slate-400 flex items-center gap-1"><FaUserTie size={10} /> {c.agentName}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ─── Modal agendar visita ──────────────────────────────────────────────────────
-const ScheduleVisitModal = ({ client, properties, onClose, onSaved }) => {
+// ── Modal agendar visita ──────────────────────────────────────────────────────
+function ScheduleVisitModal({ client, onClose }) {
   const { currentUser } = useAuth();
-  const [form, setForm] = useState({ propertyId: client?.propiedadVinculada || '', date: '', time: '10:00', notes: '' });
+  const [properties, setProperties] = useState([]);
+  const [form, setForm] = useState({
+    propertyId: client?.propiedadVinculada || '',
+    date: '', time: '10:00', notes: '',
+  });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getDocs(query(collection(db, 'properties'), orderBy('title'), limit(100)))
+      .then((s) => setProperties(s.docs.map((d) => ({ id: d.id, ...d.data() }))))
+      .catch(() => {});
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.date) { toast.error('Selecciona una fecha'); return; }
     setSaving(true);
     try {
-      const selectedProp = properties.find((p) => p.id === form.propertyId);
+      const prop = properties.find((p) => p.id === form.propertyId);
       await addDoc(collection(db, 'appointments'), {
-        clientId: client.id, clientName: client.nombre, clientPhone: client.telefono || '', clientEmail: client.email || '',
-        propertyId: form.propertyId || '', propertyName: selectedProp?.title || selectedProp?.name || '',
-        propertyAddress: selectedProp?.location?.address || selectedProp?.address || '',
-        date: form.date, time: form.time, notes: form.notes, status: 'pendiente', type: 'visita',
-        agentId: currentUser?.uid || '', agentName: currentUser?.displayName || currentUser?.email?.split('@')[0] || '',
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        clientId:       client.id,
+        clientName:     client.nombre,
+        clientPhone:    client.telefono || '',
+        clientEmail:    client.email    || '',
+        propertyId:     form.propertyId || '',
+        propertyName:   prop?.title  || '',
+        propertyAddress:prop?.address || prop?.city || '',
+        date:           form.date,
+        time:           form.time,
+        notes:          form.notes,
+        status:         'pendiente',
+        type:           'visita',
+        assignedAgentId: currentUser?.uid || '',
+        agentName:      currentUser?.displayName || currentUser?.email?.split('@')[0] || '',
+        agentEmail:     currentUser?.email || '',
+        createdAt:      serverTimestamp(),
+        updatedAt:      serverTimestamp(),
       });
-      toast.success('Visita agendada correctamente');
-      onSaved?.(); onClose();
-    } catch (err) { toast.error(`Error: ${err.message}`); } finally { setSaving(false); }
+      toast.success('Visita agendada correctamente ✓');
+      onClose();
+    } catch (err) {
+      toast.error(`Error: ${err.message}`);
+    } finally { setSaving(false); }
   };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
-      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl border border-slate-700/60 p-6" style={{ backgroundColor: 'var(--color-card-bg, #1e1e1c)' }}>
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.93, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2"><FaCalendarCheck className="text-yellow-400" />Agendar visita</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"><FaTimes size={14} /></button>
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <FaCalendarCheck className="text-primary" /> Agendar visita
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <FaTimes size={13} />
+          </button>
         </div>
         <p className="text-slate-400 text-sm mb-4">Cliente: <span className="text-white font-semibold">{client?.nombre}</span></p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-xs mb-1.5">Propiedad</label>
+            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Propiedad</label>
             <select value={form.propertyId} onChange={(e) => setForm({ ...form, propertyId: e.target.value })}
-              className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }}>
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none">
               <option value="">Sin propiedad específica</option>
-              {properties.map((p) => <option key={p.id} value={p.id}>{p.title || p.name} – {p.city || p.location?.city || ''}</option>)}
+              {properties.map((p) => <option key={p.id} value={p.id}>{p.title} – {p.city || ''}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 text-xs mb-1.5">Fecha <span className="text-red-400">*</span></label>
-              <input type="date" required value={form.date} min={new Date().toISOString().split('T')[0]} onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Fecha *</label>
+              <input type="date" required value={form.date} min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none" />
             </div>
             <div>
-              <label className="block text-slate-400 text-xs mb-1.5">Hora</label>
-              <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Hora</label>
+              <input type="time" value={form.time}
+                onChange={(e) => setForm({ ...form, time: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none" />
             </div>
           </div>
           <div>
-            <label className="block text-slate-400 text-xs mb-1.5">Notas</label>
-            <textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Instrucciones, observaciones..."
-              className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none resize-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Notas</label>
+            <textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Instrucciones, observaciones..."
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:border-primary outline-none resize-none" />
           </div>
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold">Cancelar</button>
-            <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
-              {saving ? <><FaSpinner className="animate-spin" /> Guardando...</> : 'Agendar visita'}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
+                hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              {saving ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : 'Agendar'}
             </button>
           </div>
         </form>
       </motion.div>
     </motion.div>
   );
-};
+}
 
-// ─── Modal: agregar actividad manual ─────────────────────────────────────────
-const AddActivityModal = ({ client, onClose }) => {
+// ── Modal agregar actividad ────────────────────────────────────────────────────
+function AddActivityModal({ client, onClose }) {
   const { currentUser } = useAuth();
-  const [form, setForm] = useState({ type: 'llamada', notes: '', date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5) });
+  const [form, setForm] = useState({
+    type: 'llamada', notes: '',
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toTimeString().slice(0, 5),
+  });
   const [saving, setSaving] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.notes.trim()) { toast.error('Agrega una nota'); return; }
+    if (!form.notes.trim()) { toast.error('Escribe una nota'); return; }
     setSaving(true);
     try {
       await addDoc(collection(db, 'clients', client.id, 'history'), {
@@ -221,526 +176,620 @@ const AddActivityModal = ({ client, onClose }) => {
         time:      form.time,
         agentName: currentUser?.displayName || currentUser?.email?.split('@')[0] || '',
         agentId:   currentUser?.uid || '',
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
       });
-      toast.success('Actividad registrada');
+      toast.success('Actividad registrada ✓');
       onClose();
-    } catch (err) { toast.error(`Error: ${err.message}`); } finally { setSaving(false); }
+    } catch (err) { toast.error(`Error: ${err.message}`); }
+    finally { setSaving(false); }
   };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} onClick={onClose}>
-      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl border border-slate-700/60 p-6" style={{ backgroundColor: 'var(--color-card-bg, #1e1e1c)' }}>
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2"><FaPlus className="text-yellow-400" />Nueva actividad</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"><FaTimes size={14} /></button>
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.93, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <FaPlus className="text-primary" /> Nueva actividad
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <FaTimes size={13} />
+          </button>
         </div>
         <p className="text-slate-400 text-sm mb-4">Cliente: <span className="text-white font-semibold">{client?.nombre}</span></p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-xs mb-1.5">Tipo de actividad</label>
+            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo</label>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }}>
-              <option value="llamada">Llamada</option>
-              <option value="reunion">Reunión</option>
-              <option value="seguimiento">Seguimiento</option>
-              <option value="visita">Visita</option>
-              <option value="otro">Otro</option>
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none">
+              <option value="llamada">📞 Llamada</option>
+              <option value="reunion">🤝 Reunión</option>
+              <option value="seguimiento">👥 Seguimiento</option>
+              <option value="visita">🏠 Visita</option>
+              <option value="otro">📌 Otro</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 text-xs mb-1.5">Fecha</label>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Fecha</label>
               <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none" />
             </div>
             <div>
-              <label className="block text-slate-400 text-xs mb-1.5">Hora</label>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Hora</label>
               <input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none" />
             </div>
           </div>
           <div>
-            <label className="block text-slate-400 text-xs mb-1.5">Notas / descripción <span className="text-red-400">*</span></label>
-            <textarea rows={4} required value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="¿Qué pasó en esta actividad?..."
-              className="w-full rounded-lg px-3 py-2.5 text-sm text-white border border-slate-600 focus:border-yellow-500 outline-none resize-none" style={{ backgroundColor: 'var(--color-input-bg, #141413)' }} />
+            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Nota *</label>
+            <textarea rows={4} required value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="¿Qué ocurrió en esta interacción?"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200
+                focus:border-primary outline-none resize-none" />
           </div>
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold">Cancelar</button>
-            <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
-              {saving ? <><FaSpinner className="animate-spin" /> Guardando...</> : 'Registrar actividad'}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
+                hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              {saving ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : 'Guardar'}
             </button>
           </div>
         </form>
       </motion.div>
     </motion.div>
   );
-};
+}
 
-// ─── Historial unificado (appointments + clients/{id}/history) ────────────────
-const ClientHistory = ({ clientDetail, onScheduleVisit, onAddActivity }) => {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ── Componente principal ──────────────────────────────────────────────────────
+const PAGE_SIZE = 15;
 
-  useEffect(() => {
-    if (!clientDetail?.id) { setItems([]); setLoading(false); return; }
-    let historyItems = [];
-    let appointmentItems = [];
-    let resolved = [false, false];
-    function merge() {
-      if (!resolved[0] || !resolved[1]) return;
-      const combined = [...historyItems, ...appointmentItems].sort((a, b) => {
-        const da = toDate(a._sortDate) || new Date(0);
-        const db2 = toDate(b._sortDate) || new Date(0);
-        return db2 - da;
-      });
-      setItems(combined);
-      setLoading(false);
-    }
-    // 1) sub-colección clients/{id}/history
-    const unsubHistory = onSnapshot(
-      query(collection(db, 'clients', clientDetail.id, 'history'), orderBy('createdAt', 'desc')),
-      (snap) => {
-        historyItems = snap.docs.map((d) => {
-          const data = d.data();
-          return { _id: d.id, _source: 'history', _sortDate: data.createdAt,
-            type: data.type || 'otro', notes: data.notes || '', date: data.date, time: data.time,
-            agentName: data.agentName || '', propertyName: data.propertyName || null,
-            approvedBy: data.approvedBy || null, createdAt: data.createdAt, status: data.type?.replace('visit_','') || 'approved' };
-        });
-        resolved[0] = true; merge();
-      },
-    );
-    // 2) appointments
-    const unsubAppt = onSnapshot(
-      query(collection(db, 'appointments'), where('clientId', '==', clientDetail.id), orderBy('date', 'desc')),
-      (snap) => {
-        appointmentItems = snap.docs.map((d) => {
-          const data = d.data();
-          let startDate = null;
-          if (data.date) { const s = parseISO(`${data.date}T${data.time || '09:00'}`); if (isValid(s)) startDate = s; }
-          return { _id: d.id, _source: 'appointment', _sortDate: startDate || data.createdAt,
-            type: data.type || 'visita', notes: data.notes || '', date: data.date, time: data.time,
-            agentName: data.agentName || '', propertyName: data.propertyName || null,
-            location: data.location || null, status: data.status || 'pendiente', createdAt: data.createdAt };
-        });
-        resolved[1] = true; merge();
-      },
-      () => { resolved[1] = true; merge(); },
-    );
-    return () => { unsubHistory(); unsubAppt(); };
-  }, [clientDetail?.id]);
-
-  if (loading) return <div className="flex justify-center py-8"><FaSpinner className="animate-spin text-yellow-400 text-2xl" /></div>;
-
-  return (
-    <div>
-      {/* Acciones */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button onClick={onScheduleVisit}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-yellow-300 border border-yellow-600/40 hover:bg-yellow-500/10 transition-colors"
-          style={{ backgroundColor: 'rgba(234,179,8,0.06)' }}>
-          <FaCalendarCheck size={11} /> Agendar visita
-        </button>
-        <button onClick={onAddActivity}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-blue-300 border border-blue-600/40 hover:bg-blue-500/10 transition-colors"
-          style={{ backgroundColor: 'rgba(59,130,246,0.06)' }}>
-          <FaPlus size={11} /> Registrar actividad
-        </button>
-      </div>
-
-      {items.length === 0 ? (
-        <div className="text-center py-8">
-          <FaCalendarAlt className="text-slate-600 text-3xl mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">Sin historial de actividad</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const cfg       = TYPE_CONFIG[item.type] || DEFAULT_TYPE;
-            const TypeIcon  = cfg.icon;
-            const sCfg      = STATUS_CONFIG[item.status] || DEFAULT_STATUS;
-            const StatusIcon = sCfg.icon;
-            return (
-              <div key={`${item._source}-${item._id}`}
-                className="flex gap-3 p-3 rounded-xl border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}>
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-slate-800`}>
-                  <TypeIcon className={`text-sm ${cfg.color}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-white text-xs font-semibold">{cfg.label}</span>
-                    {item._source === 'history' && (
-                      <span className="bg-yellow-500/10 text-yellow-400 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">CRM</span>
-                    )}
-                    <StatusIcon className={`text-xs ${sCfg.color}`} />
-                    <span className={`text-[10px] ${sCfg.color}`}>{sCfg.label}</span>
-                  </div>
-                  {item.propertyName && <p className="text-slate-400 text-xs truncate">🏠 {item.propertyName}</p>}
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-slate-500 text-[10px]">{formatEventDate(item)}</span>
-                    {item.agentName && <span className="text-slate-500 text-[10px]">{item.agentName}</span>}
-                  </div>
-                  {item.notes && <p className="text-slate-500 text-[10px] mt-1 line-clamp-2">{item.notes}</p>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── Componente principal ──────────────────────────────────────────────────────
-const ClientManagement = () => {
+export default function ClientManagement() {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
   const canCreate = hasPermission(currentUser?.role, 'clients', 'create');
   const canUpdate = hasPermission(currentUser?.role, 'clients', 'update');
   const canDelete = hasPermission(currentUser?.role, 'clients', 'delete');
 
-  const [clients, setClients]         = useState([]);
-  const [properties, setProperties]   = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [clients,   setClients]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [viewMode,  setViewMode]  = useState('table'); // 'table' | 'cards'
 
-  const [showForm, setShowForm]               = useState(false);
-  const [selectedClient, setSelectedClient]   = useState(null);
-  const [submitting, setSubmitting]           = useState(false);
-
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [clientDetail, setClientDetail]       = useState(null);
-  const [detailTab, setDetailTab]             = useState('actividad');
-
-  const [visitClient, setVisitClient]       = useState(null);
-  const [activityClient, setActivityClient] = useState(null);
-
-  const [filtroTipo, setFiltroTipo]     = useState('Todos');
-  const [filtroEstado, setFiltroEstado] = useState('Todos');
-  const [busqueda, setBusqueda]         = useState('');
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalDocs, setTotalDocs]     = useState(0);
-  const [pageCursors, setPageCursors] = useState({});
-
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
-
-  const [formData, setFormData] = useState({
+  // Formulario
+  const [showForm,  setShowForm]  = useState(false);
+  const [editClient, setEditClient] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formData,  setFormData]  = useState({
     nombre: '', telefono: '', email: '',
     tipoCliente: 'Lead', estado: 'Activo',
     presupuesto: '', tipoPropiedad: '',
     ubicacionInteres: '', notas: '', propiedadVinculada: '',
   });
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil((totalDocs || 0) / PAGE_SIZE)), [totalDocs]);
+  // Drawer detalle
+  const [detailClient,  setDetailClient]  = useState(null);
 
-  const buildClientsBaseQuery = () => query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
+  // Modales
+  const [visitClient,   setVisitClient]   = useState(null);
+  const [activityClient,setActivityClient]= useState(null);
+  const [confirmModal,  setConfirmModal]  = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
-  const loadTotalClientsCount = async () => {
-    try { const snap = await getCountFromServer(buildClientsBaseQuery()); setTotalDocs(snap.data().count || 0); } catch { setTotalDocs(0); }
-  };
+  // Filtros
+  const [search,       setSearch]       = useState('');
+  const [filterTipo,   setFilterTipo]   = useState('');
+  const [filterEstado, setFilterEstado] = useState('');
+  const [showFilters,  setShowFilters]  = useState(false);
+  const [page,         setPage]         = useState(1);
 
-  const hydrateCursorsUpTo = async (targetPage) => {
-    for (let p = 1; p <= targetPage; p++) {
-      if (pageCursors[p]) continue;
-      const qBase = buildClientsBaseQuery();
-      const qPage = p === 1 ? query(qBase, limit(PAGE_SIZE))
-        : pageCursors[p - 1] ? query(qBase, startAfter(pageCursors[p - 1]), limit(PAGE_SIZE)) : null;
-      if (!qPage) break;
-      const snap = await getDocs(qPage);
-      setPageCursors((prev) => ({ ...prev, [p]: snap.docs[snap.docs.length - 1] || null }));
-    }
-  };
-
-  const loadClientsPage = async (pageNumber) => {
-    try {
-      setLoading(true);
-      const qBase = buildClientsBaseQuery();
-      let qPage;
-      if (pageNumber === 1) { qPage = query(qBase, limit(PAGE_SIZE)); }
-      else {
-        if (!pageCursors[pageNumber - 1]) await hydrateCursorsUpTo(pageNumber - 1);
-        const cursor = pageCursors[pageNumber - 1] || null;
-        qPage = cursor ? query(qBase, startAfter(cursor), limit(PAGE_SIZE)) : query(qBase, limit(PAGE_SIZE));
-      }
-      const snapshot = await getDocs(qPage);
-      const data = snapshot.docs.map((docSnap) => {
-        const d = docSnap.data();
-        return {
-          id: docSnap.id,
-          nombre: d.nombre || d.name || '', telefono: d.telefono || d.phone || '', email: d.email || '',
-          tipoCliente: d.tipoCliente || d.type || 'Lead', estado: d.estado || d.status || 'Activo',
-          presupuesto: d.presupuesto || d.budget || '', tipoPropiedad: d.tipoPropiedad || d.propertyType || '',
-          ubicacionInteres: d.ubicacionInteres || d.location || '', notas: d.notas || d.notes || '',
-          propiedadVinculada: d.propiedadVinculada || d.linkedProperty || '',
-          fechaRegistro: d.fechaRegistro || d.createdAt || new Date().toISOString(), ...d,
-        };
-      });
-      setPageCursors((prev) => ({ ...prev, [pageNumber]: snapshot.docs[snapshot.docs.length - 1] || null }));
-      setClients(data); setCurrentPage(pageNumber);
-    } catch (error) { toast.error(`Error: ${error.message}`); } finally { setLoading(false); }
-  };
-
+  // ── Listener en tiempo real ────────────────────────────────────────────────
   useEffect(() => {
-    (async () => { await loadTotalClientsCount(); await loadClientsPage(1); })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const unsub = onSnapshot(
+      query(collection(db, 'clients'), orderBy('createdAt', 'desc')),
+      (s) => { setClients(s.docs.map((d) => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      (err) => { console.error('[ClientManagement]', err); setLoading(false); }
+    );
+    return () => unsub();
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!showForm && !visitClient) return;
-      if (properties.length > 0) return;
-      try {
-        const q = query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(200));
-        const snap = await getDocs(q);
-        if (active) setProperties(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch {}
-    };
-    load();
-    return () => { active = false; };
-  }, [showForm, visitClient]);
+  // ── Filtrado en memoria ────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return clients.filter((c) => {
+      if (filterTipo   && c.tipoCliente !== filterTipo)   return false;
+      if (filterEstado && c.estado      !== filterEstado) return false;
+      if (q && !(
+        c.nombre?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q)  ||
+        c.telefono?.includes(q)
+      )) return false;
+      return true;
+    });
+  }, [clients, search, filterTipo, filterEstado]);
 
-  const clientesFiltrados = useMemo(() => clients.filter((c) => {
-    const term = busqueda.trim().toLowerCase();
-    return (
-      (filtroTipo   === 'Todos' || c.tipoCliente === filtroTipo) &&
-      (filtroEstado === 'Todos' || c.estado      === filtroEstado) &&
-      (!term || c.nombre?.toLowerCase().includes(term) || c.email?.toLowerCase().includes(term) || c.telefono?.includes(busqueda))
-    );
-  }), [clients, filtroTipo, filtroEstado, busqueda]);
+  // KPIs
+  const kpis = useMemo(() => ({
+    total:      clients.length,
+    activos:    clients.filter((c) => c.estado === 'Activo').length,
+    leads:      clients.filter((c) => c.tipoCliente === 'Lead').length,
+    convertidos:clients.filter((c) => c.estado === 'Convertido').length,
+  }), [clients]);
 
-  const pageButtons = useMemo(() => {
-    const p = totalPages, c = currentPage;
-    if (p <= 3) return Array.from({ length: p }, (_, i) => i + 1);
-    let s = Math.max(1, c - 1), e = Math.min(p, s + 2);
-    if (e - s < 2) s = Math.max(1, e - 2);
-    return [s, s + 1, s + 2].filter((x) => x >= 1 && x <= p);
-  }, [totalPages, currentPage]);
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleSaveClient = async (e) => {
+  const hasFilters = filterTipo || filterEstado;
+
+  // ── Guardar cliente ────────────────────────────────────────────────────────
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.nombre.trim())   { toast.error('El nombre es obligatorio');   return; }
     if (!formData.telefono.trim()) { toast.error('El teléfono es obligatorio'); return; }
     setSubmitting(true);
     try {
-      if (selectedClient) {
-        await updateDoc(doc(db, 'clients', selectedClient.id), { ...formData, updatedAt: new Date().toISOString() });
-        toast.success('Cliente actualizado correctamente');
+      if (editClient) {
+        await updateDoc(doc(db, 'clients', editClient.id), {
+          ...formData, updatedAt: serverTimestamp(),
+        });
+        toast.success('Cliente actualizado ✓');
+        // Actualizar drawer si está abierto
+        if (detailClient?.id === editClient.id) {
+          setDetailClient((prev) => ({ ...prev, ...formData }));
+        }
       } else {
-        await addDoc(collection(db, 'clients'), { ...formData, fechaRegistro: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-        toast.success('Cliente creado correctamente');
+        await addDoc(collection(db, 'clients'), {
+          ...formData, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        toast.success('Cliente creado ✓');
       }
-      await loadTotalClientsCount(); await loadClientsPage(currentPage); handleCloseForm();
-    } catch (error) { toast.error(`Error: ${error.message}`); } finally { setSubmitting(false); }
+      handleCloseForm();
+    } catch (err) { toast.error(`Error: ${err.message}`); }
+    finally { setSubmitting(false); }
   };
 
-  const handleDeleteClient = (clientId) => {
+  const handleDelete = (clientId) => {
     setConfirmModal({
-      isOpen: true, title: 'Eliminar cliente', message: '¿Seguro que quieres eliminar este cliente? Esta acción no se puede deshacer.',
+      isOpen: true,
+      title: 'Eliminar cliente',
+      message: '¿Seguro que deseas eliminar este cliente? Esta acción es permanente.',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal((p) => ({ ...p, isOpen: false }));
         try {
-          await deleteDoc(doc(db, 'clients', clientId)); toast.success('Cliente eliminado');
-          await loadTotalClientsCount();
-          await loadClientsPage(clients.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
-        } catch (error) { toast.error(`Error: ${error.message}`); }
+          await deleteDoc(doc(db, 'clients', clientId));
+          toast.success('Cliente eliminado');
+          if (detailClient?.id === clientId) setDetailClient(null);
+        } catch (err) { toast.error(`Error: ${err.message}`); }
       },
     });
   };
 
-  const handleEditClient = (client) => {
-    setSelectedClient(client);
-    setFormData({ nombre: client.nombre || '', telefono: client.telefono || '', email: client.email || '',
+  const handleEdit = (client) => {
+    setEditClient(client);
+    setFormData({
+      nombre: client.nombre || '', telefono: client.telefono || '', email: client.email || '',
       tipoCliente: client.tipoCliente || 'Lead', estado: client.estado || 'Activo',
       presupuesto: client.presupuesto || '', tipoPropiedad: client.tipoPropiedad || '',
-      ubicacionInteres: client.ubicacionInteres || '', notas: client.notas || '', propiedadVinculada: client.propiedadVinculada || '' });
+      ubicacionInteres: client.ubicacionInteres || '', notas: client.notas || '',
+      propiedadVinculada: client.propiedadVinculada || '',
+    });
     setShowForm(true);
   };
 
-  const handleViewDetail = (client) => { setClientDetail(client); setDetailTab('actividad'); setShowDetailModal(true); };
-
   const handleCloseForm = () => {
-    setShowForm(false); setSelectedClient(null);
-    setFormData({ nombre: '', telefono: '', email: '', tipoCliente: 'Lead', estado: 'Activo', presupuesto: '', tipoPropiedad: '', ubicacionInteres: '', notas: '', propiedadVinculada: '' });
+    setShowForm(false); setEditClient(null);
+    setFormData({ nombre: '', telefono: '', email: '', tipoCliente: 'Lead', estado: 'Activo',
+      presupuesto: '', tipoPropiedad: '', ubicacionInteres: '', notas: '', propiedadVinculada: '' });
   };
 
-  const goPrev   = () => { if (currentPage <= 1) return; loadClientsPage(currentPage - 1); };
-  const goNext   = () => { if (currentPage >= totalPages) return; loadClientsPage(currentPage + 1); };
-  const goToPage = (p) => { if (p < 1 || p > totalPages) return; loadClientsPage(p); };
-
-  const inputCls = 'w-full rounded-lg px-4 py-3 text-sm text-white border border-slate-600/60 focus:border-yellow-500 outline-none transition-colors';
-  const inputStyle = { backgroundColor: 'var(--color-input-bg, #141413)' };
+  const inputCls = 'w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none transition-colors';
 
   return (
-    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
+    <div className="space-y-5">
 
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">CRM · Clientes</h1>
-          <p className="text-slate-400 text-sm">Página <span className="text-yellow-400 font-bold">{currentPage}</span> de <span className="text-white font-bold">{totalPages}</span></p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1">
+            CRM · Clientes
+          </h1>
+          <p className="text-slate-400 text-sm">{clients.length} clientes registrados</p>
         </div>
         {canCreate && (
-          <button onClick={() => setShowForm(true)} className="button-gold inline-flex items-center justify-center gap-2 px-4 md:px-6 py-3 w-full md:w-auto">
-            <FaPlus /> Nuevo Cliente
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl
+              bg-primary text-slate-950 font-semibold text-sm hover:bg-primary/90 transition-colors">
+            <FaPlus size={12} /> Nuevo cliente
           </button>
         )}
       </div>
 
-      {/* FILTROS */}
-      <div className="rounded-xl p-4 md:p-6 border border-slate-700/50" style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-        <div className="flex items-center gap-2 mb-4"><FaSearch className="text-yellow-400" /><h3 className="text-base md:text-lg font-semibold text-white">Filtrar Clientes</h3></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <select className={inputCls} style={inputStyle} value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-            <option value="Todos">Todos los tipos</option>
-            <option value="Lead">Leads</option>
-            <option value="Comprador">Compradores</option>
-            <option value="Arrendatario">Arrendatarios</option>
-            <option value="Propietario">Propietarios</option>
-          </select>
-          <select className={inputCls} style={inputStyle} value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-            <option value="Todos">Todos los estados</option>
-            <option value="Activo">Activos</option>
-            <option value="Inactivo">Inactivos</option>
-            <option value="Convertido">Convertidos</option>
-          </select>
-          <input type="text" placeholder="Buscar nombre, email..." className={inputCls} style={inputStyle} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-          <button onClick={() => { setFiltroTipo('Todos'); setFiltroEstado('Todos'); setBusqueda(''); }}
-            className="rounded-lg px-4 py-3 text-sm font-semibold text-white border border-slate-600/60 hover:border-yellow-500/40 hover:bg-slate-700/50 transition-colors"
-            style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>Limpiar Filtros</button>
-        </div>
-        <div className="mt-4 text-slate-500 text-xs">Mostrando <span className="text-yellow-400 font-semibold">{clientesFiltrados.length}</span> de {clients.length} en esta página</div>
+      {/* ── KPIs ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total',       value: kpis.total,       color: 'text-white' },
+          { label: 'Activos',     value: kpis.activos,     color: 'text-emerald-400' },
+          { label: 'Leads',       value: kpis.leads,       color: 'text-yellow-400' },
+          { label: 'Convertidos', value: kpis.convertidos, color: 'text-blue-400' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
+            <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
+            <p className="text-slate-400 text-xs mt-0.5">{label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* LISTA */}
+      {/* ── Barra búsqueda + filtros ─────────────────────────────────────── */}
+      <div className="flex gap-3 flex-col sm:flex-row">
+        <div className="relative flex-1">
+          <FaSearch className="absolute left-3 top-3 text-slate-400" size={12} />
+          <input type="text" placeholder="Buscar nombre, email o teléfono..."
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5
+              text-sm text-slate-200 placeholder-slate-500 focus:border-primary outline-none transition-colors" />
+        </div>
+        <button onClick={() => setShowFilters((v) => !v)}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
+            border transition-colors ${hasFilters
+              ? 'bg-primary/20 border-primary/50 text-primary'
+              : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
+          <FaFilter size={11} /> Filtros
+          {hasFilters && (
+            <span className="w-5 h-5 rounded-full bg-primary text-slate-950 text-xs font-bold flex items-center justify-center">
+              {[filterTipo, filterEstado].filter(Boolean).length}
+            </span>
+          )}
+        </button>
+        {/* Toggle vista */}
+        <div className="flex gap-1 bg-slate-900 border border-slate-700 rounded-xl p-1">
+          <button onClick={() => setViewMode('table')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+              ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            <FaTable size={11} />
+          </button>
+          <button onClick={() => setViewMode('cards')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+              ${viewMode === 'cards' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            <FaTh size={11} />
+          </button>
+        </div>
+      </div>
+
+      {/* Filtros expandibles */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+              <div>
+                <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo de cliente</label>
+                <select value={filterTipo} onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
+                  className={inputCls}>
+                  <option value="">Todos</option>
+                  <option value="Lead">Lead</option>
+                  <option value="Comprador">Comprador</option>
+                  <option value="Arrendatario">Arrendatario</option>
+                  <option value="Propietario">Propietario</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-400 text-xs font-semibold mb-1.5">Estado</label>
+                <select value={filterEstado} onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
+                  className={inputCls}>
+                  <option value="">Todos</option>
+                  <option value="Activo">Activo</option>
+                  <option value="Inactivo">Inactivo</option>
+                  <option value="Convertido">Convertido</option>
+                </select>
+              </div>
+              {hasFilters && (
+                <div className="sm:col-span-2 flex justify-end">
+                  <button onClick={() => { setFilterTipo(''); setFilterEstado(''); }}
+                    className="text-xs text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1">
+                    <FaTimes size={10} /> Limpiar
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Lista ───────────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="text-center text-slate-400 py-12">
-          <FaSpinner className="animate-spin text-4xl text-yellow-400 mx-auto mb-4" />
+        <div className="py-16 flex flex-col items-center gap-3 text-slate-400">
+          <FaSpinner className="animate-spin text-3xl text-primary" />
           <p className="text-sm">Cargando clientes...</p>
         </div>
-      ) : clients.length === 0 ? (
-        <div className="text-center text-slate-400 py-12 rounded-xl border border-slate-700/50" style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-          <FaUser className="text-5xl text-slate-700 mx-auto mb-4" />
-          <p className="text-base mb-2 text-white">No hay clientes registrados</p>
-          <p className="text-xs">Haz clic en "Nuevo Cliente" para empezar</p>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 flex flex-col items-center gap-3 text-slate-500">
+          <FaUsers size={40} className="opacity-30" />
+          <p className="text-sm">{search || hasFilters ? 'Sin resultados' : 'No hay clientes registrados'}</p>
         </div>
-      ) : clientesFiltrados.length === 0 ? (
-        <div className="text-center text-slate-400 py-12 rounded-xl border border-slate-700/50" style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-          <FaExclamationTriangle className="text-5xl text-yellow-500 mx-auto mb-4" />
-          <p className="text-sm">No hay clientes que coincidan con los filtros</p>
+      ) : viewMode === 'table' ? (
+        /* ── Vista tabla ── */
+        <div className="overflow-x-auto rounded-2xl border border-slate-800">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-900/80 border-b border-slate-800">
+                {['Cliente', 'Contacto', 'Tipo / Estado', 'Presupuesto', ''].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {paginated.map((c) => (
+                <motion.tr key={c.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="hover:bg-slate-900/60 transition-colors cursor-pointer"
+                  onClick={() => setDetailClient(c)}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+                        <FaUser className="text-primary" size={12} />
+                      </div>
+                      <div>
+                        <p className="text-white text-xs font-semibold">{c.nombre}</p>
+                        <p className="text-slate-500 text-xs truncate max-w-[120px]">{c.email || '—'}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.telefono && (
+                      <a href={`https://wa.me/57${(c.telefono).replace(/\D/g,'')}`}
+                        target="_blank" rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 text-green-400 hover:text-green-300 transition-colors text-xs"
+                        title="WhatsApp">
+                        <FaWhatsapp size={11} /> {c.telefono}
+                      </a>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <TipoBadge  tipo={c.tipoCliente} />
+                      <EstadoBadge estado={c.estado} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <p className="text-slate-300 text-xs">{c.presupuesto ? formatCOP(c.presupuesto) : '—'}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => setVisitClient(c)}
+                        className="p-1.5 rounded-lg hover:bg-yellow-500/10 text-yellow-400 transition-colors" title="Agendar visita">
+                        <FaCalendarCheck size={11} />
+                      </button>
+                      {canUpdate && (
+                        <button onClick={() => handleEdit(c)}
+                          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" title="Editar">
+                          <FaEdit size={11} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => handleDelete(c.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors" title="Eliminar">
+                          <FaTrash size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {clientesFiltrados.map((client) => (
-            <motion.div key={client.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="rounded-xl border border-slate-700/50 hover:border-yellow-500/30 transition-all duration-300 overflow-hidden" style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-              <div className="h-1 bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600" />
-              <div className="p-4 md:p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-white mb-2 truncate">{client.nombre}</h3>
-                    <div className="flex flex-wrap gap-1.5"><TipoBadge tipo={client.tipoCliente} /><EstadoBadge estado={client.estado} /></div>
+        /* ── Vista cards ── */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paginated.map((c) => (
+            <motion.div key={c.id} layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden
+                hover:border-slate-700 transition-colors cursor-pointer"
+              onClick={() => setDetailClient(c)}>
+              <div className="h-1 bg-gradient-to-r from-primary/60 to-primary/20" />
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-white text-sm font-bold">{c.nombre}</p>
+                    <div className="flex gap-1.5 mt-1 flex-wrap">
+                      <TipoBadge tipo={c.tipoCliente} /><EstadoBadge estado={c.estado} />
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2 mb-4">
-                  {client.telefono && <div className="flex items-center gap-2 text-slate-400 text-xs"><FaPhone className="text-yellow-400 flex-shrink-0" /><span className="truncate">{client.telefono}</span></div>}
-                  {client.email && <div className="flex items-center gap-2 text-slate-400 text-xs"><FaEnvelope className="text-yellow-400 flex-shrink-0" /><span className="truncate">{client.email}</span></div>}
-                  {client.ubicacionInteres && <div className="flex items-center gap-2 text-slate-400 text-xs"><FaMapMarkerAlt className="text-yellow-400 flex-shrink-0" /><span className="truncate">{client.ubicacionInteres}</span></div>}
-                  {client.presupuesto && <div className="flex items-center gap-2 text-slate-400 text-xs"><FaDollarSign className="text-yellow-400 flex-shrink-0" /><span>{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(client.presupuesto)}</span></div>}
-                  {client.tipoPropiedad && <div className="flex items-center gap-2 text-slate-400 text-xs"><FaHome className="text-yellow-400 flex-shrink-0" /><span>{client.tipoPropiedad}</span></div>}
-                </div>
-                {client.notas && <div className="rounded-lg p-3 mb-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}><p className="text-slate-400 text-xs line-clamp-2">{client.notas}</p></div>}
-                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-700/40">
-                  <button onClick={() => handleViewDetail(client)}
-                    className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors text-slate-200 border border-slate-600/50 hover:border-yellow-500/40 hover:text-yellow-400"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.04)' }} title="Ver detalle">
-                    <FaEye /> <span className="hidden sm:inline">Ver</span>
-                  </button>
-                  <button onClick={() => setVisitClient(client)}
-                    className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors text-yellow-300 border border-yellow-600/40 hover:bg-yellow-500/10"
-                    style={{ backgroundColor: 'rgba(234,179,8,0.06)' }} title="Agendar visita">
-                    <FaCalendarCheck /> <span className="hidden sm:inline">Visita</span>
-                  </button>
-                  <a href={`https://wa.me/57${(client.telefono || '').replace(/\D/g, '')}?text=Hola%20${encodeURIComponent(client.nombre)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors text-emerald-300 border border-emerald-600/40 hover:bg-emerald-500/10"
-                    style={{ backgroundColor: 'rgba(16,185,129,0.06)' }} title="WhatsApp">
-                    <FaWhatsapp /> <span className="hidden sm:inline">WA</span>
-                  </a>
-                </div>
-                {(canUpdate || canDelete) && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {canUpdate && (
-                      <button onClick={() => handleEditClient(client)}
-                        className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors text-slate-300 border border-slate-600/50 hover:border-yellow-500/40 hover:text-yellow-400"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}>
-                        <FaEdit /> <span className="hidden sm:inline">Editar</span>
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button onClick={() => handleDeleteClient(client.id)}
-                        className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors text-red-400 border border-red-800/40 hover:bg-red-500/10"
-                        style={{ backgroundColor: 'rgba(239,68,68,0.04)' }}>
-                        <FaTrash /> <span className="hidden sm:inline">Eliminar</span>
-                      </button>
-                    )}
+                {c.telefono && (
+                  <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+                    <FaPhone className="text-primary" size={10} /> {c.telefono}
                   </div>
                 )}
+                {c.email && (
+                  <div className="flex items-center gap-2 text-slate-400 text-xs mb-1 truncate">
+                    <FaEnvelope className="text-primary" size={10} /> {c.email}
+                  </div>
+                )}
+                {c.presupuesto && (
+                  <p className="text-primary text-xs font-bold mt-2">{formatCOP(c.presupuesto)}</p>
+                )}
+                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setVisitClient(c)}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-yellow-300
+                      border border-yellow-600/40 hover:bg-yellow-500/10 transition-colors">
+                    Visita
+                  </button>
+                  <a href={`https://wa.me/57${(c.telefono || '').replace(/\D/g, '')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-center text-green-300
+                      border border-green-600/40 hover:bg-green-500/10 transition-colors">
+                    WA
+                  </a>
+                  {canUpdate && (
+                    <button onClick={() => handleEdit(c)}
+                      className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                      <FaEdit size={11} />
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
         </div>
       )}
 
-      {/* PAGINACIÓN */}
-      <div className="flex items-center justify-center gap-2 pt-2">
-        <button onClick={goPrev} disabled={loading || currentPage === 1}
-          className="px-3 py-2 rounded-xl border border-slate-700/60 text-slate-300 disabled:opacity-40 hover:border-yellow-500/40 transition inline-flex items-center gap-2 text-sm"
-          style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-          <FaChevronLeft /> Anterior
-        </button>
-        {pageButtons.map((p) => (
-          <button key={p} onClick={() => goToPage(p)} disabled={loading}
-            className={`w-10 h-10 rounded-xl border transition font-semibold text-sm ${
-              p === currentPage ? 'bg-yellow-500 text-slate-950 border-yellow-400' : 'border-slate-700/60 text-slate-300 hover:border-yellow-500/40'
-            }`}
-            style={p !== currentPage ? { backgroundColor: 'var(--color-card-bg, #1a1917)' } : {}}>{p}</button>
-        ))}
-        <button onClick={goNext} disabled={loading || currentPage >= totalPages}
-          className="px-3 py-2 rounded-xl border border-slate-700/60 text-slate-300 disabled:opacity-40 hover:border-yellow-500/40 transition inline-flex items-center gap-2 text-sm"
-          style={{ backgroundColor: 'var(--color-card-bg, #1a1917)' }}>
-          Siguiente <FaChevronRight />
-        </button>
-      </div>
+      {/* ── Paginación ──────────────────────────────────────────────────── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40
+              hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
+            <FaChevronLeft size={10} /> Anterior
+          </button>
+          <span className="text-slate-400 text-sm">{page} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40
+              hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
+            Siguiente <FaChevronRight size={10} />
+          </button>
+        </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <p className="text-slate-600 text-xs text-center">{filtered.length} cliente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}</p>
+      )}
 
-      {/* MODAL FORMULARIO */}
-      <AnimatePresence mode="wait">
+      {/* ── Drawer detalle ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {detailClient && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setDetailClient(null); }}>
+            <motion.div
+              initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 40, opacity: 0 }}
+              className="bg-slate-950 border-l border-slate-800 h-full w-full sm:w-[420px]
+                overflow-y-auto p-5">
+              <ClientDetail
+                client={detailClient}
+                onClose={() => setDetailClient(null)}
+                onEdit={() => { handleEdit(detailClient); setDetailClient(null); }}
+                onScheduleVisit={() => { setVisitClient(detailClient); setDetailClient(null); }}
+                onAddActivity={() => setActivityClient(detailClient)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal formulario ────────────────────────────────────────────── */}
+      <AnimatePresence>
         {showForm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} onClick={handleCloseForm}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded-2xl border border-slate-700/60 max-w-3xl w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-card-bg, #1e1e1c)' }}>
-              <form onSubmit={handleSaveClient} className="p-4 md:p-8">
-                <h2 className="text-xl font-bold text-yellow-400 mb-4">{selectedClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2"><label className="block text-slate-400 text-sm mb-2">Nombre completo <span className="text-red-400">*</span></label><input type="text" required value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className={inputCls} style={inputStyle} placeholder="Ej: Juan Pérez" /></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Teléfono <span className="text-red-400">*</span></label><input type="tel" required value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} className={inputCls} style={inputStyle} placeholder="3001234567" /></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Email</label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={inputCls} style={inputStyle} placeholder="correo@ejemplo.com" /></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Tipo de cliente <span className="text-red-400">*</span></label><select required value={formData.tipoCliente} onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })} className={inputCls} style={inputStyle}><option value="Lead">Lead</option><option value="Comprador">Comprador</option><option value="Arrendatario">Arrendatario</option><option value="Propietario">Propietario</option></select></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Estado</label><select value={formData.estado} onChange={(e) => setFormData({ ...formData, estado: e.target.value })} className={inputCls} style={inputStyle}><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option><option value="Convertido">Convertido</option></select></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Presupuesto (COP)</label><input type="number" value={formData.presupuesto} onChange={(e) => setFormData({ ...formData, presupuesto: e.target.value })} className={inputCls} style={inputStyle} placeholder="50000000" /></div>
-                  <div><label className="block text-slate-400 text-sm mb-2">Tipo de propiedad de interés</label><select value={formData.tipoPropiedad} onChange={(e) => setFormData({ ...formData, tipoPropiedad: e.target.value })} className={inputCls} style={inputStyle}><option value="">Seleccionar...</option><option value="Casa">Casa</option><option value="Apartamento">Apartamento</option><option value="Local">Local</option><option value="Lote">Lote</option><option value="Finca">Finca</option></select></div>
-                  <div className="md:col-span-2"><label className="block text-slate-400 text-sm mb-2">Ubicación de interés</label><input type="text" value={formData.ubicacionInteres} onChange={(e) => setFormData({ ...formData, ubicacionInteres: e.target.value })} className={inputCls} style={inputStyle} placeholder="Ej: Anserma, Centro" /></div>
-                  <div className="md:col-span-2"><label className="block text-slate-400 text-sm mb-2">Propiedad vinculada</label><select value={formData.propiedadVinculada} onChange={(e) => setFormData({ ...formData, propiedadVinculada: e.target.value })} className={inputCls} style={inputStyle}><option value="">Sin vincular</option>{properties.map((prop) => (<option key={prop.id} value={prop.id}>{prop.title} - {prop.city}</option>))}</select></div>
-                  <div className="md:col-span-2"><label className="block text-slate-400 text-sm mb-2">Notas adicionales</label><textarea rows={4} value={formData.notas} onChange={(e) => setFormData({ ...formData, notas: e.target.value })} className={`${inputCls} resize-none`} style={inputStyle} placeholder="Información adicional relevante..." /></div>
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/85"
+            onClick={(e) => { if (e.target === e.currentTarget) handleCloseForm(); }}>
+            <motion.div initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.93, opacity: 0 }}
+              className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl
+                max-h-[90vh] overflow-y-auto">
+              <form onSubmit={handleSave} className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-white font-bold text-lg">
+                    {editClient ? 'Editar cliente' : 'Nuevo cliente'}
+                  </h2>
+                  <button type="button" onClick={handleCloseForm}
+                    className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                    <FaTimes size={14} />
+                  </button>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 mt-6">
-                  <button type="button" onClick={handleCloseForm} disabled={submitting} className="flex-1 border border-slate-600/60 hover:border-slate-500 text-slate-300 font-semibold rounded-xl px-6 py-3 transition-colors disabled:opacity-50 text-sm" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>Cancelar</button>
-                  <button type="submit" disabled={submitting} className="flex-1 button-gold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 text-sm">
-                    {submitting ? <><FaSpinner className="animate-spin" /> Guardando...</> : (selectedClient ? 'Actualizar' : 'Crear Cliente')}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Nombre completo *</label>
+                    <input type="text" required value={formData.nombre}
+                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      className={inputCls} placeholder="Ej: Juan Pérez" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Teléfono *</label>
+                    <input type="tel" required value={formData.telefono}
+                      onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                      className={inputCls} placeholder="3001234567" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Email</label>
+                    <input type="email" value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className={inputCls} placeholder="correo@ejemplo.com" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo *</label>
+                    <select required value={formData.tipoCliente}
+                      onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })}
+                      className={inputCls}>
+                      <option value="Lead">Lead</option>
+                      <option value="Comprador">Comprador</option>
+                      <option value="Arrendatario">Arrendatario</option>
+                      <option value="Propietario">Propietario</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Estado</label>
+                    <select value={formData.estado}
+                      onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                      className={inputCls}>
+                      <option value="Activo">Activo</option>
+                      <option value="Inactivo">Inactivo</option>
+                      <option value="Convertido">Convertido</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Presupuesto (COP)</label>
+                    <input type="number" value={formData.presupuesto}
+                      onChange={(e) => setFormData({ ...formData, presupuesto: e.target.value })}
+                      className={inputCls} placeholder="50000000" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo de propiedad de interés</label>
+                    <select value={formData.tipoPropiedad}
+                      onChange={(e) => setFormData({ ...formData, tipoPropiedad: e.target.value })}
+                      className={inputCls}>
+                      <option value="">Sin especificar</option>
+                      <option value="Casa">Casa</option>
+                      <option value="Apartamento">Apartamento</option>
+                      <option value="Local">Local</option>
+                      <option value="Lote">Lote</option>
+                      <option value="Finca">Finca</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Ubicación de interés</label>
+                    <input type="text" value={formData.ubicacionInteres}
+                      onChange={(e) => setFormData({ ...formData, ubicacionInteres: e.target.value })}
+                      className={inputCls} placeholder="Ej: Anserma, Centro" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Notas</label>
+                    <textarea rows={3} value={formData.notas}
+                      onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                      className={`${inputCls} resize-none`}
+                      placeholder="Observaciones, preferencias, información relevante..." />
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                  <button type="button" onClick={handleCloseForm} disabled={submitting}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700
+                      text-sm font-semibold transition-colors disabled:opacity-50">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={submitting}
+                    className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
+                      hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                    {submitting
+                      ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</>
+                      : (editClient ? 'Actualizar' : 'Crear cliente')}
                   </button>
                 </div>
               </form>
@@ -749,83 +798,20 @@ const ClientManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* MODAL DETALLE */}
-      <AnimatePresence mode="wait">
-        {showDetailModal && clientDetail && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}
-            onClick={() => setShowDetailModal(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded-2xl border border-slate-700/60 max-w-5xl w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-card-bg, #1e1e1c)' }}>
-              <div className="p-4 md:p-8 space-y-4">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl md:text-3xl font-bold text-white mb-2 truncate">{clientDetail.nombre}</h2>
-                    <div className="flex flex-wrap gap-2"><TipoBadge tipo={clientDetail.tipoCliente} /><EstadoBadge estado={clientDetail.estado} /></div>
-                  </div>
-                  <button onClick={() => setShowDetailModal(false)} className="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center transition-colors text-slate-400 hover:text-white hover:bg-slate-700"><FaTimes /></button>
-                </div>
-
-                {/* Info básica */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {clientDetail.telefono && <div className="rounded-xl p-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}><div className="flex items-center gap-2 mb-2"><FaPhone className="text-yellow-400" /><span className="text-slate-400 text-xs">Teléfono</span></div><a href={`tel:${clientDetail.telefono}`} className="text-white font-semibold hover:text-yellow-400 text-sm break-all">{clientDetail.telefono}</a></div>}
-                  {clientDetail.email && <div className="rounded-xl p-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}><div className="flex items-center gap-2 mb-2"><FaEnvelope className="text-yellow-400" /><span className="text-slate-400 text-xs">Email</span></div><a href={`mailto:${clientDetail.email}`} className="text-white font-semibold hover:text-yellow-400 text-sm break-all">{clientDetail.email}</a></div>}
-                  {clientDetail.ubicacionInteres && <div className="rounded-xl p-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}><div className="flex items-center gap-2 mb-2"><FaMapMarkerAlt className="text-yellow-400" /><span className="text-slate-400 text-xs">Ubicación</span></div><p className="text-white font-semibold text-sm">{clientDetail.ubicacionInteres}</p></div>}
-                  {clientDetail.presupuesto && <div className="rounded-xl p-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}><div className="flex items-center gap-2 mb-2"><FaDollarSign className="text-yellow-400" /><span className="text-slate-400 text-xs">Presupuesto</span></div><p className="text-white font-semibold text-sm">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(clientDetail.presupuesto)}</p></div>}
-                </div>
-                {clientDetail.notas && <div className="rounded-xl p-4 border border-slate-700/40" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}><div className="flex items-center gap-2 mb-3"><FaStickyNote className="text-yellow-400" /><span className="text-white font-semibold text-sm">Notas</span></div><p className="text-slate-300 leading-relaxed text-xs break-words">{clientDetail.notas}</p></div>}
-
-                {/* Pestañas */}
-                <div>
-                  <div className="flex gap-1 border-b border-slate-700/60 mb-4">
-                    {[{ id: 'actividad', label: 'Historial', Icon: FaHistory }, { id: 'contratos', label: 'Contratos', Icon: FaFileContract }].map(({ id, label, Icon }) => (
-                      <button key={id} onClick={() => setDetailTab(id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-colors ${
-                          detailTab === id ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400 hover:text-slate-200'
-                        }`}>
-                        <Icon size={13} /> {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {detailTab === 'actividad' && (
-                    <div className="rounded-xl border border-slate-700/40 p-4" style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                      <ClientHistory
-                        clientDetail={clientDetail}
-                        onScheduleVisit={() => { setShowDetailModal(false); setVisitClient(clientDetail); }}
-                        onAddActivity={() => setActivityClient(clientDetail)}
-                      />
-                    </div>
-                  )}
-
-                  {detailTab === 'contratos' && <ClientContracts clientId={clientDetail.id} />}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL VISITA */}
+      {/* ── Modales auxiliares ───────────────────────────────────────────── */}
       <AnimatePresence>
-        {visitClient && (
-          <ScheduleVisitModal client={visitClient} properties={properties} onClose={() => setVisitClient(null)}
-            onSaved={() => { if (clientDetail?.id === visitClient.id) setDetailTab('actividad'); }} />
-        )}
+        {visitClient && <ScheduleVisitModal client={visitClient} onClose={() => setVisitClient(null)} />}
       </AnimatePresence>
-
-      {/* MODAL AGREGAR ACTIVIDAD */}
       <AnimatePresence>
         {activityClient && <AddActivityModal client={activityClient} onClose={() => setActivityClient(null)} />}
       </AnimatePresence>
-
-      {/* CONFIRM MODAL */}
-      <ConfirmModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message}
-        onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((p) => ({ ...p, isOpen: false }))}
+      />
     </div>
   );
-};
-
-export default ClientManagement;
+}

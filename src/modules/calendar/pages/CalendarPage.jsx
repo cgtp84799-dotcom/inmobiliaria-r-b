@@ -15,6 +15,7 @@ import {
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, onSnapshot, query, orderBy, where,
+  getDocs, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
@@ -97,6 +98,7 @@ function normalizeStatus(status) {
   return STATUS_ALIASES[key] || key || 'pending';
 }
 
+// FIX #3: usar el enum canónico 'completed' para visitas (subscribeCalendar filtra por ese valor)
 function toCollectionStatus(status, collectionName = 'appointments') {
   const normalized = normalizeStatus(status);
   if (collectionName === 'visits') return normalized || 'pending';
@@ -116,11 +118,24 @@ function normalizeDoc(raw, source) {
   };
 }
 
-// ─── Helpers globales ────────────────────────────────────────────────────────
 function cleanPhone(p = '') {
   const digits = String(p).replace(/\D/g, '');
   if (!digits) return '';
   return digits.startsWith('57') ? digits : `57${digits}`;
+}
+
+// ─── Sincroniza appointment espejo de una visita ──────────────────────────────
+async function syncVisitMirror(visitId, fields) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'appointments'), where('visitId', '==', visitId))
+    );
+    await Promise.all(
+      snap.docs.map((d) => updateDoc(d.ref, { ...fields, updatedAt: serverTimestamp() }))
+    );
+  } catch (e) {
+    console.warn('[Calendar] syncVisitMirror:', e.message);
+  }
 }
 
 // ─── Componente de evento personalizado ──────────────────────────────────────
@@ -161,7 +176,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
   const isCompleted = ['completada', 'completed'].includes(status);
   const phone = r.clientPhone || '';
 
-  // Posición: evitar que salga fuera de pantalla
   const left = Math.min(position.x + 12, window.innerWidth - 320);
   const top  = Math.min(position.y - 8,  window.innerHeight - 360);
 
@@ -175,7 +189,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
       style={{ left, top, position: 'fixed' }}
       onMouseLeave={onClose}
     >
-      {/* Header */}
       <div className="cal-tooltip-header" style={{ borderLeft: `3px solid ${event.color || '#f59e0b'}` }}>
         <span className="cal-tooltip-icon">{TYPE_ICONS[r._type] || '📌'}</span>
         <div className="cal-tooltip-title-block">
@@ -185,8 +198,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
           </span>
         </div>
       </div>
-
-      {/* Info rows */}
       <div className="cal-tooltip-body">
         <div className="cal-tooltip-row">
           <FaClock className="cal-tooltip-row-icon" />
@@ -221,8 +232,6 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
           </div>
         )}
       </div>
-
-      {/* Acciones rápidas */}
       <div className="cal-tooltip-actions">
         <button className="cal-tip-btn cal-tip-btn--primary" onClick={onEdit}>
           ✏️ Editar
@@ -246,7 +255,7 @@ const EventTooltip = ({ event, position, agents, getAgentColor, getAgentName, ge
   );
 };
 
-// ─── Menú contextual (click derecho) ─────────────────────────────────────────
+// ─── Menú contextual ─────────────────────────────────────────────────────────
 const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete, onWhatsApp }) => {
   if (!position || !event) return null;
   const r = event.resource || {};
@@ -292,7 +301,6 @@ const ContextMenu = ({ position, event, onClose, onEdit, onComplete, onDelete, o
 const CalendarPage = () => {
   const { currentUser } = useAuth();
 
-  // ── State de datos ──────────────────────────────────────────────────────────
   const [appointments,  setAppointments]  = useState([]);
   const [orphanVisits,  setOrphanVisits]  = useState([]);
   const [contracts,     setContracts]     = useState([]);
@@ -301,21 +309,18 @@ const CalendarPage = () => {
   const [agents,        setAgents]        = useState([]);
   const [loading,       setLoading]       = useState(true);
 
-  // ── State de UI ─────────────────────────────────────────────────────────────
   const [view,          setView]          = useState('month');
   const [currentDate,   setCurrentDate]   = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState('');
   const [filterType,    setFilterType]    = useState('');
   const [filterStatus,  setFilterStatus]  = useState('');
+  // FIX: nuevo filtro por propiedad (no requiere listener nuevo)
+  const [filterPropertyId, setFilterPropertyId] = useState('');
 
-  // ── Tooltip ──────────────────────────────────────────────────────────────────
   const [tooltip,        setTooltip]       = useState({ event: null, position: null });
   const tooltipTimer                       = useRef(null);
-
-  // ── Menú contextual ──────────────────────────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState({ event: null, position: null });
 
-  // ── Modal evento ─────────────────────────────────────────────────────────────
   const [showEventModal,  setShowEventModal]  = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [selectedEvent,   setSelectedEvent]   = useState(null);
@@ -336,21 +341,20 @@ const CalendarPage = () => {
     const unsubAppts = onSnapshot(
       query(collection(db, 'appointments'), orderBy('date', 'asc')),
       (s) => { setAppointments(s.docs.map((d) => ({ id: d.id, ...d.data() }))); checkLoaded(); },
-      () => checkLoaded(),
+      (e) => { console.error('[Calendar] appointments:', e.message); checkLoaded(); },
     );
 
-    // FIX 1: el listener de visits ahora tiene error handler con log explícito
-    // (antes era () => {} silencioso — errores de permisos o índice pasaban desapercibidos)
+    // FIX #5: incluir 'approved' para cubrir la ventana entre asignación y creación del espejo
     const unsubVisits = onSnapshot(
-      query(collection(db, 'visits'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+      query(collection(db, 'visits'), where('status', 'in', ['pending', 'approved']), orderBy('createdAt', 'desc')),
       (s) => setOrphanVisits(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      (err) => { console.warn('[Calendar] visits listener error (no bloquea carga):', err.message); },
+      (err) => { console.warn('[Calendar] visits listener:', err.message); },
     );
 
     const unsubContracts = onSnapshot(
       query(collection(db, 'contracts')),
       (s) => { setContracts(s.docs.map((d) => ({ id: d.id, ...d.data() }))); checkLoaded(); },
-      () => checkLoaded(),
+      (e) => { console.error('[Calendar] contracts:', e.message); checkLoaded(); },
     );
 
     const unsubClients = onSnapshot(query(collection(db, 'clients')), (s) => {
@@ -385,7 +389,6 @@ const CalendarPage = () => {
     return () => { unsubAppts(); unsubVisits(); unsubContracts(); unsubClients(); unsubProps(); unsubMembers(); };
   }, []);
 
-  // ─── Cerrar tooltip/ctx al hacer click fuera ────────────────────────────────
   useEffect(() => {
     const close = () => { setCtxMenu({ event: null, position: null }); };
     window.addEventListener('click', close);
@@ -446,7 +449,9 @@ const CalendarPage = () => {
       });
     });
 
+    // FIX #5: solo mostrar visitas web que NO tienen agente asignado (evitar duplicados con appointments)
     orphanVisits.forEach((raw) => {
+      if (raw.assignedAgentId || raw.agentId) return;
       const norm = normalizeDoc(raw, 'web');
       const start = buildDateFromFields(norm._date, norm._time);
       const end   = addHours(start, 1);
@@ -465,7 +470,14 @@ const CalendarPage = () => {
           id: `cs_${c.id}`,
           title: `📋 Firma: ${c.propertyName || c.clientName || 'Contrato'}`,
           start, end: addHours(start, 1), color: '#059669',
-          resource: { ...c, _type: 'contract_sign', _collection: 'contracts' },
+          resource: {
+            ...c,
+            _type: 'contract_sign',
+            _collection: 'contracts',
+            // FIX: exponer agentName del contrato en el resource para el tooltip
+            _agentId: c.agentId || c.agentEmail || '',
+            _agentName: c.agentName || '',
+          },
         });
       }
       if (c.endDate) {
@@ -477,7 +489,13 @@ const CalendarPage = () => {
           id: `ce_${c.id}`,
           title: `⚠️ Vence: ${c.propertyName || c.clientName || 'Contrato'}`,
           start: end, end: addHours(end, 1), color,
-          resource: { ...c, _type: 'contract_expiry', _collection: 'contracts' },
+          resource: {
+            ...c,
+            _type: 'contract_expiry',
+            _collection: 'contracts',
+            _agentId: c.agentId || c.agentEmail || '',
+            _agentName: c.agentName || '',
+          },
         });
       }
     });
@@ -495,21 +513,24 @@ const CalendarPage = () => {
     }
     if (filterType   && r._type   !== filterType)   return false;
     if (filterStatus && normalizeStatus(r.status) !== normalizeStatus(filterStatus)) return false;
+    // FIX: filtro por propiedad
+    if (filterPropertyId) {
+      const pid = r.propertyId || '';
+      if (pid !== filterPropertyId) return false;
+    }
     return true;
-  }), [allEvents, filterAgentId, filterType, filterStatus, findAgentByKey]);
+  }), [allEvents, filterAgentId, filterType, filterStatus, filterPropertyId, findAgentByKey]);
 
   // ─── Stats ───────────────────────────────────────────────────────────────────
   const totalEvents  = allEvents.length;
   const pendingCount = allEvents.filter((e) => ['pending', 'approved'].includes(normalizeStatus(e.resource?.status))).length;
   const webCount     = allEvents.filter((e) => e.resource?.sourceCollection === 'visits' || e.resource?._source === 'web').length;
 
-  // ─── Drilldown: click en número de día → vista día ───────────────────────────
   const handleDrillDown = useCallback((date) => {
     setCurrentDate(date);
     setView('day');
   }, []);
 
-  // ─── Handlers tooltip ────────────────────────────────────────────────────────
   const handleMouseEnterEvent = useCallback((event, e) => {
     clearTimeout(tooltipTimer.current);
     const rect = e?.currentTarget?.getBoundingClientRect?.();
@@ -530,14 +551,12 @@ const CalendarPage = () => {
     setTooltip({ event: null, position: null });
   }, []);
 
-  // ─── Handlers menú contextual ─────────────────────────────────────────────
   const handleContextMenu = useCallback((e, event) => {
     e.preventDefault();
     setCtxMenu({ event, position: { x: e.clientX, y: e.clientY } });
     setTooltip({ event: null, position: null });
   }, []);
 
-  // ─── Handlers principales ────────────────────────────────────────────────────
   const openNewEvent = useCallback((slotInfo) => {
     setSelectedEvent(null);
     setEventForm({
@@ -578,6 +597,7 @@ const CalendarPage = () => {
     openEditEvent(ev);
   }, [openEditEvent]);
 
+  // FIX #2: reagendar sincroniza el appointment espejo
   const handleEventDrop = useCallback(async ({ event, start }) => {
     const r = event.resource;
     const colName = r._collection || 'appointments';
@@ -588,12 +608,20 @@ const CalendarPage = () => {
       await updateDoc(doc(db, colName, r.id), {
         date, time,
         ...(colName === 'visits' ? { requestedDate: date, requestedTime: time, status: 'rescheduled' } : {}),
-        updatedAt: new Date().toISOString(),
+        updatedAt: serverTimestamp(), // FIX #3
       });
+      // FIX #2: sincronizar espejo si es visita
+      if (colName === 'visits') {
+        await syncVisitMirror(r.id, { date, time, status: 'rescheduled' });
+      }
       toast.success('Evento reagendado');
-    } catch { toast.error('Error al reagendar'); }
+    } catch (e) {
+      console.error('[Calendar] handleEventDrop:', e.message);
+      toast.error('Error al reagendar');
+    }
   }, []);
 
+  // FIX #1: completar visitas usa 'completed' (canónico), no 'completada'
   const handleMarkComplete = useCallback(async (ev) => {
     const target = ev || ctxMenu.event || tooltip.event || (selectedEvent ? { resource: selectedEvent.resource } : null);
     if (!target) return;
@@ -602,19 +630,26 @@ const CalendarPage = () => {
       toast.error('Los contratos se gestionan desde el módulo de contratos');
       return;
     }
-    const status = toCollectionStatus('completed', r._collection);
+    const colName = r._collection || 'appointments';
+    // FIX #1: visitas usan 'completed' (lo que subscribeCalendar reconoce), appointments usan 'completada'
+    const status = colName === 'visits' ? 'completed' : 'completada';
     try {
-      await updateDoc(doc(db, r._collection || 'appointments', r.id), {
-        status, updatedAt: new Date().toISOString(),
+      await updateDoc(doc(db, colName, r.id), {
+        status, updatedAt: serverTimestamp(), // FIX #3
       });
+      // FIX #1: sincronizar espejo si es visita
+      if (colName === 'visits') {
+        await syncVisitMirror(r.id, { status });
+      }
       toast.success('Marcado como completado');
       setTooltip({ event: null, position: null });
       setCtxMenu({ event: null, position: null });
-    } catch { toast.error('Error al actualizar'); }
+    } catch (e) {
+      console.error('[Calendar] handleMarkComplete:', e.message);
+      toast.error('Error al actualizar');
+    }
   }, [ctxMenu.event, selectedEvent, tooltip.event]);
 
-  // FIX 2: handleDeleteEvent cierra el modal ANTES del deleteDoc para evitar
-  // re-render con referencia a documento ya eliminado en Firestore
   const handleDeleteEvent = useCallback(async (ev) => {
     const target = ev || ctxMenu.event || (selectedEvent ? { resource: selectedEvent.resource } : null);
     if (!target) return;
@@ -624,17 +659,17 @@ const CalendarPage = () => {
       return;
     }
     if (!confirm('¿Eliminar este evento?')) return;
-    // Cerrar UI primero para evitar re-render con ref muerta
     setCtxMenu({ event: null, position: null });
     handleCloseModals();
     try {
       await deleteDoc(doc(db, r._collection || 'appointments', r.id));
       toast.success('Evento eliminado');
-    } catch { toast.error('Error al eliminar'); }
+    } catch (e) {
+      console.error('[Calendar] handleDeleteEvent:', e.message);
+      toast.error('Error al eliminar');
+    }
   }, [ctxMenu.event, selectedEvent]);
 
-  // FIX 3: handleSaveEvent — cuando una visita web se actualiza con agente asignado,
-  // se crea automáticamente un appointment vinculado y se actualiza el status de la visita
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     if (!eventForm.title.trim()) { toast.error('El título es obligatorio'); return; }
@@ -655,7 +690,7 @@ const CalendarPage = () => {
         clientPhone:     eventForm.clientPhone,
         assignedAgentId: eventForm.assignedAgentId || '',
         createdBy:       currentUser?.email || 'unknown',
-        updatedAt:       new Date().toISOString(),
+        updatedAt:       serverTimestamp(), // FIX #3
       };
       if (selectedEvent) {
         const colName = selectedEvent.collection || 'appointments';
@@ -676,9 +711,6 @@ const CalendarPage = () => {
           };
           await updateDoc(doc(db, 'visits', selectedEvent.id), visitPayload);
 
-          // FIX 3: Si se asigna agente a una visita web, crear appointment vinculado
-          // para que quede reflejado en el módulo de citas y no desaparezca del calendario
-          // cuando el status de la visita cambie de 'pending'
           if (eventForm.assignedAgentId && !selectedEvent.resource?.assignedAgentId) {
             const apptPayload = {
               title:           eventForm.title,
@@ -695,9 +727,10 @@ const CalendarPage = () => {
               agentEmail:      assignedAgent?.email || '',
               sourceCollection: 'visits',
               sourceVisitId:   selectedEvent.id,
+              visitId:         selectedEvent.id,
               createdBy:       currentUser?.email || 'unknown',
-              createdAt:       new Date().toISOString(),
-              updatedAt:       new Date().toISOString(),
+              createdAt:       serverTimestamp(), // FIX #3
+              updatedAt:       serverTimestamp(), // FIX #3
             };
             await addDoc(collection(db, 'appointments'), apptPayload);
             toast.success('Visita asignada y cita creada en el sistema ✓');
@@ -709,11 +742,17 @@ const CalendarPage = () => {
           toast.success('Evento actualizado');
         }
       } else {
-        await addDoc(collection(db, 'appointments'), { ...payload, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, 'appointments'), {
+          ...payload,
+          createdAt: serverTimestamp(), // FIX #3
+        });
         toast.success('Evento creado');
       }
       handleCloseModals();
-    } catch (err) { console.error(err); toast.error('Error al guardar'); }
+    } catch (err) {
+      console.error('[Calendar] handleSaveEvent:', err);
+      toast.error('Error al guardar');
+    }
     finally { setSubmitting(false); }
   };
 
@@ -731,15 +770,18 @@ const CalendarPage = () => {
       const data = {
         nombre: clientForm.nombre, telefono: clientForm.telefono,
         email: clientForm.email || '', tipoCliente: 'Lead',
-        estado: 'Activo', createdAt: new Date().toISOString(),
+        estado: 'Activo', createdAt: serverTimestamp(), // FIX #3
       };
       const r = await addDoc(collection(db, 'clients'), data);
-      setClients((p) => [...p, { id: r.id, ...data }]);
+      setClients((p) => [...p, { id: r.id, nombre: data.nombre, telefono: data.telefono, email: data.email }]);
       setEventForm((p) => ({ ...p, clientId: r.id, clientPhone: data.telefono }));
       setClientForm({ nombre: '', telefono: '', email: '' });
       setShowClientModal(false);
       toast.success('Cliente creado y vinculado');
-    } catch { toast.error('Error al crear cliente'); }
+    } catch (e) {
+      console.error('[Calendar] handleCreateClient:', e.message);
+      toast.error('Error al crear cliente');
+    }
     finally { setSubmitting(false); }
   };
 
@@ -747,7 +789,6 @@ const CalendarPage = () => {
     setShowEventModal(false); setShowClientModal(false); setSelectedEvent(null);
   };
 
-  // ─── Estilo de eventos ───────────────────────────────────────────────────────
   const eventStyleGetter = useCallback((event) => ({
     style: {
       backgroundColor: event.color || '#f59e0b',
@@ -759,7 +800,6 @@ const CalendarPage = () => {
     },
   }), []);
 
-  // ─── Toolbar personalizada ───────────────────────────────────────────────────
   const CustomToolbar = useCallback(({ label, onNavigate, onView, view: currentView }) => (
     <div className="rbc-custom-toolbar">
       <div className="rbc-toolbar-left">
@@ -778,7 +818,6 @@ const CalendarPage = () => {
     </div>
   ), []);
 
-  // ─── Componentes del calendario ──────────────────────────────────────────────
   const components = useMemo(() => ({
     toolbar: CustomToolbar,
     event: (props) => (
@@ -800,7 +839,6 @@ const CalendarPage = () => {
     ),
   }), [CustomToolbar, agents, getAgentColor, getAgentName, handleContextMenu, handleMouseEnterEvent, handleMouseLeaveEvent]);
 
-  // ─── Loading ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -809,7 +847,6 @@ const CalendarPage = () => {
     );
   }
 
-  // ─── Render principal ────────────────────────────────────────────────────────
   return (
     <div className="cal-page">
 
@@ -850,12 +887,20 @@ const CalendarPage = () => {
       {/* ── Filtros ────────────────────────────────────────────────────────── */}
       <div className="cal-filters-card">
         <p className="cal-section-title">Filtros</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
             <label className="cal-label">Agente</label>
             <select value={filterAgentId} onChange={(e) => setFilterAgentId(e.target.value)} className="cal-select">
               <option value="">Todos los agentes</option>
               {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          {/* FIX: nuevo filtro por propiedad */}
+          <div>
+            <label className="cal-label">Propiedad</label>
+            <select value={filterPropertyId} onChange={(e) => setFilterPropertyId(e.target.value)} className="cal-select">
+              <option value="">Todas las propiedades</option>
+              {properties.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           </div>
           <div>
@@ -1037,12 +1082,12 @@ const CalendarPage = () => {
 
                     <div>
                       <label className="cal-label">Estado</label>
+                      {/* FIX #4: eliminada opción duplicada 'confirmada' */}
                       <select value={eventForm.status}
                         onChange={(e) => setEventForm({ ...eventForm, status: e.target.value })}
                         className="cal-select">
                         <option value="pendiente">⏳ Pendiente</option>
                         <option value="approved">✅ Aprobada</option>
-                        <option value="confirmada">✅ Confirmada</option>
                         <option value="completada">✔ Completada</option>
                         <option value="cancelada">✗ Cancelada</option>
                         <option value="rescheduled">🔄 Reagendada</option>
@@ -1126,9 +1171,6 @@ const CalendarPage = () => {
 
                   </div>
 
-                  {/* FIX 4: Layout de botones de acción del modal — flex en lugar de
-                      grid condicional para evitar espacios vacíos cuando algún botón
-                      no se renderiza (ej: sin teléfono, sin botón WhatsApp) */}
                   <div className="flex items-center justify-between gap-3 pt-2">
                     <button type="button" onClick={handleCloseModals} disabled={submitting} className="cal-btn-cancel">
                       Cancelar
@@ -1213,7 +1255,6 @@ const CalendarPage = () => {
 
       {/* ── Estilos del calendario ─────────────────────────────────────────── */}
       <style>{`
-        /* ── Wrapper ─────────────────────────────────────────────────── */
         .cal-wrapper {
           background: var(--color-surface);
           border: 1px solid var(--color-border);
@@ -1222,8 +1263,6 @@ const CalendarPage = () => {
           box-shadow: var(--shadow-card);
         }
         .cal-wrapper .rbc-calendar { background: var(--color-surface); color: var(--color-text); font-family: inherit; }
-
-        /* ── Toolbar ─────────────────────────────────────────────────── */
         .rbc-custom-toolbar {
           display: flex; align-items: center; justify-content: space-between;
           flex-wrap: wrap; gap: 0.5rem;
@@ -1266,8 +1305,6 @@ const CalendarPage = () => {
         }
         .rbc-view-btn:hover { color: var(--color-text); background: var(--color-row-hover); }
         .rbc-view-btn.active { background: #f59e0b; color: #111827; border-color: #f59e0b; }
-
-        /* ── Grid mensual ─────────────────────────────────────────────── */
         .cal-wrapper .rbc-month-view { border: none; background: var(--color-surface); }
         .cal-wrapper .rbc-header {
           background: var(--color-surface-2);
@@ -1301,8 +1338,6 @@ const CalendarPage = () => {
           background: rgba(245,158,11,0.10); border-radius: 4px;
           padding: 1px 6px; margin: 1px 4px;
         }
-
-        /* ── TimeGrid ─────────────────────────────────────────────────── */
         .cal-wrapper .rbc-time-view { border: none; }
         .cal-wrapper .rbc-time-header { border-bottom: 1px solid var(--color-border); }
         .cal-wrapper .rbc-time-header-content { border-left: 1px solid var(--color-border); }
@@ -1316,8 +1351,6 @@ const CalendarPage = () => {
           background: var(--color-surface-2);
           border-right: 1px solid var(--color-border);
         }
-
-        /* ── Agenda ───────────────────────────────────────────────────── */
         .cal-wrapper .rbc-agenda-view table { border: none; color: var(--color-text); }
         .cal-wrapper .rbc-agenda-date-cell,
         .cal-wrapper .rbc-agenda-time-cell {
@@ -1333,8 +1366,6 @@ const CalendarPage = () => {
         .cal-wrapper .rbc-agenda-empty {
           color: var(--color-text-faint); padding: 2rem; text-align: center; font-size: 13px;
         }
-
-        /* ── Event chip ───────────────────────────────────────────────── */
         .cal-event-chip {
           display: flex; align-items: center; gap: 3px;
           padding: 1px 5px; border-radius: 4px;
@@ -1348,8 +1379,6 @@ const CalendarPage = () => {
           width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
           box-shadow: 0 0 0 1px rgba(255,255,255,0.3);
         }
-
-        /* ── Tooltip ──────────────────────────────────────────────────── */
         .cal-tooltip {
           z-index: 9999; width: 300px;
           background: var(--color-surface-2);
@@ -1399,8 +1428,6 @@ const CalendarPage = () => {
         .cal-tip-btn--primary { background: rgba(245,158,11,0.15); color: #f59e0b; }
         .cal-tip-btn--success { background: rgba(16,185,129,0.15); color: #10b981; }
         .cal-tip-btn--wa     { background: rgba(37,211,102,0.15); color: #25D366; }
-
-        /* ── Context menu ─────────────────────────────────────────────── */
         .cal-context-menu {
           z-index: 9999; min-width: 180px;
           background: var(--color-surface-2);
@@ -1426,8 +1453,6 @@ const CalendarPage = () => {
         .cal-ctx-item--danger { color: #ef4444; }
         .cal-ctx-item--danger:hover { background: rgba(239,68,68,0.1); }
         .cal-ctx-divider { height: 1px; background: var(--color-border); margin: 3px 0; }
-
-        /* ── Page layout ──────────────────────────────────────────────── */
         .cal-page { display: flex; flex-direction: column; gap: 1.25rem; padding: 1.5rem; }
         .cal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
         .cal-title {
@@ -1446,8 +1471,6 @@ const CalendarPage = () => {
         }
         .cal-btn-primary:hover { background: #d97706; }
         .cal-btn-primary:active { transform: scale(0.97); }
-
-        /* ── KPIs ─────────────────────────────────────────────────────── */
         .cal-kpi-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
         .cal-kpi {
           display: flex; align-items: center; gap: 0.75rem;
@@ -1465,8 +1488,6 @@ const CalendarPage = () => {
         .cal-kpi-num--amber { color: #f59e0b; }
         .cal-kpi-num--blue  { color: #3b82f6; }
         .cal-kpi-label { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; font-weight: 500; }
-
-        /* ── Filters card ─────────────────────────────────────────────── */
         .cal-filters-card {
           background: var(--color-surface);
           border: 1px solid var(--color-border);
@@ -1506,14 +1527,10 @@ const CalendarPage = () => {
           box-shadow: 0 0 0 2px rgba(245,158,11,0.2);
         }
         .cal-textarea { resize: vertical; min-height: 72px; }
-
-        /* ── Agent legend ─────────────────────────────────────────────── */
         .cal-agent-legend { display: flex; align-items: center; gap: 6px; font-size: 12px; }
         .cal-agent-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .cal-agent-name { font-weight: 600; color: var(--color-text); }
         .cal-agent-role { color: var(--color-text-faint); font-size: 11px; }
-
-        /* ── Modal ────────────────────────────────────────────────────── */
         .cal-modal {
           background: var(--color-surface);
           border: 1px solid var(--color-border);
@@ -1539,8 +1556,6 @@ const CalendarPage = () => {
           transition: background 0.15s ease, color 0.15s ease;
         }
         .cal-close-btn:hover { background: var(--color-row-hover); color: var(--color-text); }
-
-        /* ── Modal action buttons ─────────────────────────────────────── */
         .cal-btn-cancel {
           display: inline-flex; align-items: center; gap: 6px;
           padding: 0.5rem 1rem; border-radius: 0.5rem;

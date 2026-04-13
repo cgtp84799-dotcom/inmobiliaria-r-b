@@ -1,6 +1,6 @@
 // ─── v2 imports ───────────────────────────────────────────────────────────────────────────
 const { onRequest }          = require("firebase-functions/v2/https");
-const { onDocumentWritten }  = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { defineSecret }       = require("firebase-functions/params");
 const { setGlobalOptions }   = require("firebase-functions/v2");
 const admin                  = require("firebase-admin");
@@ -600,5 +600,201 @@ exports.onVisitStatusChanged = onDocumentWritten(
     }
 
     console.log(`[onVisitStatusChanged] Estado "${nextStatus}" no genera email. Ignorado.`);
+  }
+);
+exports.onUserCreated = onDocumentCreated(
+  {
+    document: 'users/{email}',
+    region:   'us-central1',
+    secrets:  [GMAIL_USER, GMAIL_PASS],
+  },
+  async (event) => {
+    const data  = event.data?.data() ?? null;
+    if (!data) return;
+ 
+    // Solo enviar bienvenida a clientes (viewer) — no a agentes/admins
+    // que se crean desde el panel y reciben otro flujo
+    const role  = String(data.role || '').toLowerCase();
+    const email = String(data.email || event.params.email || '').trim();
+    const name  = String(data.displayName || '').split(' ')[0] || 'Cliente';
+ 
+    if (!email) return;
+    if (role !== 'viewer') return; // agentes/admin no reciben este correo
+ 
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+ 
+    const transporter = createTransport(gmailUser, gmailPass);
+ 
+    const html = htmlWrapper(
+      'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      `
+      <div style="text-align:center;font-size:56px;margin-bottom:20px;">🏠</div>
+      <h1 class="title" style="text-align:center;color:#b8952a;">¡Bienvenido, ${name}!</h1>
+      <p class="subtitle" style="text-align:center;">
+        Tu cuenta en R&B Inmobiliaria ya está activa.<br/>
+        Desde tu portal personal puedes gestionar todo.
+      </p>
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">📅</span>
+          <span class="info-value">Agendar y seguir el estado de tus visitas</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">📋</span>
+          <span class="info-value">Acceder a tus contratos y descargar documentos</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">❤️</span>
+          <span class="info-value">Guardar tus propiedades favoritas</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">🔔</span>
+          <span class="info-value">Recibir notificaciones sobre tus solicitudes</span>
+        </div>
+      </div>
+      <div class="btn-center">
+        <a href="${BASE_URL}/portal" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836);color:#ffffff;">
+          Ir a mi portal →
+        </a>
+        <a href="${BASE_URL}/catalogo" class="btn-secondary" style="color:#b8952a;border-color:#b8952a;">
+          Ver propiedades
+        </a>
+      </div>
+      <div class="divider"></div>
+      <p class="tip" style="text-align:center;">
+        ¿Tienes preguntas? Escríbenos al
+        <a href="https://wa.me/573105968202" style="color:#b8952a;font-weight:600;">WhatsApp 310 596 8202</a>
+        o al correo
+        <a href="mailto:inmojuridi09@gmail.com" style="color:#b8952a;">inmojuridi09@gmail.com</a>
+      </p>
+      `
+    );
+ 
+    await sendMail(transporter, gmailUser, {
+      to:      email,
+      subject: `¡Bienvenido a R&B Inmobiliaria, ${name}! 🏠`,
+      html,
+    });
+ 
+    console.log(`[onUserCreated] Email de bienvenida enviado a ${email}`);
+  }
+);
+ 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 7: onContractCreated — notifica al cliente cuando se crea un contrato
+// ═══════════════════════════════════════════════════════════════════════════════
+ 
+exports.onContractCreated = onDocumentCreated(
+  {
+    document: 'contracts/{contractId}',
+    region:   'us-central1',
+    secrets:  [GMAIL_USER, GMAIL_PASS],
+  },
+  async (event) => {
+    const data = event.data?.data() ?? null;
+    if (!data) return;
+ 
+    const clientEmail = String(data.clientEmail || '').trim();
+    if (!clientEmail) return;
+ 
+    // Solo enviar si NO es borrador
+    if (data.status === 'borrador') return;
+ 
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+ 
+    const transporter = createTransport(gmailUser, gmailPass);
+    const d = {
+      clientName:   String(data.clientName   || 'Cliente').trim(),
+      propertyName: String(data.propertyName || 'la propiedad').trim(),
+      type:         String(data.type         || 'contrato').trim(),
+      value:        Number(data.value || 0),
+      startDate:    String(data.startDate    || '').trim(),
+      endDate:      String(data.endDate      || '').trim(),
+      agentName:    String(data.agentName    || '').trim(),
+      agentEmail:   String(data.agentEmail   || '').trim(),
+    };
+ 
+    const typeLabel = { venta: 'Venta', arriendo: 'Arriendo', promesa: 'Promesa de compraventa' };
+    const valueStr  = d.value > 0
+      ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(d.value)
+      : '—';
+ 
+    const html = htmlWrapper(
+      'linear-gradient(135deg, #0c2340 0%, #1a3a6e 100%)',
+      `
+      <span class="emoji-icon">📋</span>
+      <h1 class="title" style="color:#1e40af;text-align:center;">Nuevo contrato registrado</h1>
+      <p class="subtitle" style="text-align:center;">
+        Hola <strong style="color:#1f2937;">${d.clientName}</strong>,<br/>
+        se ha registrado un contrato a tu nombre. Aquí tienes los detalles:
+      </p>
+      <div class="info-card">
+        ${infoRow('📋 Tipo',       typeLabel[d.type] || d.type, '#1e40af')}
+        ${infoRow('🏠 Propiedad',  d.propertyName,              '#b8952a')}
+        ${infoRow('💰 Valor',      valueStr,                    '#166534')}
+        ${d.startDate ? infoRow('📅 Inicio',   d.startDate) : ''}
+        ${d.endDate   ? infoRow('📅 Fin',      d.endDate)   : ''}
+        ${d.agentName ? infoRow('👤 Agente',   d.agentName) : ''}
+      </div>
+      <div class="note-box" style="background:#eff6ff;border-left:4px solid #3b82f6;">
+        <p style="margin:0;font-size:13px;color:#1d4ed8;font-weight:600;">¿Qué sigue?</p>
+        <p style="margin:6px 0 0;font-size:14px;color:#1e3a8a;line-height:1.7;">
+          Puedes consultar y descargar el documento desde tu portal personal.
+          Si tienes dudas, no dudes en contactar a tu agente o a nuestro equipo.
+        </p>
+      </div>
+      <div class="btn-center">
+        <a href="${BASE_URL}/portal" class="btn-primary" style="background:linear-gradient(135deg,#1e40af,#2563eb);color:#ffffff;">
+          Ver en mi portal →
+        </a>
+        <a href="https://wa.me/573105968202" class="btn-secondary" style="color:#1e40af;border-color:#1e40af;">
+          Contactar agente
+        </a>
+      </div>
+      `
+    );
+ 
+    await sendMail(transporter, gmailUser, {
+      to:      clientEmail,
+      subject: `📋 Contrato registrado — ${d.propertyName}`,
+      html,
+    });
+ 
+    // También notificar al agente si es diferente del creador
+    if (d.agentEmail && d.agentEmail !== gmailUser) {
+      const agentHtmlContent = htmlWrapper(
+        'linear-gradient(135deg,#1a1f2e,#2d3548)',
+        `
+        <span class="emoji-icon">🏡</span>
+        <h1 class="title" style="color:#b8952a;text-align:center;">Contrato creado</h1>
+        <p class="subtitle" style="text-align:center;">
+          Hola <strong style="color:#1f2937;">${d.agentName}</strong>,<br/>
+          se registró un nuevo contrato bajo tu gestión.
+        </p>
+        <div class="info-card">
+          ${infoRow('👤 Cliente',    d.clientName,                 '#1f2937')}
+          ${infoRow('🏠 Propiedad',  d.propertyName,               '#b8952a')}
+          ${infoRow('💰 Valor',      valueStr,                     '#166534')}
+          ${infoRow('📋 Tipo',       typeLabel[d.type] || d.type,  '#1e40af')}
+        </div>
+        <div class="btn-center">
+          <a href="${BASE_URL}/contratos" class="btn-primary" style="background:linear-gradient(135deg,#b8952a,#d4a836);color:#ffffff;">
+            Ver en panel
+          </a>
+        </div>
+        `
+      );
+      await sendMail(transporter, gmailUser, {
+        to:      d.agentEmail,
+        subject: `📋 Contrato registrado — ${d.propertyName} · ${d.clientName}`,
+        html:    agentHtmlContent,
+      });
+    }
+ 
+    console.log(`[onContractCreated] Email enviado a ${clientEmail}`);
   }
 );

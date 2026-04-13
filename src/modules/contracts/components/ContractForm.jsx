@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaBuilding, FaUser, FaFileContract,
   FaChevronRight, FaChevronLeft, FaUpload,
-  FaTimes, FaSpinner, FaSearch,
+  FaTimes, FaSpinner, FaSearch, FaUserTie,
+  FaCheckCircle,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
@@ -16,17 +17,54 @@ import {
 } from '../types/contract.types';
 import { formatCOP } from '../../../shared/utils/formatCurrency';
 
-/**
- * ContractForm — stepper de 3 pasos para crear un contrato.
- *
- * Paso 1: Seleccionar propiedad (autocomplete desde /properties)
- * Paso 2: Seleccionar cliente   (autocomplete desde /users role:client)
- * Paso 3: Tipo, fechas, valor, notas, upload PDF
- *
- * Props:
- *   onSuccess(contractId) — callback al guardar exitosamente
- *   onCancel()            — callback para cerrar sin guardar
- */
+// ── Autocomplete genérico ──────────────────────────────────────────────────────
+function AutocompleteField({ placeholder, value, onSearch, results, onSelect, onClear, loading, renderItem, renderSelected }) {
+  return (
+    <div className="space-y-2">
+      {value ? (
+        <div className="flex items-center justify-between p-3 bg-green-500/10
+          border border-green-500/30 rounded-xl">
+          <div className="flex-1 min-w-0">{renderSelected(value)}</div>
+          <button onClick={onClear} className="text-slate-500 hover:text-red-400 transition-colors ml-2">
+            <FaTimes size={12} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="relative">
+            <FaSearch className="absolute left-3 top-3 text-slate-400" size={12} />
+            <input
+              type="text"
+              placeholder={placeholder}
+              onChange={(e) => onSearch(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl
+                pl-9 pr-10 py-2.5 text-sm text-slate-200 placeholder-slate-500
+                focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+            />
+            {loading && <FaSpinner className="absolute right-3 top-3 animate-spin text-slate-400" size={12} />}
+          </div>
+          {results.length > 0 && (
+            <ul className="bg-slate-950 border border-slate-700 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+              {results.map((item, i) => (
+                <li key={item.id ?? i}>
+                  <button
+                    onClick={() => onSelect(item)}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-800
+                      transition-colors border-b border-slate-800 last:border-0"
+                  >
+                    {renderItem(item)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
 export default function ContractForm({ onSuccess, onCancel }) {
   const { currentUser } = useAuth();
   const [step, setStep] = useState(1);
@@ -40,28 +78,28 @@ export default function ContractForm({ onSuccess, onCancel }) {
   const propTimer = useRef(null);
 
   useEffect(() => {
-    if (!propSearch || propSearch.length < 2) { setPropResults([]); return; }
+    if (!propSearch.trim() || propSearch.length < 2) { setPropResults([]); return; }
     clearTimeout(propTimer.current);
     propTimer.current = setTimeout(async () => {
       setPropLoading(true);
       try {
-        // Busca en /properties por slug o título — simple query
-        const snap = await getDocs(
-          query(collection(db, 'properties'), orderBy('title'), limit(20))
+        const snap = await getDocs(query(collection(db, 'properties'), orderBy('title'), limit(20)));
+        const q = propSearch.toLowerCase();
+        setPropResults(
+          snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((p) =>
+              p.title?.toLowerCase().includes(q) ||
+              p.address?.toLowerCase().includes(q) ||
+              p.city?.toLowerCase().includes(q)
+            )
         );
-        const all  = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const q    = propSearch.toLowerCase();
-        setPropResults(all.filter((p) =>
-          p.title?.toLowerCase().includes(q) ||
-          p.address?.toLowerCase().includes(q) ||
-          p.city?.toLowerCase().includes(q)
-        ));
       } catch { setPropResults([]); }
       finally  { setPropLoading(false); }
     }, 350);
   }, [propSearch]);
 
-  // ── Paso 2: Cliente ────────────────────────────────────────────────────────
+  // ── Paso 2: Cliente — busca en /clients (módulo real) y en /users ──────────
   const [clientSearch,   setClientSearch]   = useState('');
   const [clientResults,  setClientResults]  = useState([]);
   const [clientLoading,  setClientLoading]  = useState(false);
@@ -69,27 +107,77 @@ export default function ContractForm({ onSuccess, onCancel }) {
   const clientTimer = useRef(null);
 
   useEffect(() => {
-    if (!clientSearch || clientSearch.length < 2) { setClientResults([]); return; }
+    if (!clientSearch.trim() || clientSearch.length < 2) { setClientResults([]); return; }
     clearTimeout(clientTimer.current);
     clientTimer.current = setTimeout(async () => {
       setClientLoading(true);
       try {
-        const snap = await getDocs(
-          query(collection(db, 'users'), where('role', 'in', ['client', 'viewer']), limit(30))
+        const q = clientSearch.toLowerCase();
+        // Buscar primero en /clients (módulo de clientes de la app)
+        const clientsSnap = await getDocs(query(collection(db, 'clients'), limit(30)));
+        const fromClients = clientsSnap.docs
+          .map((d) => ({ id: d.id, _source: 'clients', ...d.data() }))
+          .filter((c) =>
+            c.nombre?.toLowerCase().includes(q) ||
+            c.name?.toLowerCase().includes(q)   ||
+            c.email?.toLowerCase().includes(q)  ||
+            c.telefono?.includes(q)
+          )
+          .map((c) => ({
+            id:          c.id,
+            _source:     'clients',
+            displayName: c.nombre || c.name || '',
+            email:       c.email  || '',
+            phone:       c.telefono || c.phone || '',
+          }));
+
+        // También buscar en /users con roles cliente
+        const usersSnap = await getDocs(
+          query(collection(db, 'users'), where('role', 'in', ['client', 'viewer']), limit(20))
         );
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const q   = clientSearch.toLowerCase();
-        setClientResults(all.filter((u) =>
-          u.displayName?.toLowerCase().includes(q) ||
-          u.email?.toLowerCase().includes(q)       ||
-          u.phone?.includes(q)
-        ));
+        const fromUsers = usersSnap.docs
+          .map((d) => ({ id: d.id, _source: 'users', ...d.data() }))
+          .filter((u) =>
+            u.displayName?.toLowerCase().includes(q) ||
+            u.email?.toLowerCase().includes(q)       ||
+            u.phone?.includes(q)
+          )
+          .map((u) => ({
+            id:          u.id,
+            _source:     'users',
+            displayName: u.displayName || u.email || '',
+            email:       u.email || '',
+            phone:       u.phone || '',
+          }));
+
+        // Deduplicar por email
+        const byEmail = new Map();
+        [...fromClients, ...fromUsers].forEach((c) => {
+          if (c.email && !byEmail.has(c.email)) byEmail.set(c.email, c);
+          else if (!c.email) byEmail.set(c.id, c);
+        });
+        setClientResults(Array.from(byEmail.values()).slice(0, 10));
       } catch { setClientResults([]); }
       finally  { setClientLoading(false); }
     }, 350);
   }, [clientSearch]);
 
-  // ── Paso 3: Datos del contrato ─────────────────────────────────────────────
+  // ── Paso 3: Agente + datos del contrato ────────────────────────────────────
+  const [agents,         setAgents]         = useState([]);
+  const [selectedAgent,  setSelectedAgent]  = useState(null);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    getDocs(query(collection(db, 'users'), where('role', 'in', ['member', 'admin']))).then((snap) => {
+      setAgents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      // Pre-seleccionar al usuario actual si es member/admin
+      const me = snap.docs.find((d) => d.data().email === currentUser?.email);
+      if (me && !selectedAgent) {
+        setSelectedAgent({ id: me.id, ...me.data() });
+      }
+    }).catch(() => {});
+  }, [step]);
+
   const [form, setForm] = useState({
     type:      CONTRACT_TYPE.RENT,
     startDate: '',
@@ -115,6 +203,12 @@ export default function ContractForm({ onSuccess, onCancel }) {
 
     setSaving(true);
     try {
+      const agentData = selectedAgent || {
+        id:    currentUser?.uid    || '',
+        email: currentUser?.email  || '',
+        displayName: currentUser?.displayName || currentUser?.email || '',
+      };
+
       const contractData = {
         ...form,
         value:           Number(form.value),
@@ -122,31 +216,30 @@ export default function ContractForm({ onSuccess, onCancel }) {
         propertyName:    selectedProp.title    ?? '',
         propertyAddress: selectedProp.address  ?? selectedProp.city ?? '',
         clientId:        selectedClient.id,
-        clientName:      selectedClient.displayName ?? selectedClient.email,
+        clientName:      selectedClient.displayName || selectedClient.email,
         clientEmail:     selectedClient.email,
-        agentId:         currentUser?.uid     ?? '',
-        agentName:       currentUser?.displayName ?? currentUser?.email ?? '',
-        agentEmail:      currentUser?.email   ?? '',
+        clientPhone:     selectedClient.phone || '',
+        agentId:         agentData.id    || agentData.uid || '',
+        agentName:       agentData.displayName || agentData.name || agentData.email || '',
+        agentEmail:      agentData.email || '',
       };
 
       const contractId = await contractService.createContract(contractData, currentUser?.email);
 
-      // Subir PDF si se adjuntó uno
       if (docFile) {
         await contractService.uploadDocument(contractId, docFile);
       }
 
-      toast.success('Contrato creado correctamente');
+      toast.success('Contrato creado correctamente ✓');
       onSuccess?.(contractId);
     } catch (error) {
-      console.error(error);
+      console.error('[ContractForm] handleSave:', error);
       toast.error('Error al crear el contrato');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── UI helpers ─────────────────────────────────────────────────────────────
   const STEPS = [
     { n: 1, label: 'Propiedad', icon: FaBuilding },
     { n: 2, label: 'Cliente',   icon: FaUser     },
@@ -164,14 +257,18 @@ export default function ContractForm({ onSuccess, onCancel }) {
               onClick={() => n < step && setStep(n)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold
                 transition-colors w-full justify-center
-                ${ step === n
+                ${step === n
                   ? 'bg-primary text-slate-950'
                   : n < step
                     ? 'bg-green-500/20 text-green-400 cursor-pointer hover:bg-green-500/30'
                     : 'bg-slate-800 text-slate-500 cursor-default'
                 }`}
             >
-              <Icon size={12} /> {label}
+              {n < step
+                ? <FaCheckCircle size={11} />
+                : <Icon size={11} />
+              }
+              {label}
             </button>
             {idx < STEPS.length - 1 && (
               <FaChevronRight className="text-slate-600 flex-shrink-0" size={10} />
@@ -180,8 +277,9 @@ export default function ContractForm({ onSuccess, onCancel }) {
         ))}
       </div>
 
-      {/* ── Paso 1: Propiedad ── */}
       <AnimatePresence mode="wait">
+
+        {/* ── Paso 1: Propiedad ── */}
         {step === 1 && (
           <motion.div key="step1"
             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
@@ -189,51 +287,29 @@ export default function ContractForm({ onSuccess, onCancel }) {
           >
             <label className="block text-slate-300 text-sm font-semibold">
               <FaBuilding className="inline mr-1.5 text-slate-500" size={12} />
-              Buscar propiedad
+              Selecciona la propiedad
             </label>
-            <div className="relative">
-              <FaSearch className="absolute left-3 top-3 text-slate-400" size={12} />
-              <input
-                type="text"
-                placeholder="Nombre, dirección o ciudad..."
-                value={selectedProp ? selectedProp.title : propSearch}
-                onChange={(e) => { setSelectedProp(null); setPropSearch(e.target.value); }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl
-                  pl-9 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500
-                  focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-              />
-              {propLoading && <FaSpinner className="absolute right-3 top-3 animate-spin text-slate-400" size={12} />}
-            </div>
-
-            {selectedProp ? (
-              <div className="flex items-center justify-between p-3 bg-green-500/10
-                border border-green-500/30 rounded-xl">
-                <div>
-                  <p className="text-green-300 text-sm font-semibold">{selectedProp.title}</p>
-                  <p className="text-slate-400 text-xs">{selectedProp.address ?? selectedProp.city}</p>
-                </div>
-                <button onClick={() => setSelectedProp(null)}
-                  className="text-slate-500 hover:text-red-400 transition-colors">
-                  <FaTimes size={12} />
-                </button>
-              </div>
-            ) : propResults.length > 0 && (
-              <ul className="bg-slate-950 border border-slate-700 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-                {propResults.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => { setSelectedProp(p); setPropSearch(''); setPropResults([]); }}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-800
-                        transition-colors border-b border-slate-800 last:border-0"
-                    >
-                      <p className="text-slate-200 text-sm font-medium">{p.title}</p>
-                      <p className="text-slate-500 text-xs">{p.address ?? p.city}</p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
+            <AutocompleteField
+              placeholder="Nombre, dirección o ciudad..."
+              value={selectedProp}
+              onSearch={setPropSearch}
+              results={propResults}
+              onSelect={(p) => { setSelectedProp(p); setPropResults([]); }}
+              onClear={() => { setSelectedProp(null); setPropSearch(''); }}
+              loading={propLoading}
+              renderItem={(p) => (
+                <>
+                  <p className="text-slate-200 text-sm font-medium">{p.title}</p>
+                  <p className="text-slate-500 text-xs">{p.address ?? p.city}</p>
+                </>
+              )}
+              renderSelected={(p) => (
+                <>
+                  <p className="text-green-300 text-sm font-semibold">{p.title}</p>
+                  <p className="text-slate-400 text-xs">{p.address ?? p.city}</p>
+                </>
+              )}
+            />
             <button
               onClick={() => selectedProp && setStep(2)}
               disabled={!selectedProp}
@@ -255,55 +331,29 @@ export default function ContractForm({ onSuccess, onCancel }) {
           >
             <label className="block text-slate-300 text-sm font-semibold">
               <FaUser className="inline mr-1.5 text-slate-500" size={12} />
-              Buscar cliente
+              Selecciona el cliente
             </label>
-            <div className="relative">
-              <FaSearch className="absolute left-3 top-3 text-slate-400" size={12} />
-              <input
-                type="text"
-                placeholder="Nombre, email o teléfono..."
-                value={selectedClient ? (selectedClient.displayName ?? selectedClient.email) : clientSearch}
-                onChange={(e) => { setSelectedClient(null); setClientSearch(e.target.value); }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl
-                  pl-9 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500
-                  focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-              />
-              {clientLoading && <FaSpinner className="absolute right-3 top-3 animate-spin text-slate-400" size={12} />}
-            </div>
-
-            {selectedClient ? (
-              <div className="flex items-center justify-between p-3 bg-green-500/10
-                border border-green-500/30 rounded-xl">
-                <div>
-                  <p className="text-green-300 text-sm font-semibold">
-                    {selectedClient.displayName ?? selectedClient.email}
-                  </p>
-                  <p className="text-slate-400 text-xs">{selectedClient.email}</p>
-                </div>
-                <button onClick={() => setSelectedClient(null)}
-                  className="text-slate-500 hover:text-red-400 transition-colors">
-                  <FaTimes size={12} />
-                </button>
-              </div>
-            ) : clientResults.length > 0 && (
-              <ul className="bg-slate-950 border border-slate-700 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-                {clientResults.map((u) => (
-                  <li key={u.id}>
-                    <button
-                      onClick={() => { setSelectedClient(u); setClientSearch(''); setClientResults([]); }}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-800
-                        transition-colors border-b border-slate-800 last:border-0"
-                    >
-                      <p className="text-slate-200 text-sm font-medium">
-                        {u.displayName ?? u.email}
-                      </p>
-                      <p className="text-slate-500 text-xs">{u.email} · {u.phone ?? 'sin teléfono'}</p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
+            <AutocompleteField
+              placeholder="Nombre, email o teléfono..."
+              value={selectedClient}
+              onSearch={setClientSearch}
+              results={clientResults}
+              onSelect={(c) => { setSelectedClient(c); setClientResults([]); }}
+              onClear={() => { setSelectedClient(null); setClientSearch(''); }}
+              loading={clientLoading}
+              renderItem={(c) => (
+                <>
+                  <p className="text-slate-200 text-sm font-medium">{c.displayName || c.email}</p>
+                  <p className="text-slate-500 text-xs">{c.email} {c.phone ? `· ${c.phone}` : ''}</p>
+                </>
+              )}
+              renderSelected={(c) => (
+                <>
+                  <p className="text-green-300 text-sm font-semibold">{c.displayName || c.email}</p>
+                  <p className="text-slate-400 text-xs">{c.email}</p>
+                </>
+              )}
+            />
             <div className="flex gap-2">
               <button onClick={() => setStep(1)}
                 className="flex-1 py-2.5 rounded-xl font-semibold text-sm
@@ -339,7 +389,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
               <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
                 <p className="text-slate-500 text-xs mb-0.5">Cliente</p>
                 <p className="text-slate-200 text-sm font-semibold truncate">
-                  {selectedClient?.displayName ?? selectedClient?.email}
+                  {selectedClient?.displayName || selectedClient?.email}
                 </p>
               </div>
             </div>
@@ -395,9 +445,34 @@ export default function ContractForm({ onSuccess, onCancel }) {
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5
                   text-sm text-slate-200 placeholder-slate-500
                   focus:border-primary outline-none transition-colors" />
-              {form.value > 0 && (
+              {Number(form.value) > 0 && (
                 <p className="text-slate-500 text-xs mt-1">{formatCOP(form.value)}</p>
               )}
+            </div>
+
+            {/* Agente responsable */}
+            <div>
+              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+                <FaUserTie className="inline mr-1" size={10} />
+                Agente responsable
+              </label>
+              <select
+                value={selectedAgent?.id || ''}
+                onChange={(e) => {
+                  const agent = agents.find((a) => a.id === e.target.value);
+                  setSelectedAgent(agent || null);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5
+                  text-sm text-slate-200 focus:border-primary outline-none transition-colors"
+              >
+                <option value="">Sin agente asignado</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.displayName || a.name || a.email}
+                    {a.email === currentUser?.email ? ' (yo)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Notas */}
@@ -419,12 +494,12 @@ export default function ContractForm({ onSuccess, onCancel }) {
                   flex items-center gap-3 cursor-pointer hover:border-primary/50 transition-colors"
               >
                 <FaUpload className="text-slate-500" size={14} />
-                <span className="text-slate-400 text-xs">
+                <span className="text-slate-400 text-xs flex-1 truncate">
                   {docFile ? docFile.name : 'Haz clic para adjuntar el contrato en PDF'}
                 </span>
                 {docFile && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); setDocFile(null); }}
-                    className="ml-auto text-slate-500 hover:text-red-400 transition-colors">
+                    className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
                     <FaTimes size={12} />
                   </button>
                 )}

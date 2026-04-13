@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaHome, FaBuilding, FaEnvelope, FaBars, FaTimes } from 'react-icons/fa';
+import { FaHome, FaBuilding, FaEnvelope, FaBars, FaTimes, FaUser } from 'react-icons/fa';
 import { MdLightMode, MdDarkMode } from 'react-icons/md';
 import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from '../../../modules/notifications/components/NotificationBell';
@@ -14,16 +14,48 @@ const NAV_LINKS = [
   { to: PUBLIC_ROUTES.CONTACT, icon: FaEnvelope, label: 'Contacto'    },
 ];
 
+// Determina qué botones mostrar según el estado del usuario
+function useNavConfig(currentUser, userData) {
+  // No autenticado → dos botones claros
+  if (!currentUser) {
+    return {
+      primary: { to: '/acceso-clientes', label: '🏠 Mi portal', style: 'client' },
+      secondary: { to: AUTH_ROUTES.LOGIN, label: 'Acceso agentes', style: 'ghost' },
+    };
+  }
+
+  const role = userData?.role;
+
+  // Cliente (viewer) → solo su portal
+  if (role === 'viewer') {
+    return {
+      primary: { to: '/portal', label: 'Mi portal', style: 'client' },
+      secondary: null,
+    };
+  }
+
+  // Admin o member → dashboard
+  return {
+    primary: { to: PRIVATE_ROUTES.DASHBOARD, label: 'Panel admin', style: 'gold' },
+    secondary: null,
+  };
+}
+
 export default function Navbar() {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const { theme, toggleTheme } = useTheme?.() ?? {};
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
-  const dashboardLink = currentUser ? PRIVATE_ROUTES.DASHBOARD : AUTH_ROUTES.ACCESS_REQUEST;
-  const dashboardLabel = currentUser ? 'Dashboard' : 'Acceso Agentes';
+  const { primary, secondary } = useNavConfig(currentUser, userData);
+
+  const btnCls = {
+    gold:   'button-gold text-sm px-4 py-2',
+    client: 'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-slate-950 font-bold text-sm hover:bg-primary/90 transition-colors shadow-md',
+    ghost:  'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-600 text-slate-400 hover:border-primary/40 hover:text-primary transition-colors text-xs font-semibold',
+  };
 
   return (
     <motion.nav
@@ -70,17 +102,25 @@ export default function Navbar() {
                 className="theme-toggle"
                 aria-label="Cambiar tema"
               >
-                {theme === 'dark'
-                  ? <MdLightMode size={18} />
-                  : <MdDarkMode  size={18} />}
+                {theme === 'dark' ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}
               </motion.button>
             )}
 
             {currentUser && <NotificationBell />}
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link to={dashboardLink} className="button-gold">
-                {dashboardLabel}
+            {/* Botón secundario (solo desktop, solo cuando hay dos) */}
+            {secondary && (
+              <div className="hidden sm:block">
+                <Link to={secondary.to} className={btnCls[secondary.style]}>
+                  {secondary.label}
+                </Link>
+              </div>
+            )}
+
+            {/* Botón primario */}
+            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <Link to={primary.to} className={btnCls[primary.style]}>
+                {primary.label}
               </Link>
             </motion.div>
 
@@ -122,12 +162,17 @@ export default function Navbar() {
                   <span>{link.label}</span>
                 </Link>
               ))}
-              <Link
-                to={dashboardLink}
-                className="button-gold w-full text-center block mt-3"
-              >
-                {dashboardLabel}
-              </Link>
+
+              <div className="pt-3 space-y-2 border-t border-slate-800 mt-2">
+                <Link to={primary.to} className={`${btnCls[primary.style]} w-full justify-center`}>
+                  {primary.label}
+                </Link>
+                {secondary && (
+                  <Link to={secondary.to} className={`${btnCls[secondary.style]} w-full justify-center`}>
+                    {secondary.label}
+                  </Link>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
