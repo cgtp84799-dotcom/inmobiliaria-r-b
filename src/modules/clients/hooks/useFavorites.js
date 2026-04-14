@@ -2,7 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   doc, updateDoc, arrayUnion, arrayRemove,
-  collection, query, where, getDocs, addDoc, serverTimestamp,
+  collection, query, where, getDocs, onSnapshot,
+  addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
@@ -12,32 +13,32 @@ import toast from 'react-hot-toast';
  * useFavorites
  *
  * Gestiona la lista de propiedades favoritas del cliente autenticado.
- * Lee y escribe en clients/{clientId}.favorites.
- * Busca el clientId por email en la colección "clients".
+ * Lee y escribe en clients/{clientId}.favorites (realtime con onSnapshot).
  * Si no existe el cliente, lo crea automáticamente.
  *
- * API pública: { favorites, isFavorite, toggleFavorite, loading }
+ * API pública: { favorites, isFavorite, toggleFavorite, loading, clientId }
  */
 export function useFavorites() {
   const { currentUser } = useAuth();
-  const [favorites, setFavorites]   = useState([]);
-  const [clientId,  setClientId]    = useState(null);
-  const [loading,   setLoading]     = useState(true);
-  const resolvedRef = useRef(false);
+  const [favorites, setFavorites] = useState([]);
+  const [clientId,  setClientId]  = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const clientIdRef = useRef(null); // ref para acceder en toggleFavorite sin re-crear callback
 
-  // ── Resolver clientId y cargar favoritos ──────────────────────────────────
+  // ── Resolver clientId y suscribirse en realtime ───────────────────────────
   useEffect(() => {
     if (!currentUser?.email) {
       setFavorites([]);
       setClientId(null);
+      clientIdRef.current = null;
       setLoading(false);
       return;
     }
 
-    resolvedRef.current = false;
+    setLoading(true);
+    let unsubClient = null;
 
-    async function resolveClient() {
-      setLoading(true);
+    async function resolveAndSubscribe() {
       try {
         const q = query(
           collection(db, 'clients'),
@@ -46,10 +47,9 @@ export function useFavorites() {
         const snap = await getDocs(q);
 
         let id;
+
         if (!snap.empty) {
-          const clientDoc = snap.docs[0];
-          id = clientDoc.id;
-          setFavorites(clientDoc.data().favorites ?? []);
+          id = snap.docs[0].id;
         } else {
           // Crear documento de cliente si no existe
           const newRef = await addDoc(collection(db, 'clients'), {
@@ -68,20 +68,38 @@ export function useFavorites() {
             createdAt:        serverTimestamp(),
           });
           id = newRef.id;
-          setFavorites([]);
         }
 
         setClientId(id);
-        resolvedRef.current = true;
+        clientIdRef.current = id;
+
+        // Suscripción realtime al documento del cliente
+        // Así los favoritos se sincronizan entre pestañas y dispositivos
+        unsubClient = onSnapshot(
+          doc(db, 'clients', id),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setFavorites(docSnap.data().favorites ?? []);
+            }
+            setLoading(false);
+          },
+          (err) => {
+            console.error('useFavorites: onSnapshot error', err);
+            setLoading(false);
+          }
+        );
       } catch (err) {
         console.error('useFavorites: error resolviendo cliente', err);
         setFavorites([]);
-      } finally {
         setLoading(false);
       }
     }
 
-    resolveClient();
+    resolveAndSubscribe();
+
+    return () => {
+      if (unsubClient) unsubClient();
+    };
   }, [currentUser?.email]);
 
   // ── isFavorite ─────────────────────────────────────────────────────────────
@@ -90,40 +108,43 @@ export function useFavorites() {
     [favorites]
   );
 
-  // ── toggleFavorite ────────────────────────────────────────────────────────
+  // ── toggleFavorite ─────────────────────────────────────────────────────────
   const toggleFavorite = useCallback(async (propertyId) => {
     if (!currentUser?.email) {
       toast.error('Debes iniciar sesión para guardar favoritos');
       return;
     }
-    if (!clientId) {
+
+    const id = clientIdRef.current;
+    if (!id) {
       toast.error('Perfil de cliente no encontrado');
       return;
     }
 
+    // Leer estado actual desde el array (no desde el cierre)
+    // El optimistic update lo hace onSnapshot automáticamente
     const isNowFav = favorites.includes(propertyId);
 
-    // Optimistic update
+    // Optimistic update local inmediato (onSnapshot confirma luego)
     setFavorites((prev) =>
-      isNowFav ? prev.filter((id) => id !== propertyId) : [...prev, propertyId]
+      isNowFav ? prev.filter((i) => i !== propertyId) : [...prev, propertyId]
     );
 
     try {
-      const clientRef = doc(db, 'clients', clientId);
-      await updateDoc(clientRef, {
+      await updateDoc(doc(db, 'clients', id), {
         favorites: isNowFav ? arrayRemove(propertyId) : arrayUnion(propertyId),
       });
       toast(isNowFav ? 'Eliminado de favoritos' : '¡Guardado en favoritos!', {
         icon: isNowFav ? '🗑️' : '❤️',
       });
     } catch (err) {
-      // Revertir en caso de error
+      // Revertir optimistic update en caso de error
       setFavorites((prev) =>
-        isNowFav ? [...prev, propertyId] : prev.filter((id) => id !== propertyId)
+        isNowFav ? [...prev, propertyId] : prev.filter((i) => i !== propertyId)
       );
       toast.error('Error al actualizar favoritos');
     }
-  }, [currentUser?.email, clientId, favorites]);
+  }, [currentUser?.email, favorites]);
 
   return { favorites, isFavorite, toggleFavorite, loading, clientId };
 }

@@ -1,100 +1,87 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <link rel="icon" href="/favicon.ico?v=5" />
-    <link rel="apple-touch-icon" href="/logo.jpg.png" />
+    <!-- ─── FAVICON ─────────────────────────────────────────── -->
+    <link rel="icon"             type="image/x-icon"    href="/favicon.ico?v=5" />
+    <link rel="icon"             type="image/png"       sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon"             type="image/png"       sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon"                        sizes="180x180" href="/logo.jpg.png" />
+    <link rel="manifest"         href="/site.webmanifest" />
 
+    <!-- ─── PRECONNECT (crítico: antes de cualquier recurso) ── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://storage.googleapis.com" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+
+    <!-- ─── FUENTE — preload del woff2 más común ─────────────── -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
+    <!-- ─── TEMA ──────────────────────────────────────────────── -->
     <meta name="theme-color" content="#020617" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
 
-    <title>
-      Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas
-    </title>
-    <meta
-      name="title"
-      content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas"
-    />
-    <meta
-      name="description"
-      content="Inmobiliaria Rincón Bedoya y Asociados: compra, venta y arriendo de casas, apartamentos, lotes y fincas en Anserma y municipios de Caldas. Asesoría jurídica especializada en finca raíz."
-    />
-    <meta
-      name="keywords"
-      content="inmobiliaria anserma, casas en venta anserma caldas, apartamentos anserma, fincas caldas, lotes anserma, arriendo anserma, inmobiliaria caldas, propiedades riosucio, supia, belalcazar, dosquebradas, filadelfia caldas, marmato, inmobiliaria rincon bedoya, compra venta inmuebles caldas"
-    />
-    <meta
-      name="author"
-      content="Inmobiliaria Rincón Bedoya y Asociados"
-    />
-    <meta
-      name="robots"
-      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
-    />
-    <meta name="language" content="Spanish" />
+    <!-- ─── SEO PRINCIPAL ────────────────────────────────────── -->
+    <title>Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas</title>
+    <meta name="title"       content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas" />
+    <meta name="description" content="Inmobiliaria Rincón Bedoya y Asociados: compra, venta y arriendo de casas, apartamentos, lotes y fincas en Anserma y municipios de Caldas. Asesoría jurídica especializada en finca raíz." />
+    <meta name="keywords"    content="inmobiliaria anserma, casas en venta anserma caldas, apartamentos anserma, fincas caldas, lotes anserma, arriendo anserma, inmobiliaria caldas, propiedades riosucio, supia, belalcazar, dosquebradas, filadelfia caldas, marmato, inmobiliaria rincon bedoya, compra venta inmuebles caldas" />
+    <meta name="author"      content="Inmobiliaria Rincón Bedoya y Asociados" />
+    <meta name="robots"      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="language"    content="Spanish" />
     <meta name="revisit-after" content="7 days" />
 
-    <meta name="geo.region" content="CO-CAL" />
-    <meta
-      name="geo.placename"
-      content="Anserma, Caldas, Colombia"
-    />
-    <meta name="geo.position" content="5.2383;-75.7850" />
-    <meta name="ICBM" content="5.2383, -75.7850" />
+    <!-- ─── CANONICAL — evita contenido duplicado ────────────── -->
+    <!--
+      IMPORTANTE: React/Vite SPA — el canonical de cada página
+      se inyecta dinámicamente con react-helmet-async en cada ruta.
+      Este canonical raíz solo aplica a la home cuando el bot
+      llega directamente al HTML shell.
+    -->
+    <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
 
-    <meta property="og:type" content="website" />
-    <meta
-      property="og:url"
-      content="https://inmobiliaria-ryb-y-asociados.com/"
-    />
-    <meta
-      property="og:title"
-      content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas"
-    />
-    <meta
-      property="og:description"
-      content="Compra, venta y arriendo de propiedades en Anserma y municipios de Caldas. Casas, apartamentos, lotes y fincas con papeles al día."
-    />
-    <meta
-      property="og:image"
-      content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
-    />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="Inmobiliaria Rincón Bedoya y Asociados - Anserma, Caldas"
-    />
-    <meta property="og:locale" content="es_CO" />
-    <meta
-      property="og:site_name"
-      content="Inmobiliaria Rincón Bedoya y Asociados"
-    />
+    <!-- ─── GEO ───────────────────────────────────────────────── -->
+    <meta name="geo.region"    content="CO-CAL" />
+    <meta name="geo.placename" content="Anserma, Caldas, Colombia" />
+    <meta name="geo.position"  content="5.2383;-75.7850" />
+    <meta name="ICBM"          content="5.2383, -75.7850" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas"
-    />
-    <meta
-      name="twitter:description"
-      content="Compra, venta y arriendo en Anserma, Caldas y municipios aledaños."
-    />
-    <meta
-      name="twitter:image"
-      content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
-    />
+    <!-- ─── OPEN GRAPH ───────────────────────────────────────── -->
+    <meta property="og:type"              content="website" />
+    <meta property="og:url"               content="https://inmobiliaria-ryb-y-asociados.com/" />
+    <meta property="og:title"             content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas" />
+    <meta property="og:description"       content="Compra, venta y arriendo de propiedades en Anserma y municipios de Caldas. Casas, apartamentos, lotes y fincas con papeles al día." />
+    <meta property="og:image"             content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+    <meta property="og:image:width"       content="1200" />
+    <meta property="og:image:height"      content="630" />
+    <meta property="og:image:alt"         content="Inmobiliaria Rincón Bedoya y Asociados - Anserma, Caldas" />
+    <meta property="og:image:type"        content="image/png" />
+    <meta property="og:locale"            content="es_CO" />
+    <meta property="og:site_name"         content="Inmobiliaria Rincón Bedoya y Asociados" />
 
+    <!-- ─── TWITTER / X ──────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@inmobiliaria_ryb" />
+    <meta name="twitter:title"       content="Inmobiliaria Rincón Bedoya y Asociados | Inmuebles en Anserma y Caldas" />
+    <meta name="twitter:description" content="Compra, venta y arriendo en Anserma, Caldas y municipios aledaños." />
+    <meta name="twitter:image"       content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
+    <meta name="twitter:image:alt"   content="Inmobiliaria Rincón Bedoya y Asociados" />
+
+    <!-- ─── SCHEMA.ORG — RealEstateAgent ─────────────────────── -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -104,7 +91,12 @@
         "url": "https://inmobiliaria-ryb-y-asociados.com",
         "telephone": "+573105968202",
         "email": "inmojuridi09@gmail.com",
-        "logo": "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png",
+          "width": 512,
+          "height": 512
+        },
         "image": "https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png",
         "hasMap": "https://maps.google.com/?q=5.23889,-75.78463",
         "address": {
@@ -139,7 +131,7 @@
         "openingHoursSpecification": [
           {
             "@type": "OpeningHoursSpecification",
-            "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
             "opens": "08:00",
             "closes": "17:30"
           },
@@ -151,40 +143,73 @@
           }
         ],
         "areaServed": [
-          "Anserma",
-          "Riosucio",
-          "Supía",
-          "Belalcázar",
-          "Filadelfia",
-          "La Merced",
-          "Marmato",
-          "Dosquebradas",
-          "Quinchía",
-          "Caldas",
-          "Risaralda"
+          "Anserma","Riosucio","Supía","Belalcázar","Filadelfia",
+          "La Merced","Marmato","Dosquebradas","Quinchía","Caldas","Risaralda"
         ],
         "priceRange": "$$",
         "sameAs": [
           "https://www.facebook.com/profile.php?id=61559014741338",
           "https://instagram.com/inmobiliaria_ryb"
-        ]
+        ],
+        "currenciesAccepted": "COP",
+        "paymentAccepted": "Cash, Bank Transfer"
       }
     </script>
 
+    <!-- ─── GOOGLE ANALYTICS — carga diferida ────────────────── -->
+    <script>
+      // GA se carga después del LCP para no bloquear el render
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-DM5BQSSP4C', { send_page_view: false });
+    </script>
     <script
       async
+      defer
       src="https://www.googletagmanager.com/gtag/js?id=G-DM5BQSSP4C"
     ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-      gtag("config", "G-DM5BQSSP4C");
-    </script>
   </head>
+
   <body>
+    <!-- Skip link — accesibilidad teclado/lectores de pantalla -->
+    <a
+      href="#root"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-amber-400 focus:text-black focus:font-bold focus:rounded-lg"
+    >
+      Saltar al contenido principal
+    <style>
+  #skip-link {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+  #skip-link:focus {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 9999;
+    width: auto;
+    height: auto;
+    clip: auto;
+    overflow: visible;
+    padding: 0.5rem 1rem;
+    background: #f59e0b;
+    color: #000;
+    font-weight: 700;
+    border-radius: 0.5rem;
+    white-space: normal;
+  }
+</style>
+
+<a id="skip-link" href="#root">Saltar al contenido principal</a>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

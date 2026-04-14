@@ -1,3 +1,5 @@
+// src/modules/properties/components/LocationPicker.jsx
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import {
   FaMapMarkerAlt,
@@ -59,12 +61,7 @@ const geocodeNominatim = async (query, limit = 5) => {
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
         query
       )}&format=json&limit=${limit}&countrycodes=co`,
-      {
-        headers: {
-          Accept: "application/json",
-          "Accept-Language": "es",
-        },
-      }
+      { headers: { Accept: "application/json", "Accept-Language": "es" } }
     );
     if (!resp.ok) return [];
     const data = await resp.json();
@@ -90,10 +87,14 @@ const smartSearchAddress = async ({ address, neighborhood, city, department }) =
   const barrioFromAddr = address?.match(/barr(?:io)?\s+([^,]+)/i)?.[1]?.trim();
   const searches = [];
 
-  if (neighborhood && city) searches.push({ q: `${neighborhood}, ${city}, ${department}, Colombia`, exact: true });
-  if (barrioFromAddr && city && barrioFromAddr !== neighborhood) searches.push({ q: `${barrioFromAddr}, ${city}, ${department}, Colombia`, exact: true });
-  if (address && city) searches.push({ q: `${address}, ${city}, ${department}, Colombia`, exact: true });
-  if (city) searches.push({ q: `${city}, ${department}, Colombia`, exact: false });
+  if (neighborhood && city)
+    searches.push({ q: `${neighborhood}, ${city}, ${department}, Colombia`, exact: true });
+  if (barrioFromAddr && city && barrioFromAddr !== neighborhood)
+    searches.push({ q: `${barrioFromAddr}, ${city}, ${department}, Colombia`, exact: true });
+  if (address && city)
+    searches.push({ q: `${address}, ${city}, ${department}, Colombia`, exact: true });
+  if (city)
+    searches.push({ q: `${city}, ${department}, Colombia`, exact: false });
 
   for (const { q, exact } of searches) {
     const results = await geocodeMulti(q, 1);
@@ -106,10 +107,7 @@ const smartSearchAddress = async ({ address, neighborhood, city, department }) =
 const GoogleMapEmbed = ({ lat, lng, query, zoom = 17 }) => {
   const q = lat && lng ? `${lat},${lng}` : query || "Anserma, Caldas, Colombia";
   const z = lat && lng ? zoom : 14;
-
-  const src = `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(
-    q
-  )}&zoom=${z}&language=es&region=CO`;
+  const src = `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(q)}&zoom=${z}&language=es&region=CO`;
 
   return (
     <iframe
@@ -124,6 +122,20 @@ const GoogleMapEmbed = ({ lat, lng, query, zoom = 17 }) => {
   );
 };
 
+// ─── Clases de input reutilizables ────────────────────────────────────────────
+// Centralizadas aquí para no repetir el string en cada <input>
+const INPUT_BASE =
+  "w-full bg-[var(--color-surface)] border border-[var(--color-border)] " +
+  "rounded-lg px-3 py-2.5 text-[var(--color-text)] text-sm " +
+  "placeholder-[var(--color-text-faint)] " +
+  "focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors";
+
+const INPUT_SM =
+  "w-full bg-[var(--color-surface)] border border-[var(--color-border)] " +
+  "rounded-lg px-3 py-2 text-[var(--color-text)] text-sm " +
+  "focus:border-primary outline-none transition-colors";
+
+
 const LocationPicker = ({
   latitude,
   longitude,
@@ -133,19 +145,19 @@ const LocationPicker = ({
   department = "Caldas",
   onChange,
 }) => {
-  const [position, setPosition] = useState(null);
-  const [mapQuery, setMapQuery] = useState(null);
-  const [searching, setSearching] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
+  const [position, setPosition]           = useState(null);
+  const [mapQuery, setMapQuery]           = useState(null);
+  const [searching, setSearching]         = useState(false);
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [suggestions, setSuggestions]     = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mapEnabled, setMapEnabled] = useState(true);
-  const [manualCoords, setManualCoords] = useState(false);
-  const [latInput, setLatInput] = useState("");
-  const [lngInput, setLngInput] = useState("");
+  const [mapEnabled, setMapEnabled]       = useState(true);
+  const [manualCoords, setManualCoords]   = useState(false);
+  const [latInput, setLatInput]           = useState("");
+  const [lngInput, setLngInput]           = useState("");
 
   const suggestionsRef = useRef(null);
-  const debounceRef = useRef(null);
+  const debounceRef    = useRef(null);
 
   useEffect(() => {
     const lat = toNumberOrNull(latitude);
@@ -168,30 +180,21 @@ const LocationPicker = ({
 
   useEffect(() => {
     const handler = (e) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target))
         setShowSuggestions(false);
-      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, []);
 
   const handleInput = useCallback((val) => {
     setSearchQuery(val);
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (val.trim().length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (val.trim().length < 3) { setSuggestions([]); setShowSuggestions(false); return; }
 
     debounceRef.current = setTimeout(async () => {
       const results = await geocodeMulti(val, 5);
@@ -217,16 +220,9 @@ const LocationPicker = ({
       toast.error("Ingresa primero la dirección y ciudad");
       return;
     }
-
     setSearching(true);
     try {
-      const { result, isExact } = await smartSearchAddress({
-        address,
-        neighborhood,
-        city,
-        department,
-      });
-
+      const { result, isExact } = await smartSearchAddress({ address, neighborhood, city, department });
       if (result) {
         if (isExact) {
           setPosition({ lat: result.lat, lng: result.lng });
@@ -238,9 +234,7 @@ const LocationPicker = ({
         } else {
           setMapQuery(`${city}, ${department}, Colombia`);
           setPosition(null);
-          toast("Zona encontrada. Usa coordenadas manuales o busca por nombre.", {
-            duration: 5000,
-          });
+          toast("Zona encontrada. Usa coordenadas manuales o busca por nombre.", { duration: 5000 });
         }
       } else {
         toast.error("No se encontró. Intenta buscar por nombre o ingresa coordenadas.");
@@ -253,7 +247,6 @@ const LocationPicker = ({
   const handleFreeSearch = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
-
     setSearching(true);
     try {
       const results = await geocodeMulti(searchQuery, 5);
@@ -280,8 +273,7 @@ const LocationPicker = ({
     const lng = field === "lng" ? toNumberOrNull(cleaned) : toNumberOrNull(lngInput);
 
     if (lat !== null && lng !== null) {
-      const newPos = { lat, lng };
-      setPosition(newPos);
+      setPosition({ lat, lng });
       setMapQuery(null);
       onChange?.({ latitude: lat, longitude: lng });
     } else {
@@ -291,40 +283,42 @@ const LocationPicker = ({
 
   return (
     <div className="space-y-3">
+
+      {/* Toggle de mapa */}
       <div className="flex items-center justify-between">
-        <span className="text-slate-400 text-sm font-medium">Mapa de ubicación</span>
+        <span className="text-muted text-sm font-medium">Mapa de ubicación</span>
         <button
           type="button"
           onClick={() => setMapEnabled((v) => !v)}
-          className="flex items-center gap-2 text-sm text-slate-400 hover:text-light transition-colors"
+          className="flex items-center gap-2 text-sm text-muted hover:text-light transition-colors"
         >
           {mapEnabled ? (
-            <>
-              <FaToggleOn className="text-primary text-xl" />
-              <span>Activado</span>
-            </>
+            <><FaToggleOn className="text-primary text-xl" /><span>Activado</span></>
           ) : (
-            <>
-              <FaToggleOff className="text-slate-600 text-xl" />
-              <span>Desactivado</span>
-            </>
+            <><FaToggleOff className="text-[var(--color-text-faint)] text-xl" /><span>Desactivado</span></>
           )}
         </button>
       </div>
 
       {mapEnabled && (
         <>
+          {/* Barra de búsqueda */}
           <div className="flex flex-col sm:flex-row gap-2">
+
+            {/* Botón buscar con dirección del formulario */}
             <button
               type="button"
               onClick={handleFormSearch}
               disabled={searching}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-semibold disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 border border-primary/30
+                text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-semibold
+                disabled:opacity-50 whitespace-nowrap"
             >
               {searching ? <FaSpinner className="animate-spin" /> : <FaCrosshairs />}
               Buscar con dirección
             </button>
 
+            {/* Input de búsqueda libre + sugerencias */}
             <div className="flex-1 relative" ref={suggestionsRef}>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
@@ -333,59 +327,55 @@ const LocationPicker = ({
                     value={searchQuery}
                     onChange={(e) => handleInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleFreeSearch(e);
-                      }
+                      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); handleFreeSearch(e); }
                     }}
                     onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                     placeholder="Buscar condominio, barrio, dirección..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-light text-sm placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                    className={INPUT_BASE}
                   />
                   {searchQuery && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setSuggestions([]);
-                        setShowSuggestions(false);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1"
+                      onClick={() => { setSearchQuery(""); setSuggestions([]); setShowSuggestions(false); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-light p-1 transition-colors"
                     >
                       <FaTimes size={12} />
                     </button>
                   )}
                 </div>
 
+                {/* Botón buscar */}
                 <button
                   type="button"
                   onClick={handleFreeSearch}
                   disabled={searching || !searchQuery.trim()}
-                  className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-light rounded-lg transition-colors disabled:opacity-50"
+                  className="px-3 py-2.5 bg-[var(--color-surface-offset)] hover:bg-[var(--color-surface-dynamic)]
+                    text-[var(--color-text)] rounded-lg transition-colors disabled:opacity-50 border border-[var(--color-border)]"
                 >
                   {searching ? <FaSpinner className="animate-spin" /> : <FaSearch />}
                 </button>
               </div>
 
+              {/* Dropdown de sugerencias */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                <div className="absolute z-50 mt-1 w-full bg-[var(--color-surface-2)] border border-[var(--color-border)]
+                  rounded-lg shadow-xl max-h-60 overflow-y-auto">
                   {suggestions.map((s, i) => (
                     <button
                       key={`${s.lat}-${s.lng}-${i}`}
                       type="button"
                       onClick={() => selectSuggestion(s)}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0 flex items-start gap-3"
+                      className="w-full text-left px-4 py-3 hover:bg-[var(--color-surface-offset)]
+                        transition-colors border-b border-[var(--color-divider)] last:border-0
+                        flex items-start gap-3"
                     >
                       <FaMapMarkerAlt className="text-primary mt-0.5 flex-shrink-0" />
                       <div className="min-w-0">
-                        <div className="text-sm text-light truncate">
+                        <div className="text-sm text-[var(--color-text)] truncate">
                           {s.display || s.name}
                         </div>
                         {s.name !== s.display && (
-                          <div className="text-xs text-slate-500 truncate mt-0.5">
-                            {s.name}
-                          </div>
+                          <div className="text-xs text-muted truncate mt-0.5">{s.name}</div>
                         )}
                       </div>
                     </button>
@@ -395,15 +385,17 @@ const LocationPicker = ({
             </div>
           </div>
 
-          <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-slate-700">
+          {/* Iframe del mapa */}
+          <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-[var(--color-border)]">
             <GoogleMapEmbed lat={position?.lat} lng={position?.lng} query={mapQuery} />
           </div>
 
+          {/* Coordenadas manuales */}
           <div>
             <button
               type="button"
               onClick={() => setManualCoords((v) => !v)}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+              className="text-xs text-muted hover:text-[var(--color-text)] transition-colors flex items-center gap-1"
             >
               <FaMousePointer />
               {manualCoords ? "Ocultar coordenadas manuales" : "Ingresar coordenadas manualmente"}
@@ -412,26 +404,25 @@ const LocationPicker = ({
             {manualCoords && (
               <div className="flex gap-3 mt-2">
                 <div className="flex-1">
-                  <label className="text-xs text-slate-500 block mb-1">Latitud</label>
+                  <label className="text-xs text-muted block mb-1">Latitud</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={latInput}
                     onChange={(e) => handleManualCoords("lat", e.target.value)}
                     placeholder="ej: 4.8511"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-light text-sm focus:border-primary outline-none"
+                    className={INPUT_SM}
                   />
                 </div>
-
                 <div className="flex-1">
-                  <label className="text-xs text-slate-500 block mb-1">Longitud</label>
+                  <label className="text-xs text-muted block mb-1">Longitud</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={lngInput}
                     onChange={(e) => handleManualCoords("lng", e.target.value)}
                     placeholder="ej: -75.6514"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-light text-sm focus:border-primary outline-none"
+                    className={INPUT_SM}
                   />
                 </div>
               </div>
@@ -440,12 +431,13 @@ const LocationPicker = ({
         </>
       )}
 
+      {/* Estado de ubicación */}
       {position ? (
         <div className="flex items-center gap-3 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
           <FaMapMarkerAlt className="text-green-400 flex-shrink-0" />
           <div className="text-sm">
             <span className="text-green-400 font-semibold">Ubicación guardada: </span>
-            <span className="text-slate-300">
+            <span className="text-[var(--color-text)]">
               {position.lat.toFixed(6)}, {position.lng.toFixed(6)}
             </span>
           </div>

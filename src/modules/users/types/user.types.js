@@ -1,45 +1,51 @@
 // src/modules/users/types/user.types.js
-
-// ─── Roles ───────────────────────────────────────────────────────────────────
-// SISTEMA DE ROLES DEFINITIVO:
-//   admin  → Control total: usuarios, configuración, todo lo operativo
-//   member → Agente inmobiliario: acceso operativo completo (sin gestión de usuarios/config)
-//   viewer → Solo lectura sobre contenido operativo (sin editar, sin chat)
 //
-// ⚠️ El rol 'agent' fue ELIMINADO. Todo lo que era 'agent' ahora es 'member'.
+// SISTEMA DE ROLES:
+//
+//   admin  → Control total: usuarios, configuración, operaciones
+//   member → Agente inmobiliario: operaciones sin gestión de usuarios
+//   viewer → Cliente portal: solo ve SU propia información
+//
+// SEPARACIÓN CLARA DE UNIVERSOS:
+//   Panel interno  → roles: admin, member
+//   Portal cliente → rol:   viewer  (= CLIENT, no es "solo lectura" del panel)
+//
+// JAMÁS mezclar lógica de portal con lógica de panel.
 
 export const USER_ROLES = {
   ADMIN:  'admin',
-  MEMBER: 'member',   // Agente inmobiliario — acceso operativo completo
-  VIEWER: 'viewer',   // Solo lectura
+  MEMBER: 'member',  // Agente inmobiliario — panel interno
+  VIEWER: 'viewer',  // Cliente portal      — portal externo
 };
+
+// Alias semántico para mayor claridad en código del portal
+export const CLIENT_ROLE = USER_ROLES.VIEWER;
 
 export const USER_ROLE_LABELS = {
   [USER_ROLES.ADMIN]:  'Administrador',
   [USER_ROLES.MEMBER]: 'Agente Inmobiliario',
-  [USER_ROLES.VIEWER]: 'Solo lectura',
+  [USER_ROLES.VIEWER]: 'Cliente',
 };
 
 export const USER_ROLE_DESCRIPTIONS = {
-  [USER_ROLES.ADMIN]:  'Control total del sistema: gestión de usuarios, configuración y todas las operaciones',
-  [USER_ROLES.MEMBER]: 'Acceso operativo completo: propiedades, clientes, contratos, visitas, documentos y chat. Sin gestión de usuarios ni configuración del sistema',
-  [USER_ROLES.VIEWER]: 'Solo puede consultar información. Sin crear, editar ni acceder al chat',
+  [USER_ROLES.ADMIN]:  'Control total del sistema',
+  [USER_ROLES.MEMBER]: 'Acceso operativo completo al panel',
+  [USER_ROLES.VIEWER]: 'Acceso al portal de clientes',
 };
 
 export const USER_ROLE_COLORS = {
   [USER_ROLES.ADMIN]:  'red',
   [USER_ROLES.MEMBER]: 'green',
-  [USER_ROLES.VIEWER]: 'slate',
+  [USER_ROLES.VIEWER]: 'amber',
 };
 
 export const USER_ROLE_BADGE_CLASSES = {
   [USER_ROLES.ADMIN]:  'bg-red-500/10 text-red-400 border-red-500/30',
   [USER_ROLES.MEMBER]: 'bg-green-500/10 text-green-400 border-green-500/30',
-  [USER_ROLES.VIEWER]: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+  [USER_ROLES.VIEWER]: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
 };
 
-// ─── Estados ─────────────────────────────────────────────────────────────────
-// Los estados se mantienen igual — son del usuario, no del rol.
+// ─── Estados ──────────────────────────────────────────────────────────────────
 
 export const USER_STATUS = {
   ACTIVE:   'active',
@@ -75,49 +81,42 @@ export const ROLE_PERMISSIONS = {
     documents:  ['create', 'read', 'update'],
     contracts:  ['create', 'read', 'update'],
     visits:     ['create', 'read', 'update'],
-    users:      ['read'],              // puede ver lista de agentes, no gestionar
+    users:      ['read'],
     chat:       ['read', 'send'],
-    settings:   [],                    // sin acceso a configuración del sistema
-    dashboard:  ['read'],
-  },
-  [USER_ROLES.VIEWER]: {
-    properties: ['read'],
-    clients:    ['read'],
-    documents:  ['read'],
-    contracts:  ['read'],
-    visits:     ['read'],
-    users:      [],
-    chat:       [],                    // sin acceso al chat
     settings:   [],
     dashboard:  ['read'],
   },
+  // viewer = cliente portal: SOLO sus propios datos
+  [USER_ROLES.VIEWER]: {
+    properties:      ['read'],    // catálogo público
+    ownFavorites:    ['read', 'update'],
+    ownVisits:       ['read', 'create'],
+    ownContracts:    ['read'],
+    ownProfile:      ['read', 'update'],
+    ownNotifications:['read', 'update', 'delete'],
+    // Sin acceso a nada del panel interno
+    clients:    [],
+    documents:  [],
+    contracts:  [],
+    visits:     [],
+    users:      [],
+    chat:       [],
+    settings:   [],
+    dashboard:  [],
+  },
 };
 
-/**
- * Verifica si un usuario tiene permiso sobre una acción en un módulo.
- */
 export const hasPermission = (userRole, module, action) => {
   const permissions = ROLE_PERMISSIONS[userRole];
   if (!permissions || !permissions[module]) return false;
   return permissions[module].includes(action);
 };
 
-/**
- * Determina si el usuario puede operar (crear/editar): admin o member.
- */
-export const canOperate = (userRole) =>
-  userRole === USER_ROLES.ADMIN || userRole === USER_ROLES.MEMBER;
+export const canOperate    = (role) => role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER;
+export const canRead       = (role) => Object.values(USER_ROLES).includes(role);
+export const isClientRole  = (role) => role === USER_ROLES.VIEWER;
+export const isAgentRole   = (role) => role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER;
 
-/**
- * Determina si el usuario puede leer contenido operativo: todos los roles autenticados.
- */
-export const canRead = (userRole) =>
-  Object.values(USER_ROLES).includes(userRole);
-
-/**
- * Determina si el usuario puede gestionar (editar/eliminar) a otro usuario.
- * Solo admins. Un admin no puede eliminarse a sí mismo.
- */
 export const canManageUser = (currentUserRole, targetRole, currentUserEmail, targetUserEmail) => {
   if (currentUserRole !== USER_ROLES.ADMIN) return false;
   if (targetRole && !Object.values(USER_ROLES).includes(targetRole)) return false;

@@ -1,8 +1,10 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../../core/contexts/AuthContext';
-import { AUTH_ROUTES } from '../../core/config/routes.config';
+// src/shared/components/ProtectedRoute.jsx
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth }    from '../../core/contexts/AuthContext';
 import { USER_ROLES } from '../../modules/users/types/user.types';
+import { PRIVATE_ROUTES, PUBLIC_ROUTES } from '../../core/config/routes.config';
 
+// ─── Pantalla de carga ─────────────────────────────────────────────────────────
 const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
     <img
@@ -18,6 +20,7 @@ const LoadingScreen = () => (
   </div>
 );
 
+// ─── Acceso denegado (agente sin permisos suficientes) ─────────────────────────
 const AccessDenied = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-950">
     <div className="text-center px-6">
@@ -34,54 +37,98 @@ const AccessDenied = () => (
   </div>
 );
 
-/**
- * ProtectedRoute — guarda rutas privadas.
- *
- * Lógica de redirección según rol:
- *   - No autenticado              → /login
- *   - viewer (cliente)            → si intenta entrar a ruta admin, va a /portal
- *   - admin/member                → acceso normal al dashboard
- *   - allowedRoles especificados  → verifica el rol exacto
- *
- * Props:
- *   clientOnly  — si true, solo permite viewer (para /portal)
- *   agentOnly   — si true, solo permite admin/member (para rutas del panel)
- *   allowedRoles — array de roles permitidos (para rutas muy específicas)
- */
-const ProtectedRoute = ({ children, allowedRoles, clientOnly, agentOnly }) => {
-  const { currentUser, userData, loading } = useAuth();
+// ─── Helpers de ruta ───────────────────────────────────────────────────────────
 
+/** Ruta de login según el rol */
+const LOGIN_BY_ROLE = {
+  [USER_ROLES.VIEWER]: PUBLIC_ROUTES.CLIENT_AUTH,
+  default:             '/login',
+};
+
+export const getLoginRoute = (role) =>
+  LOGIN_BY_ROLE[role] ?? LOGIN_BY_ROLE.default;
+
+/** Ruta de inicio después del login según el rol */
+const HOME_BY_ROLE = {
+  [USER_ROLES.ADMIN]:  PRIVATE_ROUTES.DASHBOARD,
+  [USER_ROLES.MEMBER]: PRIVATE_ROUTES.DASHBOARD,
+  [USER_ROLES.VIEWER]: PRIVATE_ROUTES.CLIENT_PORTAL,
+  default:             '/login',
+};
+
+export const getHomeRoute = (role) =>
+  HOME_BY_ROLE[role] ?? HOME_BY_ROLE.default;
+
+// ─── ProtectedRoute ────────────────────────────────────────────────────────────
+const ProtectedRoute = ({
+  children,
+  allowedRoles,
+  clientOnly = false,
+  agentOnly  = false,
+  redirectTo,
+}) => {
+  const { currentUser, userData, loading } = useAuth();
+  const location = useLocation();
+
+  // 1. Auth aún resolviendo
   if (loading) return <LoadingScreen />;
 
-  // No autenticado
-  if (!currentUser) return <Navigate to={AUTH_ROUTES.LOGIN} replace />;
+  // 2. No autenticado → inferir qué login mostrar
+  if (!currentUser) {
+    const isPortalRoute = location.pathname.startsWith('/portal');
+    const loginRoute    = isPortalRoute
+      ? PUBLIC_ROUTES.CLIENT_AUTH
+      : '/login';
 
-  const role = userData?.role;
+    return (
+      <Navigate
+        to={redirectTo ?? loginRoute}
+        state={{ from: location }}
+        replace
+      />
+    );
+  }
+
+  const role       = userData?.role;
   const validRoles = Object.values(USER_ROLES);
+  const isViewer   = role === USER_ROLES.VIEWER;
 
-  // Rol no válido
-  if (!role || !validRoles.includes(role)) return <AccessDenied />;
-
-  // Ruta solo para clientes (viewer)
-  if (clientOnly && role !== USER_ROLES.VIEWER) {
-    // Admin/member que intenta ir a /portal → dashboard
-    return <Navigate to="/dashboard" replace />;
+  // 3. Rol ausente o no reconocido → sesión corrupta, forzar re-login
+  if (!role || !validRoles.includes(role)) {
+    return <Navigate to="/login" replace />;
   }
 
-  // Ruta solo para agentes/admin (panel interno)
-  if (agentOnly && role === USER_ROLES.VIEWER) {
-    // Cliente que intenta entrar al dashboard → su portal
-    return <Navigate to="/portal" replace />;
+  // 4. clientOnly → solo viewers; admin/member van al dashboard
+  if (clientOnly && !isViewer) {
+    return <Navigate to={redirectTo ?? PRIVATE_ROUTES.DASHBOARD} replace />;
   }
 
-  // Roles específicos
+  // 5. agentOnly → solo admin/member; viewers van a su portal
+  if (agentOnly && isViewer) {
+    return <Navigate to={redirectTo ?? PRIVATE_ROUTES.CLIENT_PORTAL} replace />;
+  }
+
+  // 6. Roles específicos requeridos
   if (allowedRoles?.length && !allowedRoles.includes(role)) {
-    // viewer intentando entrar a ruta admin-only → su portal
-    if (role === USER_ROLES.VIEWER) return <Navigate to="/portal" replace />;
+    if (isViewer) return <Navigate to={PRIVATE_ROUTES.CLIENT_PORTAL} replace />;
     return <AccessDenied />;
   }
 
+  // 7. Todo correcto
   return children ? children : <Outlet />;
 };
+
+// ─── HOCs de conveniencia para AppRouter ──────────────────────────────────────
+
+/** Solo para viewers (portal de clientes) */
+export const ClientRoute = (props) => <ProtectedRoute clientOnly {...props} />;
+
+/** Solo para admin y member (panel interno) */
+export const AgentRoute  = (props) => <ProtectedRoute agentOnly  {...props} />;
+
+/** Solo para admin */
+export const AdminRoute  = (props) => (
+  <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]} {...props} />
+);
 
 export default ProtectedRoute;

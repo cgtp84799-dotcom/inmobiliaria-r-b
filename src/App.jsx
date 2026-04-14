@@ -1,116 +1,89 @@
-/**
- * src/App.jsx  — archivo completo listo para reemplazar
- *
- * Cambios respecto a la versión anterior:
- *  1. routes.config.js ya no tiene CLIENT_PORTAL duplicado
- *  2. /portal usa  <ProtectedRoute clientOnly>  → viewer pasa, staff va a /dashboard
- *  3. Sin sesión en /portal → ProtectedRoute redirige a /acceso-clientes (no a /login)
- *  4. La segunda ruta <Route path="/portal"> duplicada fue eliminada
- *  5. AuthPage y ClientAuthPage incluyen useEffect de redirección si ya hay sesión
- */
-
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  Link,
-} from 'react-router-dom';
+// src/App.jsx
 import { lazy, Suspense, useEffect } from 'react';
-import { Toaster }  from 'react-hot-toast';
-import { motion }   from 'framer-motion';
-import { Helmet }   from 'react-helmet-async';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 
-import {
-  FaBuilding, FaKey, FaGavel, FaFileContract, FaHandshake, FaShieldAlt,
-  FaWhatsapp, FaInstagram, FaFacebook, FaEnvelope, FaPhone, FaMapMarkerAlt,
-  FaClock, FaHome, FaSearch, FaCheckCircle, FaBalanceScale, FaUserTie,
-} from 'react-icons/fa';
-
-import PublicLayout    from './shared/components/Layout/PublicLayout';
-import AdminLayout     from './shared/components/Layout/AdminLayout';
-import ScrollToTop     from './shared/components/ScrollToTop';
 import { AuthProvider, useAuth } from './core/contexts/AuthContext';
 import { PUBLIC_ROUTES, PRIVATE_ROUTES, AUTH_ROUTES } from './core/config/routes.config';
-import {
-  requestNotificationPermission,
-  initializeMessaging,
-} from './core/services/notificationService';
 import { USER_ROLES } from './modules/users/types/user.types';
+import { requestNotificationPermission, initializeMessaging } from './core/services/notificationService';
 
-import AuthPage           from './modules/auth/pages/AuthPage';
-import CatalogPage        from './modules/public/pages/CatalogPage';
+import ScrollToTop from './shared/components/ScrollToTop';
+import SettingsFab from './shared/components/UI/SettingsFab';
+import PublicLayout from './shared/components/Layout/PublicLayout';
+import AdminLayout from './shared/components/Layout/AdminLayout';
+import ProtectedRoute from './shared/components/ProtectedRoute';
+
+// ── Páginas públicas (non-lazy, pequeñas) ────────────────────────────────────
+import AuthPage from './modules/auth/pages/AuthPage';
+import HomePage from './modules/public/pages/HomePage';
+import ContactPage from './modules/public/pages/ContactPage';
+import LocationPage from './modules/public/pages/LocationPage';
+import PrivacyPolicyPage from './modules/public/pages/PrivacyPolicyPage';
+import AccessRequestPage from './modules/users/pages/AccessRequestPage';
+import ProfilePage from './modules/profile/pages/ProfilePage';
+import CatalogPage from './modules/public/pages/CatalogPage';
 import PropertyDetailPage from './modules/public/pages/PropertyDetailPage';
-import AccessRequestPage  from './modules/users/pages/AccessRequestPage';
-import ProtectedRoute     from './shared/components/ProtectedRoute';
-import SettingsFab        from './shared/components/UI/SettingsFab';
-import LocationPage       from './modules/public/pages/LocationPage';
-import ProfilePage        from './modules/profile/pages/ProfilePage';
-import PrivacyPolicyPage  from './modules/public/pages/PrivacyPolicyPage';
 
-const VisitsPage         = lazy(() => import('./modules/visits/pages/VisitsPage'));
-const ScheduleVisitPage  = lazy(() => import('./modules/visits/pages/ScheduleVisitPage'));
+// ── Páginas lazy ─────────────────────────────────────────────────────────────
+const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
+const LoginPage          = lazy(() => import('./modules/auth/pages/LoginPage'));
+const ClientPortal       = lazy(() => import('./modules/clients/pages/ClientPortal'));
 const DashboardPage      = lazy(() => import('./modules/dashboard/pages/DashboardPage'));
-const AgentDashboard     = lazy(() => import('./modules/agents/pages/AgentDashboard'));
 const PropertyManagement = lazy(() => import('./modules/properties/pages/PropertyManagement'));
 const ClientManagement   = lazy(() => import('./modules/clients/pages/ClientManagement'));
 const ContractsPage      = lazy(() => import('./modules/contracts/pages/ContractsPage'));
 const DocumentsPage      = lazy(() => import('./modules/documents/pages/DocumentsPage'));
 const ContactsPage       = lazy(() => import('./modules/contacts/pages/ContactsPage'));
-const CalendarPage       = lazy(() => import('./modules/calendar/pages/CalendarPage'));
+const CalendarPage       = lazy(() => import('./modules/visits/pages/CalendarPage'));
+const VisitsPage         = lazy(() => import('./modules/visits/pages/VisitsPage'));
+const ScheduleVisitPage  = lazy(() => import('./modules/visits/pages/ScheduleVisitPage'));
 const UsersPage          = lazy(() => import('./modules/users/pages/UsersPage'));
 const RequestsPage       = lazy(() => import('./modules/users/pages/RequestsPage'));
-const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
-const ClientPortal       = lazy(() => import('./modules/clients/pages/ClientPortal'));
+const AgentDashboard     = lazy(() => import('./modules/agents/pages/AgentDashboard'));
+const AgentsPage         = lazy(() => import('./modules/agents/pages/AgentsPage'));
+const AgentDetailPage    = lazy(() => import('./modules/agents/pages/AgentDetailPage'));
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Spinner de carga para Suspense ───────────────────────────────────────────
 const PageLoader = () => (
   <div className="flex items-center justify-center h-[60vh]">
     <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-const NotificationInitializer = () => {
+const S = ({ children }) => <Suspense fallback={<PageLoader />}>{children}</Suspense>;
+
+// ── Inicializador de notificaciones push ─────────────────────────────────────
+function NotificationInitializer() {
   const { currentUser } = useAuth();
+
   useEffect(() => {
     initializeMessaging();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/firebase-messaging-sw.js')
-        .then((r) => console.log('✅ SW registrado:', r.scope))
-        .catch((e) => console.error('❌ SW error:', e));
+        .then((r) => console.log('SW registrado:', r.scope))
+        .catch((e) => console.error('SW error:', e));
     }
     if (currentUser?.email) {
       const t = setTimeout(() => requestNotificationPermission(currentUser.email), 3000);
       return () => clearTimeout(t);
     }
   }, [currentUser]);
+
   return null;
-};
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HomePage y ContactPage se mantienen igual que en la versión anterior.
-// Por brevedad se importan inline desde aquí — si ya los tienes como archivos
-// separados, reemplaza este bloque por los imports correspondientes.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Redirect raíz inteligente según rol ──────────────────────────────────────
+function RootRedirect() {
+  const { userData } = useAuth();
+  const role = userData?.role;
+  if (role === USER_ROLES.VIEWER)  return <Navigate to={PRIVATE_ROUTES.CLIENT_PORTAL} replace />;
+  if (role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER) return <Navigate to={PRIVATE_ROUTES.DASHBOARD} replace />;
+  return <Navigate to={AUTH_ROUTES.LOGIN} replace />;
+}
 
-const serviceColorMap = {
-  primary:     { bg: 'bg-primary/10',    text: 'text-primary',    border: 'hover:border-primary/50'    },
-  'blue-500':  { bg: 'bg-blue-500/10',   text: 'text-blue-500',   border: 'hover:border-blue-500/50'   },
-  'green-500': { bg: 'bg-green-500/10',  text: 'text-green-500',  border: 'hover:border-green-500/50'  },
-  'purple-500':{ bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'hover:border-purple-500/50' },
-  'orange-500':{ bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'hover:border-orange-500/50' },
-  'red-500':   { bg: 'bg-red-500/10',    text: 'text-red-500',    border: 'hover:border-red-500/50'    },
-};
-
-// NOTA: HomePage y ContactPage se asumen ya existentes en tu proyecto.
-// Si están inline en App.jsx original, cópialos aquí tal cual.
-// Solo se muestran como placeholders para no repetir cientos de líneas.
-import HomePage    from './modules/public/pages/HomePage';
-import ContactPage from './modules/public/pages/ContactPage';
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Árbol de rutas ────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
     <>
@@ -125,7 +98,8 @@ function AppRoutes() {
       />
 
       <Routes>
-        {/* ── Rutas públicas (con PublicLayout + Navbar) ──────────────────── */}
+
+        {/* ── Públicas con Navbar + Footer ── */}
         <Route element={<PublicLayout />}>
           <Route path={PUBLIC_ROUTES.HOME}                 element={<HomePage />} />
           <Route path={PUBLIC_ROUTES.CATALOG}              element={<CatalogPage />} />
@@ -137,59 +111,72 @@ function AppRoutes() {
           <Route path={PUBLIC_ROUTES.PRIVACY_POLICY}       element={<PrivacyPolicyPage />} />
           <Route
             path={PUBLIC_ROUTES.SCHEDULE_VISIT}
-            element={<Suspense fallback={<PageLoader />}><ScheduleVisitPage /></Suspense>}
+            element={<S><ScheduleVisitPage /></S>}
           />
         </Route>
 
-        {/* ── Auth de agentes — sin layout ───────────────────────────────── */}
+        {/* ── Auth agentes (sin layout) ── */}
         <Route path={AUTH_ROUTES.LOGIN}          element={<AuthPage />} />
+        <Route path="/login"                     element={<S><LoginPage /></S>} />
         <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
 
-        {/* ── Auth de clientes — pública, sin layout ─────────────────────── */}
-        {/*    ProtectedRoute redirige aquí si hay viewer sin sesión en /portal */}
+        {/* ── Auth clientes (pública, sin layout) ── */}
         <Route
           path={PUBLIC_ROUTES.CLIENT_AUTH}
-          element={<Suspense fallback={<PageLoader />}><ClientAuthPage /></Suspense>}
+          element={<S><ClientAuthPage /></S>}
         />
 
-        {/* ── Portal de clientes — privado, sin AdminLayout ──────────────── */}
-        {/*    clientOnly={true}: viewer pasa, admin/member van a /dashboard   */}
+        {/* ────────────────────────────────────────────────────────────────── */}
+        {/* PORTAL DE CLIENTES                                                */}
+        {/* Solo viewers pasan. Admin/member → /dashboard                    */}
+        {/* Sin sesión → /acceso-clientes                                    */}
+        {/* ────────────────────────────────────────────────────────────────── */}
         <Route
           path={PRIVATE_ROUTES.CLIENT_PORTAL}
           element={
-            <ProtectedRoute clientOnly={true}>
-              <Suspense fallback={<PageLoader />}>
-                <ClientPortal />
-              </Suspense>
+            <ProtectedRoute clientOnly>
+              <S><ClientPortal /></S>
             </ProtectedRoute>
           }
         />
 
-        {/* ── Rutas privadas del panel (AdminLayout) ─────────────────────── */}
-        {/*    ProtectedRoute sin clientOnly: viewer → redirige a /portal      */}
+        {/* ────────────────────────────────────────────────────────────────── */}
+        {/* PANEL INTERNO (admin + member)                                    */}
+        {/* Viewer → /portal | Sin sesión → /login                           */}
+        {/* AdminLayout contiene Sidebar + Topbar                            */}
+        {/* ────────────────────────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute>
+            <ProtectedRoute agentOnly>
               <AdminLayout />
             </ProtectedRoute>
           }
         >
-          <Route path={PRIVATE_ROUTES.DASHBOARD}  element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.PROPERTIES} element={<Suspense fallback={<PageLoader />}><PropertyManagement /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CLIENTS}    element={<Suspense fallback={<PageLoader />}><ClientManagement /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CONTRACTS}  element={<Suspense fallback={<PageLoader />}><ContractsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.DOCUMENTS}  element={<Suspense fallback={<PageLoader />}><DocumentsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.QUERIES}    element={<Suspense fallback={<PageLoader />}><ContactsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.CALENDAR}   element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.VISITS}     element={<Suspense fallback={<PageLoader />}><VisitsPage /></Suspense>} />
-          <Route path={PRIVATE_ROUTES.PROFILE}    element={<ProfilePage />} />
+          {/* Dashboard */}
+          <Route path={PRIVATE_ROUTES.DASHBOARD}   element={<S><DashboardPage /></S>} />
 
-          {/* Solo admin */}
+          {/* Módulos operativos */}
+          <Route path={PRIVATE_ROUTES.PROPERTIES}  element={<S><PropertyManagement /></S>} />
+          <Route path={PRIVATE_ROUTES.CLIENTS}     element={<S><ClientManagement /></S>} />
+          <Route path={PRIVATE_ROUTES.CONTRACTS}   element={<S><ContractsPage /></S>} />
+          <Route path={PRIVATE_ROUTES.DOCUMENTS}   element={<S><DocumentsPage /></S>} />
+          <Route path={PRIVATE_ROUTES.QUERIES}     element={<S><ContactsPage /></S>} />
+          <Route path={PRIVATE_ROUTES.CALENDAR}    element={<S><CalendarPage /></S>} />
+          <Route path={PRIVATE_ROUTES.VISITS}      element={<S><VisitsPage /></S>} />
+
+          {/* Perfil (todos los agentes) */}
+          <Route path={PRIVATE_ROUTES.PROFILE}     element={<ProfilePage />} />
+
+          {/* Agentes — todos los del panel pueden verlo */}
+          <Route path={PRIVATE_ROUTES.AGENTS}      element={<S><AgentsPage /></S>} />
+          <Route path={PRIVATE_ROUTES.AGENT_DETAIL} element={<S><AgentDetailPage /></S>} />
+
+          {/* Solo admin ── */}
           <Route
             path={PRIVATE_ROUTES.USERS}
             element={
               <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
-                <Suspense fallback={<PageLoader />}><UsersPage /></Suspense>
+                <S><UsersPage /></S>
               </ProtectedRoute>
             }
           />
@@ -197,7 +184,7 @@ function AppRoutes() {
             path={PRIVATE_ROUTES.REQUESTS}
             element={
               <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
-                <Suspense fallback={<PageLoader />}><RequestsPage /></Suspense>
+                <S><RequestsPage /></S>
               </ProtectedRoute>
             }
           />
@@ -205,14 +192,25 @@ function AppRoutes() {
             path={PRIVATE_ROUTES.AGENT_DASHBOARD}
             element={
               <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
-                <Suspense fallback={<PageLoader />}><AgentDashboard /></Suspense>
+                <S><AgentDashboard /></S>
               </ProtectedRoute>
             }
           />
         </Route>
 
-        {/* ── Fallback ───────────────────────────────────────────────────── */}
+        {/* ── Raíz → redirect inteligente según rol ── */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <RootRedirect />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── 404 → home ── */}
         <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
+
       </Routes>
 
       <SettingsFab />
@@ -220,7 +218,7 @@ function AppRoutes() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Entry point ───────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>

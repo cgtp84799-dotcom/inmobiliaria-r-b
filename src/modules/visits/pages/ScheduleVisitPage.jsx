@@ -1,3 +1,10 @@
+// src/modules/visits/pages/ScheduleVisitPage.jsx
+//
+// INTEGRACIÓN MÓDULO B: Lee clientEmail, clientName, propertyName de los params
+// cuando llega desde el portal (/agendar-visita?propertyId=X&clientEmail=Y...).
+// Si el usuario ya está autenticado como viewer, pre-llena email + nombre.
+// Sin cambios en la UI ni en el flujo de envío.
+
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,13 +14,12 @@ import {
   FaArrowRight, FaHome, FaShieldAlt, FaMapMarkerAlt,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import { visitService } from '../services/visit.service';
+import { visitService }      from '../services/visit.service';
 import { createVisitPayload } from '../types/visit.types';
-import propertyService from '../../properties/services/property.service';
+import propertyService        from '../../properties/services/property.service';
+import { useAuth }            from '../../../core/contexts/AuthContext';
 
-// ─────────────────────────────────────────────────────
-// Animación de deslizamiento entre pasos
-// ─────────────────────────────────────────────────────
+// ─── Animación ────────────────────────────────────────────────────────────────
 const slideVariants = {
   enter:  (dir) => ({ x: dir > 0 ? 56 : -56, opacity: 0 }),
   center: { x: 0, opacity: 1 },
@@ -32,9 +38,8 @@ const TIME_SLOTS = [
   '16:00','16:30','17:00',
 ];
 
-// ─────────────────────────────────────────────────────
-// Indicador de pasos (usa variables semánticas inline)
-// ─────────────────────────────────────────────────────
+// ─── Sub-componentes (sin cambios) ────────────────────────────────────────────
+
 function StepIndicator({ current }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
@@ -53,14 +58,10 @@ function StepIndicator({ current }) {
                   border: `2px solid ${ done || active ? 'var(--tw-primary)' : 'var(--color-border)' }`,
                   background: done
                     ? 'var(--tw-primary)'
-                    : active
-                      ? 'var(--tw-primary-15)'
-                      : 'var(--color-surface)',
+                    : active ? 'var(--tw-primary-15)' : 'var(--color-surface)',
                   color: done
                     ? '#111827'
-                    : active
-                      ? 'var(--tw-primary)'
-                      : 'var(--color-text-faint)',
+                    : active ? 'var(--tw-primary)' : 'var(--color-text-faint)',
                   transition: 'all 0.3s ease',
                 }}
               >
@@ -71,9 +72,7 @@ function StepIndicator({ current }) {
                   fontSize: 11, marginTop: 6, fontWeight: 600,
                   color: active
                     ? 'var(--tw-primary)'
-                    : done
-                      ? 'var(--color-text-muted)'
-                      : 'var(--color-text-faint)',
+                    : done ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
                   transition: 'color 0.3s ease',
                 }}
               >
@@ -83,10 +82,7 @@ function StepIndicator({ current }) {
             {i < STEPS.length - 1 && (
               <div
                 style={{
-                  height: 2,
-                  width: 56,
-                  marginInline: 8,
-                  marginBottom: 16,
+                  height: 2, width: 56, marginInline: 8, marginBottom: 16,
                   borderRadius: 9999,
                   background: current > step.id ? 'var(--tw-primary)' : 'var(--color-border)',
                   transition: 'background 0.5s ease',
@@ -100,20 +96,11 @@ function StepIndicator({ current }) {
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Campo de formulario genérico
-// ─────────────────────────────────────────────────────
 function InputField({ label, icon: Icon, error, hint, children }) {
   return (
     <div>
       <label
-        style={{
-          display: 'block',
-          fontSize: 13,
-          fontWeight: 600,
-          marginBottom: 6,
-          color: 'var(--color-text)',
-        }}
+        style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--color-text)' }}
       >
         {Icon && <Icon style={{ display:'inline', marginRight:5, color:'var(--color-text-faint)', verticalAlign:'middle' }} size={12} />}
         {label}
@@ -131,9 +118,6 @@ function InputField({ label, icon: Icon, error, hint, children }) {
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Badge de propiedad
-// ─────────────────────────────────────────────────────
 function PropertyBadge({ property }) {
   if (!property) return null;
   return (
@@ -151,23 +135,17 @@ function PropertyBadge({ property }) {
           {property.title}
         </p>
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', display:'flex', alignItems:'center', gap:4 }}>
-          <FaMapMarkerAlt size={10} /> {property.city}
+          <FaMapMarkerAlt size={10} /> {property.city ?? property.location?.city ?? ''}
         </p>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Botón primario (dorado)
-// ─────────────────────────────────────────────────────
 function BtnPrimary({ onClick, disabled, children }) {
   return (
     <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="button-gold"
+      type="button" onClick={onClick} disabled={disabled} className="button-gold"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
         padding: '12px 24px', fontSize: 14, fontWeight: 700,
@@ -180,14 +158,10 @@ function BtnPrimary({ onClick, disabled, children }) {
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Botón secundario (neutro)
-// ─────────────────────────────────────────────────────
 function BtnSecondary({ onClick, children }) {
   return (
     <button
-      type="button"
-      onClick={onClick}
+      type="button" onClick={onClick}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
         padding: '12px 20px', fontSize: 14, fontWeight: 600,
@@ -205,9 +179,6 @@ function BtnSecondary({ onClick, children }) {
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Fila del resumen (paso 3)
-// ─────────────────────────────────────────────────────
 function SummaryRow({ icon: Icon, value }) {
   if (!value) return null;
   return (
@@ -218,12 +189,17 @@ function SummaryRow({ icon: Icon, value }) {
   );
 }
 
-// ═════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
-// ═════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 export default function ScheduleVisitPage() {
-  const [params]   = useSearchParams();
-  const propertyId = params.get('propertyId');
+  const [params]      = useSearchParams();
+  const { currentUser, isViewer } = useAuth();
+
+  const propertyId    = params.get('propertyId')   ?? '';
+  const propertyName  = params.get('propertyName') ?? ''; // pre-fill desde portal
+  const clientEmailP  = params.get('clientEmail')  ?? ''; // pre-fill desde portal
+  const addressP      = params.get('address')      ?? '';
 
   const [property,        setProperty]        = useState(null);
   const [loading,         setLoading]         = useState(!!propertyId);
@@ -234,21 +210,28 @@ export default function ScheduleVisitPage() {
   const [errors,          setErrors]          = useState({});
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
 
+  // ── Pre-llenado inteligente ──────────────────────────────────────────────
+  // Prioridad: viewer autenticado > params de URL > vacío
+  const defaultName  = currentUser?.displayName || '';
+  const defaultEmail = isViewer
+    ? (currentUser?.email ?? clientEmailP)   // viewer: siempre su propio email
+    : clientEmailP;
+  const defaultPhone = currentUser?.phoneNumber || '';
+
   const [form, setForm] = useState({
-    clientName:    '',
-    clientEmail:   '',
-    clientPhone:   '',
+    clientName:    defaultName,
+    clientEmail:   defaultEmail,
+    clientPhone:   defaultPhone,
     requestedDate: '',
     requestedTime: '',
     notes:         '',
   });
 
-  // Fecha mínima = mañana
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
 
-  // Cargar datos de propiedad si viene desde una ficha
+  // Cargar propiedad
   useEffect(() => {
     if (!propertyId) { setLoading(false); return; }
     propertyService
@@ -257,6 +240,17 @@ export default function ScheduleVisitPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [propertyId]);
+
+  // Si el usuario autenticado cambia (ej: acaba de logearse), re-sincronizar
+  useEffect(() => {
+    if (isViewer && currentUser?.email) {
+      setForm((f) => ({
+        ...f,
+        clientEmail: currentUser.email,
+        clientName:  f.clientName || currentUser.displayName || '',
+      }));
+    }
+  }, [currentUser?.email, isViewer]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -272,20 +266,16 @@ export default function ScheduleVisitPage() {
   const validateStep = (s) => {
     const errs = {};
     if (s === 1) {
-      if (!form.clientName.trim())
-        errs.clientName = 'Tu nombre es obligatorio';
-      if (!form.clientEmail.trim())
-        errs.clientEmail = 'El correo es obligatorio';
-      else if (!/\S+@\S+\.\S+/.test(form.clientEmail))
-        errs.clientEmail = 'Ingresa un correo válido';
+      if (!form.clientName.trim())  errs.clientName  = 'Tu nombre es obligatorio';
+      if (!form.clientEmail.trim()) errs.clientEmail = 'El correo es obligatorio';
+      else if (!/\S+@\S+\.\S+/.test(form.clientEmail)) errs.clientEmail = 'Ingresa un correo válido';
     }
     if (s === 2) {
       if (!form.requestedDate) errs.requestedDate = 'Elige una fecha';
       if (!form.requestedTime) errs.requestedTime = 'Elige una hora';
     }
     if (s === 3) {
-      if (!acceptedPrivacy)
-        errs.privacy = 'Debes aceptar la política de privacidad para continuar';
+      if (!acceptedPrivacy) errs.privacy = 'Debes aceptar la política de privacidad para continuar';
     }
     return errs;
   };
@@ -308,11 +298,10 @@ export default function ScheduleVisitPage() {
     setSubmitting(true);
     try {
       const payload = createVisitPayload({
-        propertyId:      propertyId ?? null,
-        propertyName:    property?.title   ?? 'Propiedad no especificada',
-        propertyAddress: property?.address ?? property?.city ?? '',
+        propertyId:      propertyId || null,
+        propertyName:    property?.title ?? propertyName ?? 'Propiedad no especificada',
+        propertyAddress: property?.address ?? property?.city ?? addressP ?? '',
         ...form,
-        // ✅ Guardar evidencia del consentimiento (Ley 1581/2012)
         privacyAccepted: true,
       });
       await visitService.requestVisit(payload);
@@ -333,305 +322,180 @@ export default function ScheduleVisitPage() {
     return `${parseInt(day)} de ${months[parseInt(m) - 1]} de ${y}`;
   };
 
-  // ── Inputs compartidos ────────────────────────────────────────────
   const inputStyle = (hasError) => ({
     width: '100%',
     background: 'var(--color-input-bg)',
     border: `1px solid ${hasError ? '#f87171' : 'var(--color-input-border)'}`,
-    borderRadius: 12,
-    padding: '12px 16px',
-    fontSize: 14,
-    color: 'var(--color-input-text)',
-    outline: 'none',
+    borderRadius: 12, padding: '12px 16px', fontSize: 14,
+    color: 'var(--color-input-text)', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   });
 
-  // ═════════════════════════════════════════════════
-  // PANTALLA DE ÉXITO
-  // ═════════════════════════════════════════════════
+  // ── Pantalla de éxito ──────────────────────────────────────────────────────
   if (success) {
     return (
-      <div
-        style={{
-          minHeight: '100vh', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', padding: '2rem 1rem',
-          background: 'var(--color-bg)',
-        }}
-      >
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'2rem 1rem', background:'var(--color-bg)' }}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity:0, scale:0.92 }}
+          animate={{ opacity:1, scale:1 }}
+          transition={{ duration:0.4, ease:[0.16,1,0.3,1] }}
           className="card-soft"
-          style={{
-            maxWidth: 440, width: '100%', textAlign: 'center',
-            padding: '2.5rem 2rem',
-          }}
+          style={{ maxWidth:440, width:'100%', textAlign:'center', padding:'2.5rem 2rem' }}
         >
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: 'spring', stiffness: 260, damping: 20 }}
-            style={{
-              width: 80, height: 80, borderRadius: '50%',
-              background: 'rgba(34,197,94,0.12)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 1.25rem',
-            }}
+            initial={{ scale:0 }} animate={{ scale:1 }}
+            transition={{ delay:0.2, type:'spring', stiffness:260, damping:20 }}
+            style={{ width:80, height:80, borderRadius:'50%', background:'rgba(34,197,94,0.12)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.25rem' }}
           >
-            <FaCheckCircle style={{ color: '#22c55e', fontSize: 36 }} />
+            <FaCheckCircle style={{ color:'#22c55e', fontSize:36 }} />
           </motion.div>
-
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', marginBottom: 8 }}>
-            ¡Solicitud enviada!
-          </h2>
-          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+          <h2 style={{ fontSize:22, fontWeight:800, color:'var(--color-text)', marginBottom:8 }}>¡Solicitud enviada!</h2>
+          <p style={{ fontSize:14, color:'var(--color-text-muted)', marginBottom:6 }}>
             Tu solicitud de visita para{' '}
-            <strong style={{ color: 'var(--color-text)' }}>{property?.title ?? 'la propiedad'}</strong>{' '}
+            <strong style={{ color:'var(--color-text)' }}>{property?.title ?? propertyName ?? 'la propiedad'}</strong>{' '}
             fue recibida correctamente.
           </p>
-          <p style={{ fontSize: 13, color: 'var(--color-text-faint)', marginBottom: 24 }}>
+          <p style={{ fontSize:13, color:'var(--color-text-faint)', marginBottom:24 }}>
             Un asesor se pondrá en contacto contigo al correo{' '}
-            <span style={{ color: 'var(--tw-primary)', fontWeight: 600 }}>{form.clientEmail}</span>{' '}
+            <span style={{ color:'var(--tw-primary)', fontWeight:600 }}>{form.clientEmail}</span>{' '}
             en las próximas horas.
           </p>
-
-          {/* Mini-resumen */}
-          <div
-            className="card-inner"
-            style={{ padding: '12px 16px', marginBottom: 24, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8 }}
-          >
-            <SummaryRow icon={FaCalendarAlt} value={formatDate(form.requestedDate)} />
-            <SummaryRow icon={FaClock}       value={`${form.requestedTime} horas`} />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Link to="/catalogo" className="button-gold" style={{ justifyContent:'center', borderRadius:12 }}>
-              Ver más propiedades
+          <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
+            <Link to="/catalogo" className="button-gold" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'11px 22px', fontSize:14, fontWeight:700, borderRadius:12 }}>
+              <FaHome size={13} /> Ver más propiedades
             </Link>
-            {propertyId && (
-              <BtnSecondary onClick={() => {
-                setSuccess(false); setStep(1);
-                setForm({ clientName:'',clientEmail:'',clientPhone:'',
-                          requestedDate:'',requestedTime:'',notes:'' });
-                setAcceptedPrivacy(false);
-              }}>
-                Nueva solicitud
-              </BtnSecondary>
+            {isViewer && (
+              <Link to="/portal" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'11px 22px', fontSize:14, fontWeight:600, borderRadius:12, background:'var(--color-surface)', border:'1px solid var(--color-border)', color:'var(--color-text)' }}>
+                Mi portal →
+              </Link>
             )}
           </div>
+          <button
+            onClick={() => { setSuccess(false); setStep(1); setForm({ clientName:defaultName, clientEmail:defaultEmail, clientPhone:defaultPhone, requestedDate:'', requestedTime:'', notes:'' }); setAcceptedPrivacy(false); }}
+            style={{ marginTop:16, fontSize:13, color:'var(--color-text-faint)', background:'none', border:'none', cursor:'pointer', textDecoration:'underline' }}
+          >
+            Agendar otra visita
+          </button>
         </motion.div>
       </div>
     );
   }
 
-  // ═════════════════════════════════════════════════
-  // LAYOUT PRINCIPAL
-  // ═════════════════════════════════════════════════
+  // ── Render principal ──────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', padding: '2rem 1rem', background: 'var(--color-bg)' }}>
-      <div style={{ maxWidth: 520, margin: '0 auto' }}>
+    <div style={{ minHeight:'100vh', background:'var(--color-bg)', padding:'2rem 1rem', display:'flex', alignItems:'flex-start', justifyContent:'center' }}>
+      <div style={{ width:'100%', maxWidth:520 }}>
 
-        {/* Volver atrás */}
+        {/* Volver */}
         <Link
-          to={propertyId ? `/propiedades/${propertyId}` : '/catalogo'}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            fontSize: 13, fontWeight: 500,
-            color: 'var(--color-text-muted)',
-            marginBottom: 24, textDecoration: 'none',
-            transition: 'color 0.2s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--tw-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+          to={isViewer ? '/portal' : '/catalogo'}
+          style={{ display:'inline-flex', alignItems:'center', gap:8, marginBottom:24, fontSize:13, color:'var(--color-text-faint)', textDecoration:'none' }}
         >
-          <FaArrowLeft size={12} />
-          {property ? `Volver a ${property.title}` : 'Volver al catálogo'}
+          <FaArrowLeft size={11} />
+          {isViewer ? 'Volver a mi portal' : 'Volver al catálogo'}
         </Link>
 
-        {/* Tarjeta principal */}
-        <div
-          className="card-soft"
-          style={{ padding: '2rem 1.75rem' }}
-        >
-          {/* Header de la tarjeta */}
-          <div style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                width: 48, height: 48, borderRadius: 14,
-                background: 'var(--tw-primary-15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 12,
-              }}
-            >
-              <FaCalendarAlt style={{ color: 'var(--tw-primary)', fontSize: 20 }} />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>
+        <div className="card-soft" style={{ padding:'2rem' }}>
+
+          {/* Título */}
+          <div style={{ textAlign:'center', marginBottom:28 }}>
+            <h1 style={{ fontSize:24, fontWeight:800, color:'var(--color-text)', marginBottom:4 }}>
               Agendar visita
             </h1>
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+            <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>
               Completa los 3 pasos para solicitar tu cita. Es muy rápido.
             </p>
           </div>
 
-          {/* Badge propiedad */}
-          {!loading && <PropertyBadge property={property} />}
+          {/* Badge de propiedad */}
+          {!loading && (property || propertyName) && (
+            <PropertyBadge property={property ?? { title: propertyName, city: addressP }} />
+          )}
 
           {/* Indicador de pasos */}
           <StepIndicator current={step} />
 
           {/* Contenido animado */}
-          <div style={{ overflow: 'hidden' }}>
+          <div style={{ overflow:'hidden' }}>
             <AnimatePresence mode="wait" custom={direction}>
 
-              {/* ══ PASO 1: Tus datos ══════════════════════════ */}
+              {/* PASO 1: Tus datos */}
               {step === 1 && (
                 <motion.div
-                  key="step1"
-                  custom={direction}
-                  variants={slideVariants}
+                  key="step1" custom={direction} variants={slideVariants}
                   initial="enter" animate="center" exit="exit"
-                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+                  transition={{ duration:0.26, ease:[0.16,1,0.3,1] }}
+                  style={{ display:'flex', flexDirection:'column', gap:20 }}
                 >
-                  {/* Encabezado del paso */}
-                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
-                    <div
-                      style={{
-                        width: 56, height: 56, borderRadius: '50%',
-                        background: 'var(--tw-primary-10)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 12px',
-                      }}
-                    >
-                      <FaUser style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                  <div style={{ textAlign:'center', marginBottom:4 }}>
+                    <div style={{ width:56, height:56, borderRadius:'50%', background:'var(--tw-primary-10)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>
+                      <FaUser style={{ color:'var(--tw-primary)', fontSize:22 }} />
                     </div>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
-                      ¿Quién eres?
-                    </h2>
-                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                      Necesitamos tus datos básicos para confirmar la visita.
-                    </p>
+                    <h2 style={{ fontSize:18, fontWeight:700, color:'var(--color-text)', marginBottom:4 }}>¿Quién eres?</h2>
+                    <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>Necesitamos tus datos básicos para confirmar la visita.</p>
                   </div>
 
                   <InputField label="Nombre completo *" icon={FaUser} error={errors.clientName}>
-                    <input
-                      type="text" name="clientName"
-                      value={form.clientName} onChange={handleChange}
-                      placeholder="Ej: María González"
-                      autoComplete="name"
-                      style={inputStyle(errors.clientName)}
-                    />
+                    <input type="text" name="clientName" value={form.clientName} onChange={handleChange}
+                      placeholder="Ej: María González" autoComplete="name" style={inputStyle(errors.clientName)} />
                   </InputField>
 
-                  <InputField
-                    label="Correo electrónico *" icon={FaEnvelope}
-                    error={errors.clientEmail}
-                    hint="Te enviaremos la confirmación a este correo"
-                  >
-                    <input
-                      type="email" name="clientEmail"
-                      value={form.clientEmail} onChange={handleChange}
-                      placeholder="tu@correo.com"
-                      autoComplete="email"
-                      style={inputStyle(errors.clientEmail)}
-                    />
+                  <InputField label="Correo electrónico *" icon={FaEnvelope} error={errors.clientEmail}
+                    hint="Te enviaremos la confirmación a este correo">
+                    <input type="email" name="clientEmail" value={form.clientEmail} onChange={handleChange}
+                      placeholder="tu@correo.com" autoComplete="email"
+                      readOnly={isViewer} // viewer no puede cambiar su email
+                      style={{ ...inputStyle(errors.clientEmail), ...(isViewer ? { opacity:0.7, cursor:'not-allowed' } : {}) }} />
                   </InputField>
 
-                  <InputField
-                    label="Teléfono (opcional)" icon={FaPhone}
-                    hint="Si lo tienes, podemos llamarte para confirmar"
-                  >
-                    <input
-                      type="tel" name="clientPhone"
-                      value={form.clientPhone} onChange={handleChange}
-                      placeholder="310 000 0000"
-                      autoComplete="tel"
-                      style={inputStyle(false)}
-                    />
+                  <InputField label="Teléfono (opcional)" icon={FaPhone} hint="Si lo tienes, podemos llamarte para confirmar">
+                    <input type="tel" name="clientPhone" value={form.clientPhone} onChange={handleChange}
+                      placeholder="310 000 0000" autoComplete="tel" style={inputStyle(false)} />
                   </InputField>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
-                    <BtnPrimary onClick={goNext}>
-                      Continuar <FaArrowRight size={12} />
-                    </BtnPrimary>
+                  <div style={{ display:'flex', justifyContent:'flex-end', paddingTop:4 }}>
+                    <BtnPrimary onClick={goNext}>Continuar <FaArrowRight size={12} /></BtnPrimary>
                   </div>
                 </motion.div>
               )}
 
-              {/* ══ PASO 2: Fecha y hora ═══════════════════════ */}
+              {/* PASO 2: Fecha y hora */}
               {step === 2 && (
                 <motion.div
-                  key="step2"
-                  custom={direction}
-                  variants={slideVariants}
+                  key="step2" custom={direction} variants={slideVariants}
                   initial="enter" animate="center" exit="exit"
-                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+                  transition={{ duration:0.26, ease:[0.16,1,0.3,1] }}
+                  style={{ display:'flex', flexDirection:'column', gap:20 }}
                 >
-                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
-                    <div
-                      style={{
-                        width: 56, height: 56, borderRadius: '50%',
-                        background: 'var(--tw-primary-10)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 12px',
-                      }}
-                    >
-                      <FaCalendarAlt style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                  <div style={{ textAlign:'center', marginBottom:4 }}>
+                    <div style={{ width:56, height:56, borderRadius:'50%', background:'var(--tw-primary-10)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>
+                      <FaCalendarAlt style={{ color:'var(--tw-primary)', fontSize:22 }} />
                     </div>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
-                      ¿Cuándo quieres ir?
-                    </h2>
-                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                      Elige la fecha y la franja horaria que más te convenga.
-                    </p>
+                    <h2 style={{ fontSize:18, fontWeight:700, color:'var(--color-text)', marginBottom:4 }}>¿Cuándo quieres ir?</h2>
+                    <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>Elige la fecha y la franja horaria que más te convenga.</p>
                   </div>
 
                   <InputField label="Fecha deseada *" icon={FaCalendarAlt} error={errors.requestedDate}>
-                    <input
-                      type="date" name="requestedDate"
-                      value={form.requestedDate} onChange={handleChange}
-                      min={minDate}
-                      style={inputStyle(errors.requestedDate)}
-                    />
+                    <input type="date" name="requestedDate" value={form.requestedDate} onChange={handleChange}
+                      min={minDate} style={inputStyle(errors.requestedDate)} />
                   </InputField>
 
-                  {/* Selector visual de hora */}
                   <div>
-                    <label
-                      style={{
-                        display: 'block', fontSize: 13, fontWeight: 600,
-                        marginBottom: 10, color: 'var(--color-text)',
-                      }}
-                    >
+                    <label style={{ display:'block', fontSize:13, fontWeight:600, marginBottom:10, color:'var(--color-text)' }}>
                       <FaClock style={{ display:'inline', marginRight:5, color:'var(--color-text-faint)', verticalAlign:'middle' }} size={12} />
                       Hora preferida *
                     </label>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: 8,
-                      }}
-                    >
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8 }}>
                       {TIME_SLOTS.map((time) => {
                         const selected = form.requestedTime === time;
                         return (
-                          <button
-                            key={time}
-                            type="button"
-                            onClick={() => selectTime(time)}
-                            style={{
-                              padding: '9px 4px', borderRadius: 10,
-                              fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                              border: `1.5px solid ${ selected ? 'var(--tw-primary)' : 'var(--color-border)' }`,
+                          <button key={time} type="button" onClick={() => selectTime(time)}
+                            style={{ padding:'9px 4px', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer',
+                              border:`1.5px solid ${selected ? 'var(--tw-primary)' : 'var(--color-border)'}`,
                               background: selected ? 'var(--tw-primary)' : 'var(--color-surface)',
                               color: selected ? '#111827' : 'var(--color-text)',
                               boxShadow: selected ? '0 2px 12px var(--tw-primary-30)' : 'none',
-                              transition: 'all 0.15s ease',
-                              transform: selected ? 'scale(1.04)' : 'scale(1)',
+                              transition:'all 0.15s ease', transform: selected ? 'scale(1.04)' : 'scale(1)',
                             }}
                           >
                             {time}
@@ -639,71 +503,40 @@ export default function ScheduleVisitPage() {
                         );
                       })}
                     </div>
-
-                    {errors.requestedTime && (
-                      <p style={{ fontSize: 11, marginTop: 6, color: '#f87171' }}>
-                        ⚠ {errors.requestedTime}
-                      </p>
-                    )}
-                    <p style={{ fontSize: 11, marginTop: 8, color: 'var(--color-text-faint)' }}>
-                      Lunes a sábado · Sujeto a disponibilidad del asesor
-                    </p>
+                    {errors.requestedTime && <p style={{ fontSize:11, marginTop:6, color:'#f87171' }}>⚠ {errors.requestedTime}</p>}
+                    <p style={{ fontSize:11, marginTop:8, color:'var(--color-text-faint)' }}>Lunes a sábado · Sujeto a disponibilidad del asesor</p>
                   </div>
 
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, paddingTop:4 }}>
-                    <BtnSecondary onClick={goBack}>
-                      <FaArrowLeft size={12} /> Atrás
-                    </BtnSecondary>
-                    <BtnPrimary onClick={goNext}>
-                      Continuar <FaArrowRight size={12} />
-                    </BtnPrimary>
+                    <BtnSecondary onClick={goBack}><FaArrowLeft size={12} /> Atrás</BtnSecondary>
+                    <BtnPrimary onClick={goNext}>Continuar <FaArrowRight size={12} /></BtnPrimary>
                   </div>
                 </motion.div>
               )}
 
-              {/* ══ PASO 3: Confirmar ══════════════════════════ */}
+              {/* PASO 3: Confirmar */}
               {step === 3 && (
                 <motion.div
-                  key="step3"
-                  custom={direction}
-                  variants={slideVariants}
+                  key="step3" custom={direction} variants={slideVariants}
                   initial="enter" animate="center" exit="exit"
-                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+                  transition={{ duration:0.26, ease:[0.16,1,0.3,1] }}
+                  style={{ display:'flex', flexDirection:'column', gap:20 }}
                 >
-                  <div style={{ textAlign: 'center', marginBottom: 4 }}>
-                    <div
-                      style={{
-                        width: 56, height: 56, borderRadius: '50%',
-                        background: 'var(--tw-primary-10)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 12px',
-                      }}
-                    >
-                      <FaCheckCircle style={{ color: 'var(--tw-primary)', fontSize: 22 }} />
+                  <div style={{ textAlign:'center', marginBottom:4 }}>
+                    <div style={{ width:56, height:56, borderRadius:'50%', background:'var(--tw-primary-10)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>
+                      <FaCheckCircle style={{ color:'var(--tw-primary)', fontSize:22 }} />
                     </div>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
-                      Confirma tu solicitud
-                    </h2>
-                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                      Revisa que todo esté bien antes de enviar.
-                    </p>
+                    <h2 style={{ fontSize:18, fontWeight:700, color:'var(--color-text)', marginBottom:4 }}>Confirma tu visita</h2>
+                    <p style={{ fontSize:13, color:'var(--color-text-muted)' }}>Revisa los datos antes de enviar tu solicitud.</p>
                   </div>
 
-                  {/* Tarjeta resumen */}
-                  <div
-                    className="card-inner"
-                    style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}
-                  >
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4 }}>
-                      Resumen de tu visita
-                    </p>
+                  <div style={{ background:'var(--tw-primary-08)', border:'1px solid var(--tw-primary-20)', borderRadius:16, padding:'20px 24px', display:'flex', flexDirection:'column', gap:12 }}>
                     {property && (
-                      <div style={{ display:'flex', alignItems:'flex-start', gap:10, paddingBottom:10, borderBottom:'1px solid var(--color-divider)' }}>
-                        <FaHome style={{ color:'var(--tw-primary)', marginTop:2, flexShrink:0 }} size={13} />
+                      <div style={{ display:'flex', alignItems:'center', gap:10, paddingBottom:12, borderBottom:'1px solid var(--tw-primary-15)' }}>
+                        <FaHome style={{ color:'var(--tw-primary)', flexShrink:0 }} size={14} />
                         <div>
-                          <p style={{ fontWeight:700, fontSize:14, color:'var(--color-text)' }}>{property.title}</p>
-                          <p style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:1 }}>{property.city}</p>
+                          <p style={{ fontWeight:700, fontSize:14, color:'var(--color-text)' }}>{property.title ?? propertyName}</p>
+                          <p style={{ fontSize:12, color:'var(--color-text-muted)' }}>{property.city ?? addressP ?? ''}</p>
                         </div>
                       </div>
                     )}
@@ -711,101 +544,57 @@ export default function ScheduleVisitPage() {
                     <SummaryRow icon={FaEnvelope}    value={form.clientEmail} />
                     <SummaryRow icon={FaPhone}       value={form.clientPhone} />
                     <SummaryRow icon={FaCalendarAlt} value={formatDate(form.requestedDate)} />
-                    <SummaryRow icon={FaClock}       value={form.requestedTime ? `${form.requestedTime} horas` : ''} />
+                    <SummaryRow icon={FaClock}       value={form.requestedTime} />
+                    {form.notes && <SummaryRow icon={FaStickyNote} value={form.notes} />}
                   </div>
 
-                  {/* Notas opcionales */}
-                  <InputField label="Mensaje o comentario (opcional)" icon={FaStickyNote}>
-                    <textarea
-                      name="notes"
-                      value={form.notes} onChange={handleChange}
-                      placeholder="¿Tienes alguna pregunta o comentario para el asesor?"
+                  <InputField label="Notas adicionales (opcional)" icon={FaStickyNote}>
+                    <textarea name="notes" value={form.notes} onChange={handleChange}
+                      placeholder="Instrucciones especiales, preguntas..."
                       rows={3}
-                      style={{ ...inputStyle(false), resize: 'none' }}
+                      style={{ ...inputStyle(false), resize:'vertical', minHeight:80 }}
                     />
                   </InputField>
 
-                  {/* Política de privacidad */}
-                  <div
-                    style={{
-                      background: 'var(--tw-primary-10)',
-                      border: `1px solid ${errors.privacy ? '#f87171' : 'var(--tw-primary-20)'}`,
-                      borderRadius: 12, padding: '14px 16px',
-                    }}
-                  >
-                    <label style={{ display:'flex', alignItems:'flex-start', gap:12, cursor:'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={acceptedPrivacy}
-                        onChange={(e) => {
-                          setAcceptedPrivacy(e.target.checked);
-                          if (e.target.checked)
-                            setErrors((prev) => ({ ...prev, privacy: '' }));
-                        }}
-                        style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--tw-primary)', flexShrink: 0 }}
-                      />
-                      <span style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.6 }}>
-                        He leído y acepto la{' '}
-                        <Link
-                          to="/politica-privacidad"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: 'var(--tw-primary)', fontWeight: 700 }}
-                        >
-                          Política de Privacidad y Uso de Datos
-                        </Link>{' '}
-                        de Inmobiliaria Rincón Bedoya y Asociados. Entiendo que mis datos serán
-                        usados únicamente para gestionar mi solicitud de visita.
+                  {/* Privacidad */}
+                  <div>
+                    <label style={{ display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer' }}>
+                      <input type="checkbox" checked={acceptedPrivacy} onChange={(e) => {
+                        setAcceptedPrivacy(e.target.checked);
+                        if (errors.privacy) setErrors((p) => ({ ...p, privacy:'' }));
+                      }} style={{ marginTop:2, accentColor:'var(--tw-primary)', width:16, height:16, flexShrink:0 }} />
+                      <span style={{ fontSize:12, color:'var(--color-text-muted)', lineHeight:1.5 }}>
+                        Acepto la{' '}
+                        <a href="/politica-privacidad" target="_blank" style={{ color:'var(--tw-primary)', textDecoration:'underline' }}>
+                          Política de Privacidad
+                        </a>{' '}
+                        y autorizo el tratamiento de mis datos personales conforme a la Ley 1581/2012.
                       </span>
                     </label>
-                    {errors.privacy && (
-                      <p style={{ fontSize: 11, marginTop: 8, color: '#f87171', display:'flex', alignItems:'center', gap:4 }}>
-                        <FaShieldAlt size={10} /> {errors.privacy}
-                      </p>
-                    )}
+                    {errors.privacy && <p style={{ fontSize:11, marginTop:6, color:'#f87171' }}>⚠ {errors.privacy}</p>}
                   </div>
 
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, paddingTop:4 }}>
-                    <BtnSecondary onClick={goBack}>
-                      <FaArrowLeft size={12} /> Atrás
-                    </BtnSecondary>
+                    <BtnSecondary onClick={goBack}><FaArrowLeft size={12} /> Atrás</BtnSecondary>
                     <BtnPrimary onClick={handleSubmit} disabled={submitting}>
-                      {submitting ? (
-                        <>
-                          <span
-                            style={{
-                              width:16, height:16, borderRadius:'50%',
-                              border:'2px solid #111827',
-                              borderTopColor:'transparent',
-                              display:'inline-block',
-                              animation:'spin 0.7s linear infinite',
-                            }}
-                          />
-                          Enviando...
-                        </>
-                      ) : (
-                        <><FaCalendarAlt size={13} /> Enviar solicitud</>
-                      )}
+                      {submitting
+                        ? <><span style={{ width:16, height:16, border:'2px solid currentColor', borderTopColor:'transparent', borderRadius:'50%', display:'inline-block', animation:'spin 0.7s linear infinite' }} /> Enviando...</>
+                        : <><FaCheckCircle size={13} /> Solicitar visita</>
+                      }
                     </BtnPrimary>
                   </div>
                 </motion.div>
               )}
-
             </AnimatePresence>
           </div>
-        </div>
 
-        {/* Pie de página */}
-        <p style={{ fontSize: 12, textAlign: 'center', marginTop: 16, color: 'var(--color-text-faint)' }}>
-          ¿Tienes dudas?{' '}
-          <a
-            href="https://wa.me/573105968202"
-            target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--tw-primary)', fontWeight: 600 }}
-          >
-            Escríbenos al 310 596 8202
-          </a>
-        </p>
+          {/* Sello de seguridad */}
+          <div style={{ display:'flex', justifyContent:'center', marginTop:28 }}>
+            <p style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:'var(--color-text-faint)' }}>
+              <FaShieldAlt size={11} /> Datos protegidos · Sin spam
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

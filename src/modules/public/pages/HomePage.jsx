@@ -177,7 +177,15 @@ const HomePage = () => {
           ].map((service, index) => {
             const c = serviceColorMap[service.color] ?? serviceColorMap.primary;
             return (
-              <motion.div key={index} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: service.delay, duration: 0.6 }} viewport={{ once: true }} whileHover={{ y: -10, scale: 1.02 }} className={`card-soft p-5 sm:p-6 text-center border border-slate-800 ${c.border} transition-all duration-300 group`}>
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: service.delay, duration: 0.6 }}
+                viewport={{ once: true }}
+                whileHover={{ y: -10, scale: 1.02 }}
+                className={`card-soft p-5 sm:p-6 text-center ${c.border} transition-all duration-300 group`}
+            >
                 <div className={`w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 ${c.bg} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
                   <service.icon className={`${c.text} text-3xl sm:text-4xl`} />
                 </div>

@@ -619,7 +619,7 @@ exports.onUserCreated = onDocumentCreated(
     const name  = String(data.displayName || '').split(' ')[0] || 'Cliente';
  
     if (!email) return;
-    if (role !== 'viewer') return; // agentes/admin no reciben este correo
+   if (role !== 'viewer') return;  // agentes/admin no reciben este correo
  
     const gmailUser = GMAIL_USER.value();
     const gmailPass = GMAIL_PASS.value();

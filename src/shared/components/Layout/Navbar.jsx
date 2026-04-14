@@ -137,16 +137,12 @@ export default function Navbar() {
               className="flex items-center min-w-0 focus-ring rounded-lg"
               aria-label="Ir al inicio — Rincón Bedoya & Asociados"
             >
-              <img
-                src="/logo.jpg.png"
-                alt="Rincón Bedoya & Asociados"
-                className="h-10 sm:h-12 md:h-14 w-auto object-contain max-w-[170px] sm:max-w-[260px] md:max-w-[360px]"
-                width={360}
-                height={56}
-                loading="eager"
-                decoding="async"
-                draggable={false}
-              />
+            <img
+              src={theme === 'dark' ? '/logo.jpg.png' : '/logo-dark.png'}
+              alt="Rincón Bedoya Asociados"
+              className="h-10 sm:h-12 md:h-14 w-auto object-contain max-w-[170px] sm:max-w-[260px] md:max-w-[360px]"
+              width={360} height={56} loading="eager" decoding="async" draggable="false"
+            />
             </Link>
 
             {/* ── Links desktop ── */}
