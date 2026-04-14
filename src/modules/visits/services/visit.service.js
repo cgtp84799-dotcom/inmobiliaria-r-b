@@ -1,3 +1,4 @@
+// src/modules/visits/services/visit.service.js
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, getDocs, getDoc, query, where, orderBy, limit,
@@ -6,6 +7,7 @@ import {
 import { db, auth } from '../../../core/config/firebase.config';
 import { VISIT_STATUS } from '../types/visit.types';
 import { notificationService } from '../../notifications/services/notification.service';
+import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 
 const COLLECTION = 'visits';
 const col = () => collection(db, COLLECTION);
@@ -15,10 +17,6 @@ const ref = (id) => doc(db, COLLECTION, id);
 // EMAIL HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Escribe un documento en /mail — lo recoge la extensión
- * "Trigger Email from Firestore" de Firebase.
- */
 async function sendMail(to, subject, html) {
   if (!to) return;
   try {
@@ -32,12 +30,6 @@ async function sendMail(to, subject, html) {
   }
 }
 
-/**
- * Cabecera y pie compartidos para todos los correos.
- * Logo: imagen real del logotipo R&B Inmobiliaria (versión blanca).
- * Fallback a texto dorado si la imagen no carga (Outlook, clientes sin imágenes).
- * Compatible con Gmail, Outlook, Apple Mail, Yahoo.
- */
 function emailHeader(previewText = '') {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -92,11 +84,7 @@ function emailHeader(previewText = '') {
 <div style="display:none;max-height:0;overflow:hidden;">${previewText}</div>
 <div class="email-wrapper">
 <div class="email-card">
-  <!-- HEADER -->
   <div class="email-header">
-    <!--[if mso]>
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td style="padding:0;">
-    <![endif]-->
     <img
       src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
       alt="R&amp;B Inmobiliaria"
@@ -106,16 +94,13 @@ function emailHeader(previewText = '') {
       style="display:block;margin:0 auto;max-width:160px;height:auto;"
       onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
     />
-    <!-- Fallback texto si la imagen no carga (Outlook, clientes sin imágenes) -->
     <div style="display:none;font-family:'Inter',Helvetica,Arial,sans-serif;font-size:26px;font-weight:700;letter-spacing:0.08em;color:#c8a44a;text-align:center;line-height:1;">R&amp;B</div>
-    <!--[if mso]></td></tr></table><![endif]-->
     <span class="brand-sub">Inmobiliaria &middot; Real Estate</span>
   </div>`;
 }
 
 function emailFooter() {
   return `
-  <!-- FOOTER -->
   <div class="email-footer">
     <p class="footer-text">
       &copy; ${new Date().getFullYear()} R&amp;B Inmobiliaria. Todos los derechos reservados.<br />
@@ -128,13 +113,8 @@ function emailFooter() {
 </html>`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATES DE CORREO
-// ─────────────────────────────────────────────────────────────────────────────
-
 function tplApprovedClient({ clientName, propertyName, requestedDate, requestedTime, agentName, adminNotes }) {
   return emailHeader(`Tu visita a "${propertyName}" fue confirmada`) + `
-  <!-- BODY -->
   <div class="email-body">
     <span class="status-badge badge-approved">✓ Visita confirmada</span>
     <h1 style="margin-top:16px;">¡Tu visita está aprobada!</h1>
@@ -143,81 +123,52 @@ function tplApprovedClient({ clientName, propertyName, requestedDate, requestedT
     <p>Nos complace informarte que tu solicitud de visita ha sido <strong>revisada y aprobada</strong>. Te esperamos con gusto.</p>
     <div class="highlight-box">
       <table style="width:100%;border-collapse:collapse;">
-        <tr class="detail-row">
-          <td class="detail-label">Propiedad</td>
-          <td class="detail-value">${propertyName}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Fecha</td>
-          <td class="detail-value">${requestedDate}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Hora</td>
-          <td class="detail-value">${requestedTime}</td>
-        </tr>
+        <tr class="detail-row"><td class="detail-label">Propiedad</td><td class="detail-value">${propertyName}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Fecha</td><td class="detail-value">${requestedDate}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Hora</td><td class="detail-value">${requestedTime}</td></tr>
         ${agentName ? `<tr class="detail-row"><td class="detail-label">Tu agente</td><td class="detail-value">${agentName}</td></tr>` : ''}
         ${adminNotes ? `<tr class="detail-row"><td class="detail-label">Notas</td><td class="detail-value" style="color:#5a5650;">${adminNotes}</td></tr>` : ''}
       </table>
     </div>
-    <p style="font-size:14px;color:#7a7670;">Por favor llega con anticipación y trae un documento de identidad. Si necesitas cambiar o cancelar, contáctanos con al menos 24 horas de antelación.</p>
+    <p style="font-size:14px;color:#7a7670;">Por favor llega con anticipación y trae un documento de identidad.</p>
     <hr class="divider" />
-    <p style="font-size:13px;color:#9a9288;margin:0;">Este correo fue generado automáticamente. No es necesario responderlo.</p>
+    <p style="font-size:13px;color:#9a9288;margin:0;">Este correo fue generado automáticamente.</p>
   </div>
   ` + emailFooter();
 }
 
 function tplApprovedAgent({ agentName, agentEmail, clientName, clientEmail, clientPhone, propertyName, requestedDate, requestedTime, adminNotes, approvedByEmail }) {
   return emailHeader(`Nueva visita asignada: ${propertyName}`) + `
-  <!-- BODY -->
   <div class="email-body">
     <span class="status-badge badge-assigned">📋 Visita asignada</span>
     <h1 style="margin-top:16px;">Tienes una nueva visita</h1>
-    <p class="subtitle">Revisa los detalles y prepárate para recibirlos.</p>
     <p class="greeting">Hola, <strong>${agentName || agentEmail}</strong>:</p>
-    <p>Se te ha asignado una visita aprobada. A continuación los detalles completos del cliente y la propiedad:</p>
+    <p>Se te ha asignado una visita aprobada. Detalles completos:</p>
     <div class="highlight-box">
       <table style="width:100%;border-collapse:collapse;">
-        <tr class="detail-row">
-          <td class="detail-label">Cliente</td>
-          <td class="detail-value">${clientName}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Correo</td>
-          <td class="detail-value"><a href="mailto:${clientEmail}" style="color:#c8a44a;">${clientEmail}</a></td>
-        </tr>
+        <tr class="detail-row"><td class="detail-label">Cliente</td><td class="detail-value">${clientName}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Correo</td><td class="detail-value"><a href="mailto:${clientEmail}" style="color:#c8a44a;">${clientEmail}</a></td></tr>
         ${clientPhone ? `<tr class="detail-row"><td class="detail-label">Teléfono</td><td class="detail-value"><a href="tel:${clientPhone}" style="color:#c8a44a;">${clientPhone}</a></td></tr>` : ''}
-        <tr class="detail-row">
-          <td class="detail-label">Propiedad</td>
-          <td class="detail-value">${propertyName}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Fecha</td>
-          <td class="detail-value">${requestedDate}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Hora</td>
-          <td class="detail-value">${requestedTime}</td>
-        </tr>
+        <tr class="detail-row"><td class="detail-label">Propiedad</td><td class="detail-value">${propertyName}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Fecha</td><td class="detail-value">${requestedDate}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Hora</td><td class="detail-value">${requestedTime}</td></tr>
         ${adminNotes ? `<tr class="detail-row"><td class="detail-label">Notas</td><td class="detail-value" style="color:#5a5650;">${adminNotes}</td></tr>` : ''}
       </table>
     </div>
     ${approvedByEmail ? `<p style="font-size:13px;color:#9a9288;margin:0 0 16px;">Aprobada por: <strong>${approvedByEmail}</strong></p>` : ''}
-    <p style="font-size:14px;color:#7a7670;">Recuerda confirmar con el cliente antes de la visita y llevar toda la documentación necesaria de la propiedad.</p>
   </div>
   ` + emailFooter();
 }
 
 function tplRejectedClient({ clientName, propertyName, adminNotes }) {
   return emailHeader(`Actualización sobre tu visita a "${propertyName}"`) + `
-  <!-- BODY -->
   <div class="email-body">
     <span class="status-badge badge-rejected">✗ No disponible</span>
     <h1 style="margin-top:16px;">Solicitud no aprobada</h1>
-    <p class="subtitle">Te ayudamos a encontrar otras opciones.</p>
     <p class="greeting">Hola, <strong>${clientName}</strong>:</p>
     <p>Hemos revisado tu solicitud de visita a <strong>${propertyName}</strong> y lamentablemente en este momento no podemos confirmarla.</p>
     ${adminNotes ? `<div class="highlight-box"><p style="margin:0;font-size:14px;color:#5a5650;"><strong>Motivo:</strong> ${adminNotes}</p></div>` : ''}
-    <p>Si deseas explorar otras propiedades disponibles o reagendar tu visita, no dudes en contactarnos. Estaremos encantados de ayudarte.</p>
+    <p>Si deseas explorar otras propiedades o reagendar, no dudes en contactarnos.</p>
     <hr class="divider" />
     <p style="font-size:13px;color:#9a9288;margin:0;">Gracias por tu interés en R&amp;B Inmobiliaria.</p>
   </div>
@@ -226,32 +177,21 @@ function tplRejectedClient({ clientName, propertyName, adminNotes }) {
 
 function tplRescheduledClient({ clientName, propertyName, proposedDate, proposedTime, originalDate, originalTime, adminNotes }) {
   return emailHeader(`Nueva propuesta de fecha para tu visita a "${propertyName}"`) + `
-  <!-- BODY -->
   <div class="email-body">
     <span class="status-badge badge-rescheduled">📅 Nueva fecha propuesta</span>
     <h1 style="margin-top:16px;">Propuesta de reagendamiento</h1>
-    <p class="subtitle">Queremos encontrar el mejor momento para ti.</p>
     <p class="greeting">Hola, <strong>${clientName}</strong>:</p>
-    <p>Queremos proponerte una <strong>nueva fecha y hora</strong> para tu visita a <strong>${propertyName}</strong>. Hemos encontrado un horario que esperamos sea conveniente para ti:</p>
+    <p>Te proponemos una <strong>nueva fecha</strong> para tu visita a <strong>${propertyName}</strong>:</p>
     <div class="highlight-box">
       <table style="width:100%;border-collapse:collapse;">
-        <tr class="detail-row">
-          <td class="detail-label">Propiedad</td>
-          <td class="detail-value">${propertyName}</td>
-        </tr>
+        <tr class="detail-row"><td class="detail-label">Propiedad</td><td class="detail-value">${propertyName}</td></tr>
         ${originalDate ? `<tr class="detail-row"><td class="detail-label">Fecha original</td><td class="detail-value" style="text-decoration:line-through;color:#aaa;">${originalDate}${originalTime ? ' · ' + originalTime : ''}</td></tr>` : ''}
-        <tr class="detail-row">
-          <td class="detail-label">Nueva fecha</td>
-          <td class="detail-value" style="color:#1a3d8b;font-weight:600;">${proposedDate}</td>
-        </tr>
-        <tr class="detail-row">
-          <td class="detail-label">Nueva hora</td>
-          <td class="detail-value" style="color:#1a3d8b;font-weight:600;">${proposedTime}</td>
-        </tr>
+        <tr class="detail-row"><td class="detail-label">Nueva fecha</td><td class="detail-value" style="color:#1a3d8b;font-weight:600;">${proposedDate}</td></tr>
+        <tr class="detail-row"><td class="detail-label">Nueva hora</td><td class="detail-value" style="color:#1a3d8b;font-weight:600;">${proposedTime}</td></tr>
         ${adminNotes ? `<tr class="detail-row"><td class="detail-label">Comentario</td><td class="detail-value" style="color:#5a5650;">${adminNotes}</td></tr>` : ''}
       </table>
     </div>
-    <p>Si este horario te queda bien, no es necesario que hagas nada más. Si necesitas otro horario, por favor responde este correo o llámanos.</p>
+    <p>Si este horario te conviene, no es necesario que hagas nada más.</p>
     <hr class="divider" />
     <p style="font-size:13px;color:#9a9288;margin:0;">Gracias por tu preferencia y paciencia.</p>
   </div>
@@ -312,7 +252,6 @@ async function upsertClientAndHistory(visit, agentData, approvedByEmail) {
 
 export const visitService = {
 
-  // ── Admin: ve TODAS las visitas ──────────────────────────────────────
   subscribeAll(onData, onError) {
     const q = query(col(), orderBy('createdAt', 'desc'));
     return onSnapshot(
@@ -332,37 +271,22 @@ export const visitService = {
     );
   },
 
-  // ── Member/Agente: ve solo sus visitas ASIGNADAS ─────────────────────
   subscribeByAgent(agentEmail, onData, onError) {
-    const q = query(
-      col(),
-      where('agentEmail', '==', agentEmail),
-      orderBy('createdAt', 'desc'),
-    );
-    return onSnapshot(
-      q,
-      { includeMetadataChanges: false },
+    const q = query(col(), where('agentEmail', '==', agentEmail), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => onError?.(err),
     );
   },
 
-  // ── Member/Agente: ve las PENDIENTES ─────────────────────────────────
   subscribePending(onData, onError) {
-    const q = query(
-      col(),
-      where('status', '==', VISIT_STATUS.PENDING),
-      orderBy('createdAt', 'desc'),
-    );
-    return onSnapshot(
-      q,
-      { includeMetadataChanges: false },
+    const q = query(col(), where('status', '==', VISIT_STATUS.PENDING), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => onError?.(err),
     );
   },
 
-  // ── Solicitar visita (formulario público) ────────────────────────────
   async requestVisit(payload) {
     const visitRef = await addDoc(col(), {
       ...payload,
@@ -391,11 +315,9 @@ export const visitService = {
       });
     } catch (e) { console.warn('espejo /appointments:', e.code); }
 
-    // Notificar admins
+    // Notificar admins y members internamente
     try {
-      const admins = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)),
-      );
+      const admins = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)));
       await Promise.allSettled(admins.docs.map((d) =>
         notificationService.createNotification({
           userId: d.id, type: 'visit_request',
@@ -405,12 +327,8 @@ export const visitService = {
         }),
       ));
     } catch (_) {}
-
-    // Notificar members
     try {
-      const members = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'member'), limit(50)),
-      );
+      const members = await getDocs(query(collection(db, 'users'), where('role', '==', 'member'), limit(50)));
       await Promise.allSettled(members.docs.map((d) =>
         notificationService.createNotification({
           userId: d.id, type: 'visit_request',
@@ -424,7 +342,6 @@ export const visitService = {
     return visitRef.id;
   },
 
-  // ── Lecturas puntuales ───────────────────────────────────────────────
   async getAllVisits() {
     const snap = await getDocs(query(col(), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -438,7 +355,6 @@ export const visitService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  // ── Actualización genérica ───────────────────────────────────────────
   async updateStatus(visitId, newStatus, adminNotes = '') {
     await updateDoc(ref(visitId), { status: newStatus, adminNotes, updatedAt: serverTimestamp() });
   },
@@ -470,7 +386,7 @@ export const visitService = {
     await deleteDoc(ref(visitId));
   },
 
-  // ── APROBAR visita ───────────────────────────────────────────────────
+  // ── APROBAR visita ────────────────────────────────────────────────────────
   async approveVisit(visit, adminNotes = '', agentData = {}) {
     const currentUser     = auth.currentUser;
     const approvedByEmail = currentUser?.email || null;
@@ -492,17 +408,17 @@ export const visitService = {
     const agentEmail = agentData.agentEmail || visit.agentEmail;
     const agentName  = agentData.agentName  || visit.agentName;
 
-    // Notificación in-app al cliente
+    // ── Notificación in-app portal (cliente viewer) ──────────────────────────
     if (visit.clientEmail) {
-      notificationService.createNotification({
-        userId: visit.clientEmail, type: 'visit_approved',
-        title:   'Visita aprobada',
-        message: `Tu visita a "${visit.propertyName}" fue aprobada para el ${visit.requestedDate} a las ${visit.requestedTime}.`,
-        actionUrl: '/portal/visitas',
+      sendClientNotification(visit.clientEmail, {
+        title:    '¡Visita confirmada! 🗓️',
+        message:  `Tu visita a "${visit.propertyName}" fue aprobada para el ${visit.requestedDate} a las ${visit.requestedTime}.`,
+        type:     NOTIF_TYPES.VISIT_CONFIRMED,
+        relatedId: visit.id,
       }).catch(() => {});
     }
 
-    // Notificación in-app al agente
+    // Notificación in-app al agente (sistema interno)
     if (agentEmail) {
       notificationService.createNotification({
         userId: agentEmail, type: 'visit_assigned',
@@ -512,67 +428,44 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // Correo premium al cliente
+    // Correos
     await sendMail(
       visit.clientEmail,
       `Visita confirmada — ${visit.propertyName} · R&B Inmobiliaria`,
-      tplApprovedClient({
-        clientName:    visit.clientName,
-        propertyName:  visit.propertyName,
-        requestedDate: visit.requestedDate,
-        requestedTime: visit.requestedTime,
-        agentName,
-        adminNotes,
-      }),
+      tplApprovedClient({ clientName: visit.clientName, propertyName: visit.propertyName, requestedDate: visit.requestedDate, requestedTime: visit.requestedTime, agentName, adminNotes }),
     );
-
-    // Correo premium al agente
     if (agentEmail) {
       await sendMail(
         agentEmail,
         `Nueva visita asignada — ${visit.propertyName} · R&B Inmobiliaria`,
-        tplApprovedAgent({
-          agentName,
-          agentEmail,
-          clientName:    visit.clientName,
-          clientEmail:   visit.clientEmail,
-          clientPhone:   visit.clientPhone,
-          propertyName:  visit.propertyName,
-          requestedDate: visit.requestedDate,
-          requestedTime: visit.requestedTime,
-          adminNotes,
-          approvedByEmail,
-        }),
+        tplApprovedAgent({ agentName, agentEmail, clientName: visit.clientName, clientEmail: visit.clientEmail, clientPhone: visit.clientPhone, propertyName: visit.propertyName, requestedDate: visit.requestedDate, requestedTime: visit.requestedTime, adminNotes, approvedByEmail }),
       );
     }
   },
 
-  // ── RECHAZAR visita ──────────────────────────────────────────────────
+  // ── RECHAZAR visita ───────────────────────────────────────────────────────
   async rejectVisit(visit, adminNotes = '') {
     await this.updateStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
 
     if (visit.clientEmail) {
-      notificationService.createNotification({
-        userId: visit.clientEmail, type: 'visit_rejected',
-        title:   'Solicitud de visita',
-        message: `Tu solicitud a "${visit.propertyName}" no pudo aprobarse. ${adminNotes || ''}`.trim(),
-        actionUrl: '/portal/visitas',
+      // Notificación in-app portal
+      sendClientNotification(visit.clientEmail, {
+        title:    'Solicitud de visita no aprobada',
+        message:  `Tu solicitud para "${visit.propertyName}" no pudo confirmarse.${adminNotes ? ' ' + adminNotes : ''}`,
+        type:     NOTIF_TYPES.VISIT_REJECTED,
+        relatedId: visit.id,
       }).catch(() => {});
 
       await sendMail(
         visit.clientEmail,
         `Actualización sobre tu visita a "${visit.propertyName}" · R&B Inmobiliaria`,
-        tplRejectedClient({
-          clientName:   visit.clientName,
-          propertyName: visit.propertyName,
-          adminNotes,
-        }),
+        tplRejectedClient({ clientName: visit.clientName, propertyName: visit.propertyName, adminNotes }),
       );
     }
   },
 
-  // ── COMPLETAR visita ─────────────────────────────────────────────────
+  // ── COMPLETAR visita ──────────────────────────────────────────────────────
   async completeVisit(visitId, adminNotes = '') {
     await this.updateStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.COMPLETED, adminNotes);
@@ -592,87 +485,65 @@ export const visitService = {
     } catch (_) {}
   },
 
-  // ── REAGENDAR visita ─────────────────────────────────────────────────
+  // ── REAGENDAR visita ──────────────────────────────────────────────────────
   async rescheduleVisit(visit, proposedDate, proposedTime, adminNotes = '') {
-    const visitId = typeof visit === 'object' ? visit.id : visit;
-    await updateDoc(ref(visitId), {
-      status:       VISIT_STATUS.RESCHEDULED,
-      proposedDate, proposedTime, adminNotes,
-      updatedAt:    serverTimestamp(),
-      rescheduledAt: serverTimestamp(),
-    });
-    await this.syncAppointmentStatus(visitId, VISIT_STATUS.RESCHEDULED, adminNotes);
-
+    const visitId     = typeof visit === 'object' ? visit.id          : visit;
     const clientEmail = typeof visit === 'object' ? visit.clientEmail  : null;
     const clientName  = typeof visit === 'object' ? visit.clientName   : null;
     const propName    = typeof visit === 'object' ? visit.propertyName : null;
     const origDate    = typeof visit === 'object' ? visit.requestedDate : null;
     const origTime    = typeof visit === 'object' ? visit.requestedTime : null;
 
+    await updateDoc(ref(visitId), {
+      status:        VISIT_STATUS.RESCHEDULED,
+      proposedDate,
+      proposedTime,
+      adminNotes,
+      newDate:       proposedDate,   // campo extra para el portal
+      newTime:       proposedTime,
+      updatedAt:     serverTimestamp(),
+      rescheduledAt: serverTimestamp(),
+    });
+    await this.syncAppointmentStatus(visitId, VISIT_STATUS.RESCHEDULED, adminNotes);
+
     if (clientEmail) {
-      notificationService.createNotification({
-        userId:    clientEmail,
-        type:      'visit_rescheduled',
-        title:     'Nueva propuesta de fecha',
-        message:   `Te proponemos reagendar tu visita a "${propName}" para el ${proposedDate} a las ${proposedTime}.`,
-        actionUrl: '/portal/visitas',
+      // Notificación in-app portal
+      sendClientNotification(clientEmail, {
+        title:    '📅 Nueva propuesta de fecha para tu visita',
+        message:  `Te proponemos reagendar tu visita a "${propName}" para el ${proposedDate} a las ${proposedTime}.`,
+        type:     NOTIF_TYPES.VISIT_RESCHEDULED,
+        relatedId: visitId,
       }).catch(() => {});
 
       await sendMail(
         clientEmail,
         `Nueva fecha propuesta para tu visita a "${propName}" · R&B Inmobiliaria`,
-        tplRescheduledClient({
-          clientName:   clientName,
-          propertyName: propName,
-          proposedDate,
-          proposedTime,
-          originalDate: origDate,
-          originalTime: origTime,
-          adminNotes,
-        }),
+        tplRescheduledClient({ clientName, propertyName: propName, proposedDate, proposedTime, originalDate: origDate, originalTime: origTime, adminNotes }),
       );
     }
   },
 
-  // ── Calendario admin ─────────────────────────────────────────────────
+  // ── Calendario ────────────────────────────────────────────────────────────
   subscribeCalendar(onData, onError) {
-    const q = query(
-      col(),
-      where('status', 'in', [VISIT_STATUS.APPROVED, VISIT_STATUS.COMPLETED, VISIT_STATUS.RESCHEDULED]),
-      orderBy('requestedDate', 'asc'),
-    );
+    const q = query(col(), where('status', 'in', [VISIT_STATUS.APPROVED, VISIT_STATUS.COMPLETED, VISIT_STATUS.RESCHEDULED]), orderBy('requestedDate', 'asc'));
     return onSnapshot(q, { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'visits' }))),
       (err) => onError?.(err),
     );
   },
 
-  // ── Calendario agente ────────────────────────────────────────────────
   subscribeCalendarByAgent(agentEmail, onData, onError) {
-    const q = query(
-      col(),
-      where('agentEmail', '==', agentEmail),
-      where('status', 'in', [VISIT_STATUS.APPROVED, VISIT_STATUS.RESCHEDULED]),
-      orderBy('requestedDate', 'asc'),
-    );
+    const q = query(col(), where('agentEmail', '==', agentEmail), where('status', 'in', [VISIT_STATUS.APPROVED, VISIT_STATUS.RESCHEDULED]), orderBy('requestedDate', 'asc'));
     return onSnapshot(q, { includeMetadataChanges: false },
       (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'visits' }))),
       (err) => onError?.(err),
     );
   },
 
-  // ── Calendario appointments (sin espejo de visits) ───────────────────
   subscribeCalendarAppointments(onData, onError) {
-    const q = query(
-      collection(db, 'appointments'),
-      orderBy('date', 'asc'),
-    );
+    const q = query(collection(db, 'appointments'), orderBy('date', 'asc'));
     return onSnapshot(q, { includeMetadataChanges: false },
-      (snap) => onData(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data(), source: 'appointments' }))
-          .filter((d) => d.sourceCollection !== 'visits'),
-      ),
+      (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'appointments' })).filter((d) => d.sourceCollection !== 'visits')),
       (err) => onError?.(err),
     );
   },

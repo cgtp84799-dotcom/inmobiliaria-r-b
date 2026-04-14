@@ -1,3 +1,4 @@
+// src/modules/clients/pages/ClientManagement.jsx
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -5,7 +6,7 @@ import {
   FaPhone, FaEnvelope, FaSpinner, FaWhatsapp,
   FaTimes, FaFilter, FaCalendarCheck, FaUsers,
   FaFileContract, FaHistory, FaTable, FaTh,
-  FaChevronLeft, FaChevronRight,
+  FaChevronLeft, FaChevronRight, FaMobileAlt,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import {
@@ -30,6 +31,7 @@ const TipoBadge = ({ tipo }) => {
     Comprador: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     Arrendatario: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     Propietario: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    portal: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
   };
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${s[tipo] || s.Lead}`}>{tipo}</span>;
 };
@@ -37,11 +39,22 @@ const TipoBadge = ({ tipo }) => {
 const EstadoBadge = ({ estado }) => {
   const s = {
     Activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     Inactivo: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
     Convertido: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
   };
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${s[estado] || s.Activo}`}>{estado}</span>;
 };
+
+/** Badge de Portal — visible cuando el cliente tiene cuenta en el portal */
+const PortalBadge = () => (
+  <span
+    title="Cliente con cuenta en el portal"
+    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20"
+  >
+    <FaMobileAlt size={8} /> Portal
+  </span>
+);
 
 // ── Modal agendar visita ──────────────────────────────────────────────────────
 function ScheduleVisitModal({ client, onClose }) {
@@ -66,23 +79,23 @@ function ScheduleVisitModal({ client, onClose }) {
     try {
       const prop = properties.find((p) => p.id === form.propertyId);
       await addDoc(collection(db, 'appointments'), {
-        clientId:       client.id,
-        clientName:     client.nombre,
-        clientPhone:    client.telefono || '',
-        clientEmail:    client.email    || '',
-        propertyId:     form.propertyId || '',
-        propertyName:   prop?.title  || '',
-        propertyAddress:prop?.address || prop?.city || '',
-        date:           form.date,
-        time:           form.time,
-        notes:          form.notes,
-        status:         'pendiente',
-        type:           'visita',
+        clientId:        client.id,
+        clientName:      client.nombre,
+        clientPhone:     client.telefono || '',
+        clientEmail:     client.email    || '',
+        propertyId:      form.propertyId || '',
+        propertyName:    prop?.title  || '',
+        propertyAddress: prop?.address || prop?.city || '',
+        date:            form.date,
+        time:            form.time,
+        notes:           form.notes,
+        status:          'pendiente',
+        type:            'visita',
         assignedAgentId: currentUser?.uid || '',
-        agentName:      currentUser?.displayName || currentUser?.email?.split('@')[0] || '',
-        agentEmail:     currentUser?.email || '',
-        createdAt:      serverTimestamp(),
-        updatedAt:      serverTimestamp(),
+        agentName:       currentUser?.displayName || currentUser?.email?.split('@')[0] || '',
+        agentEmail:      currentUser?.email || '',
+        createdAt:       serverTimestamp(),
+        updatedAt:       serverTimestamp(),
       });
       toast.success('Visita agendada correctamente ✓');
       onClose();
@@ -143,8 +156,7 @@ function ScheduleVisitModal({ client, onClose }) {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
-                hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
               {saving ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : 'Agendar'}
             </button>
           </div>
@@ -154,7 +166,7 @@ function ScheduleVisitModal({ client, onClose }) {
   );
 }
 
-// ── Modal agregar actividad ────────────────────────────────────────────────────
+// ── Modal agregar actividad ───────────────────────────────────────────────────
 function AddActivityModal({ client, onClose }) {
   const { currentUser } = useAuth();
   const [form, setForm] = useState({
@@ -229,8 +241,7 @@ function AddActivityModal({ client, onClose }) {
             <label className="block text-slate-400 text-xs font-semibold mb-1.5">Nota *</label>
             <textarea rows={4} required value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="¿Qué ocurrió en esta interacción?"
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200
-                focus:border-primary outline-none resize-none" />
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none resize-none" />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose}
@@ -238,8 +249,7 @@ function AddActivityModal({ client, onClose }) {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
-                hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+              className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
               {saving ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : 'Guardar'}
             </button>
           </div>
@@ -260,31 +270,27 @@ export default function ClientManagement() {
 
   const [clients,   setClients]   = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [viewMode,  setViewMode]  = useState('table'); // 'table' | 'cards'
+  const [viewMode,  setViewMode]  = useState('table');
 
-  // Formulario
-  const [showForm,  setShowForm]  = useState(false);
+  const [showForm,   setShowForm]   = useState(false);
   const [editClient, setEditClient] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [formData,  setFormData]  = useState({
+  const [formData,   setFormData]   = useState({
     nombre: '', telefono: '', email: '',
     tipoCliente: 'Lead', estado: 'Activo',
     presupuesto: '', tipoPropiedad: '',
     ubicacionInteres: '', notas: '', propiedadVinculada: '',
   });
 
-  // Drawer detalle
-  const [detailClient,  setDetailClient]  = useState(null);
+  const [detailClient,   setDetailClient]   = useState(null);
+  const [visitClient,    setVisitClient]    = useState(null);
+  const [activityClient, setActivityClient] = useState(null);
+  const [confirmModal,   setConfirmModal]   = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
-  // Modales
-  const [visitClient,   setVisitClient]   = useState(null);
-  const [activityClient,setActivityClient]= useState(null);
-  const [confirmModal,  setConfirmModal]  = useState({ isOpen: false, title: '', message: '', onConfirm: null });
-
-  // Filtros
   const [search,       setSearch]       = useState('');
   const [filterTipo,   setFilterTipo]   = useState('');
   const [filterEstado, setFilterEstado] = useState('');
+  const [filterPortal, setFilterPortal] = useState(''); // '' | 'portal' | 'no-portal'
   const [showFilters,  setShowFilters]  = useState(false);
   const [page,         setPage]         = useState(1);
 
@@ -304,6 +310,8 @@ export default function ClientManagement() {
     return clients.filter((c) => {
       if (filterTipo   && c.tipoCliente !== filterTipo)   return false;
       if (filterEstado && c.estado      !== filterEstado) return false;
+      if (filterPortal === 'portal'    && !c.createdViaPortal) return false;
+      if (filterPortal === 'no-portal' &&  c.createdViaPortal) return false;
       if (q && !(
         c.nombre?.toLowerCase().includes(q) ||
         c.email?.toLowerCase().includes(q)  ||
@@ -311,21 +319,20 @@ export default function ClientManagement() {
       )) return false;
       return true;
     });
-  }, [clients, search, filterTipo, filterEstado]);
+  }, [clients, search, filterTipo, filterEstado, filterPortal]);
 
   // KPIs
   const kpis = useMemo(() => ({
     total:      clients.length,
-    activos:    clients.filter((c) => c.estado === 'Activo').length,
+    activos:    clients.filter((c) => c.estado === 'Activo' || c.estado === 'activo').length,
     leads:      clients.filter((c) => c.tipoCliente === 'Lead').length,
+    portal:     clients.filter((c) => c.createdViaPortal).length,
     convertidos:clients.filter((c) => c.estado === 'Convertido').length,
   }), [clients]);
 
-  // Paginación
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const hasFilters = filterTipo || filterEstado;
+  const hasFilters = filterTipo || filterEstado || filterPortal;
 
   // ── Guardar cliente ────────────────────────────────────────────────────────
   const handleSave = async (e) => {
@@ -335,18 +342,11 @@ export default function ClientManagement() {
     setSubmitting(true);
     try {
       if (editClient) {
-        await updateDoc(doc(db, 'clients', editClient.id), {
-          ...formData, updatedAt: serverTimestamp(),
-        });
+        await updateDoc(doc(db, 'clients', editClient.id), { ...formData, updatedAt: serverTimestamp() });
         toast.success('Cliente actualizado ✓');
-        // Actualizar drawer si está abierto
-        if (detailClient?.id === editClient.id) {
-          setDetailClient((prev) => ({ ...prev, ...formData }));
-        }
+        if (detailClient?.id === editClient.id) setDetailClient((prev) => ({ ...prev, ...formData }));
       } else {
-        await addDoc(collection(db, 'clients'), {
-          ...formData, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-        });
+        await addDoc(collection(db, 'clients'), { ...formData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
         toast.success('Cliente creado ✓');
       }
       handleCloseForm();
@@ -403,20 +403,20 @@ export default function ClientManagement() {
         </div>
         {canCreate && (
           <button onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl
-              bg-primary text-slate-950 font-semibold text-sm hover:bg-primary/90 transition-colors">
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-slate-950 font-semibold text-sm hover:bg-primary/90 transition-colors">
             <FaPlus size={12} /> Nuevo cliente
           </button>
         )}
       </div>
 
-      {/* ── KPIs ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* ── KPIs — ahora incluye Portal ──────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Total',       value: kpis.total,       color: 'text-white' },
           { label: 'Activos',     value: kpis.activos,     color: 'text-emerald-400' },
           { label: 'Leads',       value: kpis.leads,       color: 'text-yellow-400' },
           { label: 'Convertidos', value: kpis.convertidos, color: 'text-blue-400' },
+          { label: 'En portal',   value: kpis.portal,      color: 'text-amber-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
             <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
@@ -431,31 +431,24 @@ export default function ClientManagement() {
           <FaSearch className="absolute left-3 top-3 text-slate-400" size={12} />
           <input type="text" placeholder="Buscar nombre, email o teléfono..."
             value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5
-              text-sm text-slate-200 placeholder-slate-500 focus:border-primary outline-none transition-colors" />
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-primary outline-none transition-colors" />
         </div>
         <button onClick={() => setShowFilters((v) => !v)}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
-            border transition-colors ${hasFilters
-              ? 'bg-primary/20 border-primary/50 text-primary'
-              : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${hasFilters ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
           <FaFilter size={11} /> Filtros
           {hasFilters && (
             <span className="w-5 h-5 rounded-full bg-primary text-slate-950 text-xs font-bold flex items-center justify-center">
-              {[filterTipo, filterEstado].filter(Boolean).length}
+              {[filterTipo, filterEstado, filterPortal].filter(Boolean).length}
             </span>
           )}
         </button>
-        {/* Toggle vista */}
         <div className="flex gap-1 bg-slate-900 border border-slate-700 rounded-xl p-1">
           <button onClick={() => setViewMode('table')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
-              ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
             <FaTable size={11} />
           </button>
           <button onClick={() => setViewMode('cards')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
-              ${viewMode === 'cards' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${viewMode === 'cards' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
             <FaTh size={11} />
           </button>
         </div>
@@ -466,11 +459,10 @@ export default function ClientManagement() {
         {showFilters && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
               <div>
                 <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo de cliente</label>
-                <select value={filterTipo} onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
-                  className={inputCls}>
+                <select value={filterTipo} onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }} className={inputCls}>
                   <option value="">Todos</option>
                   <option value="Lead">Lead</option>
                   <option value="Comprador">Comprador</option>
@@ -480,19 +472,26 @@ export default function ClientManagement() {
               </div>
               <div>
                 <label className="block text-slate-400 text-xs font-semibold mb-1.5">Estado</label>
-                <select value={filterEstado} onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
-                  className={inputCls}>
+                <select value={filterEstado} onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }} className={inputCls}>
                   <option value="">Todos</option>
                   <option value="Activo">Activo</option>
                   <option value="Inactivo">Inactivo</option>
                   <option value="Convertido">Convertido</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-slate-400 text-xs font-semibold mb-1.5">Portal</label>
+                <select value={filterPortal} onChange={(e) => { setFilterPortal(e.target.value); setPage(1); }} className={inputCls}>
+                  <option value="">Todos</option>
+                  <option value="portal">Con cuenta en portal</option>
+                  <option value="no-portal">Sin cuenta en portal</option>
+                </select>
+              </div>
               {hasFilters && (
-                <div className="sm:col-span-2 flex justify-end">
-                  <button onClick={() => { setFilterTipo(''); setFilterEstado(''); }}
+                <div className="sm:col-span-3 flex justify-end">
+                  <button onClick={() => { setFilterTipo(''); setFilterEstado(''); setFilterPortal(''); }}
                     className="text-xs text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1">
-                    <FaTimes size={10} /> Limpiar
+                    <FaTimes size={10} /> Limpiar filtros
                   </button>
                 </div>
               )}
@@ -518,7 +517,7 @@ export default function ClientManagement() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-900/80 border-b border-slate-800">
-                {['Cliente', 'Contacto', 'Tipo / Estado', 'Presupuesto', ''].map((h) => (
+                {['Cliente', 'Contacto', 'Tipo / Estado', 'Portal', 'Presupuesto', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
@@ -543,7 +542,7 @@ export default function ClientManagement() {
                   </td>
                   <td className="px-4 py-3">
                     {c.telefono && (
-                      <a href={`https://wa.me/57${(c.telefono).replace(/\D/g,'')}`}
+                      <a href={`https://wa.me/57${(c.telefono).replace(/\D/g, '')}`}
                         target="_blank" rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1.5 text-green-400 hover:text-green-300 transition-colors text-xs"
@@ -557,6 +556,10 @@ export default function ClientManagement() {
                       <TipoBadge  tipo={c.tipoCliente} />
                       <EstadoBadge estado={c.estado} />
                     </div>
+                  </td>
+                  {/* ─ Columna Portal (NUEVA) ─ */}
+                  <td className="px-4 py-3">
+                    {c.createdViaPortal && <PortalBadge />}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <p className="text-slate-300 text-xs">{c.presupuesto ? formatCOP(c.presupuesto) : '—'}</p>
@@ -591,16 +594,18 @@ export default function ClientManagement() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {paginated.map((c) => (
             <motion.div key={c.id} layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-              className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden
-                hover:border-slate-700 transition-colors cursor-pointer"
+              className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-colors cursor-pointer"
               onClick={() => setDetailClient(c)}>
               <div className="h-1 bg-gradient-to-r from-primary/60 to-primary/20" />
               <div className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <p className="text-white text-sm font-bold">{c.nombre}</p>
-                    <div className="flex gap-1.5 mt-1 flex-wrap">
-                      <TipoBadge tipo={c.tipoCliente} /><EstadoBadge estado={c.estado} />
+                    <div className="flex gap-1.5 mt-1 flex-wrap items-center">
+                      <TipoBadge tipo={c.tipoCliente} />
+                      <EstadoBadge estado={c.estado} />
+                      {/* Badge Portal en card (NUEVO) */}
+                      {c.createdViaPortal && <PortalBadge />}
                     </div>
                   </div>
                 </div>
@@ -619,14 +624,12 @@ export default function ClientManagement() {
                 )}
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => setVisitClient(c)}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-yellow-300
-                      border border-yellow-600/40 hover:bg-yellow-500/10 transition-colors">
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-yellow-300 border border-yellow-600/40 hover:bg-yellow-500/10 transition-colors">
                     Visita
                   </button>
                   <a href={`https://wa.me/57${(c.telefono || '').replace(/\D/g, '')}`}
                     target="_blank" rel="noopener noreferrer"
-                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-center text-green-300
-                      border border-green-600/40 hover:bg-green-500/10 transition-colors">
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-center text-green-300 border border-green-600/40 hover:bg-green-500/10 transition-colors">
                     WA
                   </a>
                   {canUpdate && (
@@ -646,20 +649,20 @@ export default function ClientManagement() {
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40
-              hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
+            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40 hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
             <FaChevronLeft size={10} /> Anterior
           </button>
           <span className="text-slate-400 text-sm">{page} / {totalPages}</span>
           <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40
-              hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
+            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 disabled:opacity-40 hover:border-primary/40 transition text-sm inline-flex items-center gap-1.5 bg-slate-900">
             Siguiente <FaChevronRight size={10} />
           </button>
         </div>
       )}
       {!loading && filtered.length > 0 && (
-        <p className="text-slate-600 text-xs text-center">{filtered.length} cliente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}</p>
+        <p className="text-slate-600 text-xs text-center">
+          {filtered.length} cliente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+        </p>
       )}
 
       {/* ── Drawer detalle ──────────────────────────────────────────────── */}
@@ -671,8 +674,7 @@ export default function ClientManagement() {
             <motion.div
               initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
               exit={{ x: 40, opacity: 0 }}
-              className="bg-slate-950 border-l border-slate-800 h-full w-full sm:w-[420px]
-                overflow-y-auto p-5">
+              className="bg-slate-950 border-l border-slate-800 h-full w-full sm:w-[420px] overflow-y-auto p-5">
               <ClientDetail
                 client={detailClient}
                 onClose={() => setDetailClient(null)}
@@ -693,8 +695,7 @@ export default function ClientManagement() {
             onClick={(e) => { if (e.target === e.currentTarget) handleCloseForm(); }}>
             <motion.div initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.93, opacity: 0 }}
-              className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl
-                max-h-[90vh] overflow-y-auto">
+              className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <form onSubmit={handleSave} className="p-6">
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-white font-bold text-lg">
@@ -780,13 +781,11 @@ export default function ClientManagement() {
                 </div>
                 <div className="flex gap-3 mt-5">
                   <button type="button" onClick={handleCloseForm} disabled={submitting}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700
-                      text-sm font-semibold transition-colors disabled:opacity-50">
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors disabled:opacity-50">
                     Cancelar
                   </button>
                   <button type="submit" disabled={submitting}
-                    className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm
-                      hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                    className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                     {submitting
                       ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</>
                       : (editClient ? 'Actualizar' : 'Crear cliente')}

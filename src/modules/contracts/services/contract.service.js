@@ -1,12 +1,14 @@
+// src/modules/contracts/services/contract.service.js
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, getDocs, getDoc, query, where, orderBy,
   onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../../core/config/firebase.config';
 import { CONTRACT_STATUS, createContractPayload } from '../types/contract.types';
 import { notificationService } from '../../notifications/services/notification.service';
+import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 
 const COL  = 'contracts';
 const col  = () => collection(db, COL);
@@ -14,7 +16,10 @@ const ref_ = (id) => doc(db, COL, id);
 
 export const contractService = {
 
-  /** Crea un contrato, escribe historial inicial y notifica al cliente. */
+  /**
+   * Crea un contrato, escribe historial inicial y envía notificaciones.
+   * Ahora también envía notificación in-app al portal del cliente (viewer).
+   */
   async createContract(data, createdByEmail) {
     const payload = {
       ...createContractPayload({ ...data, createdBy: createdByEmail }),
@@ -23,7 +28,7 @@ export const contractService = {
     };
     const docRef = await addDoc(col(), payload);
 
-    // Entrada en historial
+    // Historial inicial
     await addDoc(collection(db, COL, docRef.id, 'history'), {
       action:    'created',
       status:    payload.status,
@@ -31,20 +36,19 @@ export const contractService = {
       createdAt: serverTimestamp(),
     }).catch(() => {});
 
-    // Notificación al cliente (solo si no es borrador)
+    // Notificación in-app portal al cliente viewer (NUEVO)
     if (data.status !== CONTRACT_STATUS.DRAFT && data.clientEmail) {
-      await notificationService.createNotification({
-        userId:    data.clientEmail,
-        type:      'contract_signed',
-        title:     'Nuevo contrato registrado',
-        message:   `Se registró un contrato de ${data.type} para "${data.propertyName}".`,
-        actionUrl: '/contratos',
+      sendClientNotification(data.clientEmail, {
+        title:    '📄 Nuevo contrato registrado',
+        message:  `Se registró un contrato de ${data.type || 'inmueble'} para "${data.propertyName}". Puedes consultarlo en tu portal.`,
+        type:     NOTIF_TYPES.CONTRACT_CREATED,
+        relatedId: docRef.id,
       }).catch(() => {});
     }
 
-    // Notificación al agente
+    // Notificación in-app sistema al agente (ya existía)
     if (data.agentEmail && data.agentEmail !== createdByEmail) {
-      await notificationService.createNotification({
+      notificationService.createNotification({
         userId:    data.agentEmail,
         type:      'contract_assigned',
         title:     'Nuevo contrato asignado',
@@ -61,7 +65,7 @@ export const contractService = {
     await updateDoc(ref_(id), { ...data, updatedAt: serverTimestamp() });
   },
 
-  /** Cambia solo el estado. No escribe historial (lo hace el componente). */
+  /** Cambia solo el estado. */
   async updateStatus(id, newStatus, notes = '') {
     const update = { status: newStatus, updatedAt: serverTimestamp() };
     if (notes) update.notes = notes;
@@ -87,23 +91,17 @@ export const contractService = {
   },
 
   async getContractsByProperty(propertyId) {
-    const snap = await getDocs(
-      query(col(), where('propertyId', '==', propertyId), orderBy('createdAt', 'desc'))
-    );
+    const snap = await getDocs(query(col(), where('propertyId', '==', propertyId), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
   async getContractsByClient(clientEmail) {
-    const snap = await getDocs(
-      query(col(), where('clientEmail', '==', clientEmail), orderBy('createdAt', 'desc'))
-    );
+    const snap = await getDocs(query(col(), where('clientEmail', '==', clientEmail), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
   async getContractsByAgent(agentEmail) {
-    const snap = await getDocs(
-      query(col(), where('agentEmail', '==', agentEmail), orderBy('createdAt', 'desc'))
-    );
+    const snap = await getDocs(query(col(), where('agentEmail', '==', agentEmail), orderBy('createdAt', 'desc')));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
@@ -125,7 +123,7 @@ export const contractService = {
     );
   },
 
-  /** Contratos activos de un agente — para el módulo de agentes. */
+  /** Contratos activos de un agente. */
   subscribeByAgent(agentEmail, callback) {
     return onSnapshot(
       query(col(), where('agentEmail', '==', agentEmail), orderBy('createdAt', 'desc')),
@@ -137,11 +135,11 @@ export const contractService = {
   /** Sube un PDF al Storage y actualiza el documento. */
   async uploadDocument(contractId, file) {
     if (!file) return null;
-    const ext        = file.name.split('.').pop();
-    const path       = `contracts/${contractId}/${Date.now()}.${ext}`;
-    const storageRef = ref(storage, path);
-    const snap       = await uploadBytes(storageRef, file);
-    const url        = await getDownloadURL(snap.ref);
+    const ext  = file.name.split('.').pop();
+    const path = `contracts/${contractId}/${Date.now()}.${ext}`;
+    const sRef = storageRef(storage, path);
+    const snap = await uploadBytes(sRef, file);
+    const url  = await getDownloadURL(snap.ref);
     await updateDoc(ref_(contractId), { documentUrl: url, updatedAt: serverTimestamp() });
     return url;
   },
