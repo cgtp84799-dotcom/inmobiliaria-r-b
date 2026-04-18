@@ -1,19 +1,22 @@
 // src/modules/auth/pages/ClientAuthPage.jsx
 //
-// Página de autenticación exclusiva del portal de clientes.
-// Fixes respecto a la versión anterior:
-//   1. ensureClientDocs usa transacción-safe: getDocs primero, addDoc solo si vacío
-//      → no usa setDoc sobre /users/{email} sin verificar existencia primero
-//      → agrega onboardingDone: false al crear el documento de cliente nuevo
-//   2. No mezcla lógica de agentes/admin
-//   3. Separado completamente de AuthPage (panel interno)
+// ═══════════════════════════════════════════════════════════════════
+// FIXES APLICADOS:
+//   1. ensureClientDocs VERIFICA si el usuario ya es admin/member
+//      ANTES de crear docs. Si ya tiene un rol de panel interno,
+//      NO lo convierte a viewer ni crea doc en /clients.
+//   2. ensureClientDocs crea /users con status:'active'
+//   3. ensureClientDocs es idempotente y no crea duplicados
+//   4. Si un admin/member llega a esta página, redirige al dashboard
+//   5. Si status:'pending' → lo corrige a 'active' solo para viewers
+// ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaEnvelope, FaLock, FaUser, FaPhone,
-  FaEye, FaEyeSlash, FaSpinner, FaGoogle,
+  FaEye, FaEyeSlash, FaSpinner,
   FaHome, FaHeart, FaCalendarAlt, FaFileContract,
 } from 'react-icons/fa';
 import {
@@ -24,7 +27,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import {
-  doc, setDoc, getDoc, serverTimestamp,
+  doc, setDoc, getDoc, updateDoc, serverTimestamp,
   collection, query, where, getDocs, addDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../../../core/config/firebase.config';
@@ -38,21 +41,42 @@ const googleProvider = new GoogleAuthProvider();
 // ── Helpers Firestore ─────────────────────────────────────────────────────────
 
 /**
- * Garantiza que existan ambos documentos: users/{email} y un documento en clients/.
- * Idempotente: si ya existen, no hace nada. Diseñado para correr sin race conditions:
- * - users/{email}: se crea con setDoc solo si !exists (merge:false)
- * - clients: getDocs primero, addDoc solo si snap.empty
+ * Garantiza que existan ambos documentos: users/{email} y un doc en /clients.
  *
- * Agrega onboardingDone: false al documento de cliente cuando es nuevo,
- * para que el WelcomeModal se muestre la primera vez.
+ * ★ FIX CRÍTICO: Ahora verifica si el usuario ya tiene un rol de panel
+ * (admin/member). Si es así, NO toca nada — el usuario simplemente
+ * será redirigido al dashboard por el useEffect de abajo.
+ *
+ * Solo crea/actualiza docs para usuarios viewer (clientes del portal).
  */
 async function ensureClientDocs(user, extraData = {}) {
   const email = user.email;
 
-  // 1. users/{email} — crear solo si no existe
+  // 1. users/{email} — verificar si ya existe
   const userRef  = doc(db, 'users', email);
   const userSnap = await getDoc(userRef);
-  if (!userSnap.exists()) {
+
+  if (userSnap.exists()) {
+    const existingData = userSnap.data();
+    const existingRole = existingData.role;
+
+    // ★ FIX: Si el usuario ya es admin o member, NO tocar su doc.
+    // Un admin que inicia sesión desde /acceso-clientes no debe
+    // ser convertido a viewer.
+    if (existingRole === USER_ROLES.ADMIN || existingRole === USER_ROLES.MEMBER) {
+      console.log('[ensureClientDocs] Usuario es', existingRole, '— no se modifica.');
+      return; // No crear doc en /clients tampoco
+    }
+
+    // Si es viewer con status 'pending', corregir a 'active'
+    if (existingData.status === 'pending' && existingRole === USER_ROLES.VIEWER) {
+      await updateDoc(userRef, {
+        status:    'active',
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } else {
+    // Doc no existe → crear como viewer activo
     await setDoc(userRef, {
       uid:         user.uid,
       role:        USER_ROLES.VIEWER,
@@ -66,7 +90,8 @@ async function ensureClientDocs(user, extraData = {}) {
     });
   }
 
-  // 2. clients/{} — buscar por email para no duplicar
+  // 2. clients/{} — buscar por email, crear solo si no existe
+  // ★ Solo para viewers (si llegamos aquí, el usuario no es admin/member)
   const clientsRef = collection(db, 'clients');
   const q          = query(clientsRef, where('email', '==', email));
   const snap       = await getDocs(q);
@@ -85,11 +110,10 @@ async function ensureClientDocs(user, extraData = {}) {
       tipoPropiedad:    '',
       agentId:          null,
       createdViaPortal: true,
-      onboardingDone:   false,   // ← WelcomeModal lo usará para mostrar bienvenida
+      onboardingDone:   false,
       createdAt:        serverTimestamp(),
     });
   }
-  // Si ya existe, no tocar onboardingDone — el usuario ya completó su perfil
 }
 
 // ── Mapeo de errores Firebase ─────────────────────────────────────────────────
@@ -98,10 +122,11 @@ const FIREBASE_ERRORS = {
   'auth/user-not-found':         'No existe una cuenta con ese email.',
   'auth/wrong-password':         'Contraseña incorrecta.',
   'auth/email-already-in-use':   'Ya existe una cuenta con ese email.',
-  'auth/weak-password':          'La contraseña es demasiado débil.',
+  'auth/weak-password':          'La contraseña es demasiado débil (mínimo 6 caracteres).',
   'auth/too-many-requests':      'Demasiados intentos. Intenta más tarde.',
   'auth/invalid-credential':     'Email o contraseña incorrectos.',
   'auth/network-request-failed': 'Sin conexión. Verifica tu internet.',
+  'auth/popup-blocked':          'El popup fue bloqueado. Permite popups para este sitio.',
 };
 
 // ── Animaciones ───────────────────────────────────────────────────────────────
@@ -112,9 +137,9 @@ const slideVariants = {
   exit:   (dir) => ({ x: dir > 0 ? -60 : 60, opacity: 0, transition: { duration: 0.25 } }),
 };
 
-// ── Campo de input reutilizable ───────────────────────────────────────────────
+// ── Campo de input ────────────────────────────────────────────────────────────
 
-function Field({ icon: Icon, type = 'text', placeholder, value, onChange, error, rightEl, autoComplete }) {
+function Field({ icon: Icon, type = 'text', placeholder, value, onChange, error, rightEl, autoComplete, readOnly }) {
   return (
     <div className="relative">
       <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none" />
@@ -124,11 +149,13 @@ function Field({ icon: Icon, type = 'text', placeholder, value, onChange, error,
         value={value}
         onChange={onChange}
         autoComplete={autoComplete}
+        readOnly={readOnly}
         className={`
           w-full bg-slate-800/60 border ${error ? 'border-red-500/60' : 'border-slate-700/60'}
           rounded-xl pl-9 ${rightEl ? 'pr-10' : 'pr-4'} py-3 text-sm text-white
           placeholder-slate-500 focus:outline-none focus:border-amber-500/60
           focus:ring-1 focus:ring-amber-500/30 transition
+          ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}
         `}
       />
       {rightEl && (
@@ -139,7 +166,7 @@ function Field({ icon: Icon, type = 'text', placeholder, value, onChange, error,
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// ── Features list ─────────────────────────────────────────────────────────────
 
 const FEATURES = [
   { icon: FaHeart,        text: 'Guarda propiedades favoritas y compáralas' },
@@ -147,6 +174,8 @@ const FEATURES = [
   { icon: FaFileContract, text: 'Consulta y descarga tus contratos en PDF' },
   { icon: FaHome,         text: 'Recibe alertas de nuevas propiedades' },
 ];
+
+// ── Componente principal ──────────────────────────────────────────────────────
 
 export default function ClientAuthPage() {
   const { currentUser, userData, loading } = useAuth();
@@ -166,15 +195,22 @@ export default function ClientAuthPage() {
   const [confirm,     setConfirm]     = useState('');
   const [errors,      setErrors]      = useState({});
 
-  // Redirect si ya está autenticado
+  // ★ FIX: Redirect según rol cuando ya está autenticado
   useEffect(() => {
     if (loading || !currentUser || !userData) return;
-    if (userData.role === USER_ROLES.VIEWER) {
+
+    const role = userData.role;
+
+    // Si es admin o member → redirigir al dashboard (NO crear docs de cliente)
+    if (role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER) {
+      navigate(PRIVATE_ROUTES.DASHBOARD, { replace: true });
+      return;
+    }
+
+    // Si es viewer → ir al portal
+    if (role === USER_ROLES.VIEWER) {
       const dest = from && !from.startsWith('/acceso-clientes') ? from : PRIVATE_ROUTES.CLIENT_PORTAL;
       navigate(dest, { replace: true });
-    } else {
-      // Admin/member que llegó aquí por error → su panel
-      navigate(PRIVATE_ROUTES.DASHBOARD, { replace: true });
     }
   }, [currentUser, userData, loading, navigate, from]);
 
@@ -188,13 +224,13 @@ export default function ClientAuthPage() {
 
   function validate() {
     const e = {};
-    if (!email.trim())               e.email    = 'El email es obligatorio';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Email inválido';
-    if (!password)                   e.password = 'La contraseña es obligatoria';
-    else if (password.length < 6)    e.password = 'Mínimo 6 caracteres';
+    if (!email.trim())                    e.email    = 'El email es obligatorio';
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email    = 'Email inválido';
+    if (!password)                        e.password = 'La contraseña es obligatoria';
+    else if (password.length < 6)         e.password = 'Mínimo 6 caracteres';
     if (mode === 'register') {
-      if (!name.trim())              e.name    = 'El nombre es obligatorio';
-      if (confirm !== password)      e.confirm = 'Las contraseñas no coinciden';
+      if (!name.trim())                   e.name    = 'El nombre es obligatorio';
+      if (confirm !== password)           e.confirm = 'Las contraseñas no coinciden';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -207,12 +243,14 @@ export default function ClientAuthPage() {
     try {
       if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email.trim(), password);
+        const user = auth.currentUser;
+        if (user) await ensureClientDocs(user);
         toast.success('¡Bienvenido de nuevo!');
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await updateProfile(cred.user, { displayName: name.trim() });
         await ensureClientDocs(cred.user, { displayName: name.trim(), phone: phone.trim() });
-        toast.success('¡Cuenta creada! Completa tu perfil para continuar.');
+        toast.success('¡Cuenta creada! Configura tu perfil para continuar.');
         navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace: true });
       }
     } catch (err) {
@@ -228,10 +266,10 @@ export default function ClientAuthPage() {
       const cred = await signInWithPopup(auth, googleProvider);
       await ensureClientDocs(cred.user);
       toast.success('¡Bienvenido!');
-      navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace: true });
+      // El useEffect se encarga del redirect según el rol
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error('Error al iniciar con Google. Intenta de nuevo.');
+        toast.error(FIREBASE_ERRORS[err.code] ?? 'Error al iniciar con Google. Intenta de nuevo.');
       }
     } finally {
       setBusy(false);
@@ -249,7 +287,7 @@ export default function ClientAuthPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex">
 
-      {/* ── PANEL IZQUIERDO — solo desktop ── */}
+      {/* Panel izquierdo — solo desktop */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30" />
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" />
@@ -261,8 +299,6 @@ export default function ClientAuthPage() {
             backgroundSize: '48px 48px',
           }}
         />
-
-        {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <img src="/logo-ryb.png" alt="RB" className="h-10 object-contain" onError={(e) => { e.target.style.display = 'none'; }} />
@@ -272,8 +308,6 @@ export default function ClientAuthPage() {
             </div>
           </div>
         </div>
-
-        {/* Copy */}
         <div className="relative z-10 max-w-sm">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }}>
             <h1 className="text-4xl font-bold text-white leading-tight mb-4">
@@ -300,25 +334,22 @@ export default function ClientAuthPage() {
             </div>
           </motion.div>
         </div>
-
         <div className="relative z-10">
           <p className="text-slate-600 text-xs">© 2025 Rincón Bedoya Asociados · Anserma, Caldas</p>
         </div>
       </div>
 
-      {/* ── PANEL DERECHO — formulario ── */}
+      {/* Panel derecho — formulario */}
       <div className="w-full lg:w-1/2 flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 lg:bg-slate-950" />
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl lg:hidden" />
 
         <div className="relative z-10 w-full max-w-md">
-          {/* Logo móvil */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
             <img src="/logo-ryb.png" alt="RB" className="h-8 object-contain" onError={(e) => { e.target.style.display = 'none'; }} />
             <span className="text-amber-400 font-bold text-sm tracking-wide">RINCÓN BEDOYA ASOCIADOS</span>
           </div>
 
-          {/* Card */}
           <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-2xl shadow-black/40">
 
             {/* Tab switcher */}
@@ -344,17 +375,16 @@ export default function ClientAuthPage() {
               disabled={busy}
               className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold py-3 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-60 mb-5"
             >
-              {busy
-                ? <FaSpinner className="animate-spin text-slate-600" />
-                : (
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                )
-              }
+              {busy ? (
+                <FaSpinner className="animate-spin text-slate-600" />
+              ) : (
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+              )}
               Continuar con Google
             </button>
 
@@ -418,11 +448,7 @@ export default function ClientAuthPage() {
                   error={errors.password}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   rightEl={
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(!showPass)}
-                      className="text-slate-500 hover:text-slate-300 transition"
-                    >
+                    <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-500 hover:text-slate-300 transition">
                       {showPass ? <FaEyeSlash /> : <FaEye />}
                     </button>
                   }
@@ -438,11 +464,7 @@ export default function ClientAuthPage() {
                     error={errors.confirm}
                     autoComplete="new-password"
                     rightEl={
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirm(!showConfirm)}
-                        className="text-slate-500 hover:text-slate-300 transition"
-                      >
+                      <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="text-slate-500 hover:text-slate-300 transition">
                         {showConfirm ? <FaEyeSlash /> : <FaEye />}
                       </button>
                     }
@@ -471,10 +493,7 @@ export default function ClientAuthPage() {
           </div>
 
           <div className="text-center mt-6">
-            <a
-              href="/catalogo"
-              className="text-slate-500 hover:text-amber-400 text-sm transition flex items-center justify-center gap-1.5"
-            >
+            <a href="/catalogo" className="text-slate-500 hover:text-amber-400 text-sm transition flex items-center justify-center gap-1.5">
               <FaHome className="text-xs" /> Ver catálogo de propiedades
             </a>
           </div>

@@ -1,3 +1,25 @@
+// src/modules/notifications/services/notification.service.js
+//
+// CAMBIOS EN ESTA VERSIÓN:
+//
+// + createIfNotExists(alertKey, data)
+//     Para deduplicación. Solo crea la notificación si no existe ya una
+//     con el mismo `alertKey`. Lo usan las alertas programadas de
+//     contratos (ver functions/index.js processContractAlerts) para no
+//     enviar la misma alerta dos veces si la Cloud Function corre más
+//     de una vez en la misma ventana.
+//
+//     El alertKey es una cadena estable como:
+//       'payment_reminder_5d_<contractId>_<paymentId>'
+//       'contract_expiry_30d_<contractId>'
+//
+//     Si necesitas resetear y permitir re-envío, borra los docs de la
+//     colección que tengan ese alertKey.
+//
+// El resto del servicio queda intacto: createNotification, getUserNotifications,
+// subscribeToNotifications, markAsRead, markAllAsRead, deleteNotification,
+// y los helpers notifyDocumentExpiring/notifyNewMessage/notifyNewInquiry.
+
 import {
   collection,
   addDoc,
@@ -8,6 +30,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
@@ -30,6 +53,46 @@ export const notificationService = {
     } catch (error) {
       console.error('Error creando notificación:', error);
       throw error;
+    }
+  },
+
+  // Crear notificación SOLO si no existe ya una con el mismo alertKey.
+  //
+  // Devuelve:
+  //   { created: true, id }    si se creó la notificación
+  //   { created: false }       si ya existía y no se hizo nada
+  //
+  // alertKey debe ser una cadena estable y única para la combinación
+  // (tipo de alerta + entidad + ventana temporal). Ejemplos:
+  //   'payment_reminder_5d_contract123_payment7'
+  //   'contract_expiry_30d_contract123'
+  //   'rent_late_3d_contract123_payment4'
+  async createIfNotExists(alertKey, notificationData) {
+    if (!alertKey) {
+      throw new Error('createIfNotExists: alertKey requerido');
+    }
+    try {
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where('alertKey', '==', alertKey),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return { created: false };
+      }
+      const newNotification = {
+        ...notificationData,
+        alertKey,
+        read:      false,
+        createdAt: Timestamp.now(),
+      };
+      const docRef = await addDoc(collection(db, COLLECTION_NAME), newNotification);
+      return { created: true, id: docRef.id };
+    } catch (error) {
+      console.error('Error en createIfNotExists:', error);
+      // No relanzamos: una alerta duplicada es preferible a una caída.
+      return { created: false, error };
     }
   },
 

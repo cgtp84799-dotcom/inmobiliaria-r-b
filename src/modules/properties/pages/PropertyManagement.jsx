@@ -11,6 +11,9 @@ import {
   FaFileDownload,
   FaChevronLeft,
   FaChevronRight,
+  FaFileContract,
+  FaUser,
+  FaUserTie,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import {
@@ -25,18 +28,20 @@ import {
   limit,
   startAfter,
   getCountFromServer,
+  where,
 } from "firebase/firestore";
 import { db } from "../../../core/config/firebase.config";
 import PropertyForm from "../components/PropertyForm";
 import PropertyDetail from "../components/PropertyDetail";
-import ConfirmModal from "../../../shared/components/UI/ConfirmModal"; // ✅
-import { useAuth } from "../../../core/contexts/AuthContext"; // ✅
-import { hasPermission } from "../../users/types/user.types"; // ✅
+import ConfirmModal from "../../../shared/components/UI/ConfirmModal";
+import { useAuth } from "../../../core/contexts/AuthContext";
+import { hasPermission } from "../../users/types/user.types";
 
 const PAGE_SIZE = 12;
 
 const PropertyManagement = () => {
-  const { currentUser } = useAuth(); // ✅
+  const { currentUser } = useAuth();
+  const [activeContracts, setActiveContracts] = useState({}); // ✅
 
   // ✅ Permisos granulares
   const canCreate = hasPermission(currentUser?.role, "properties", "create");
@@ -192,6 +197,25 @@ const PropertyManagement = () => {
     (async () => {
       await loadTotalCount();
       await loadPage(1);
+      // Cargar contratos activos para mostrar en tarjetas
+      try {
+        const snap = await getDocs(
+          query(collection(db, "contracts"), where("statusGeneral", "in", ["vigente", "borrador", "pausado"]))
+        );
+        const map = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.propertyId) {
+            const existing = map[data.propertyId];
+            if (!existing || data.statusGeneral === "vigente") {
+              map[data.propertyId] = { id: d.id, ...data };
+            }
+          }
+        });
+        setActiveContracts(map);
+      } catch (e) {
+        console.warn("Error cargando contratos:", e.message);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -517,6 +541,31 @@ const handleDownloadPDF = (property) => {
                 <div className="mb-3">
                   <StatusBadge status={property.status} />
                 </div>
+
+                {activeContracts[property.id] && (() => {
+                  const c = activeContracts[property.id];
+                  const sLabel = { vigente: 'Vigente', borrador: 'Borrador', pausado: 'Pausado' };
+                  const typeLabel = { venta: 'Venta', arriendo: 'Arriendo', promesa: 'Promesa' };
+                  const isActive = c.statusGeneral === 'vigente';
+                  return (
+                    <div className={`mb-3 p-2.5 border rounded-xl ${isActive ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-500/10 border-slate-500/20'}`}>
+                      <div className={`flex items-center gap-1.5 text-[11px] font-semibold mb-1 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        <FaFileContract size={10} />
+                        {typeLabel[c.type] || c.type} · {sLabel[c.statusGeneral] || c.statusGeneral}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-300 text-xs">
+                        <FaUser size={9} className="text-slate-500" />
+                        <span className="truncate">{c.clientName || c.clientEmail || '—'}</span>
+                      </div>
+                      {c.agentName && (
+                        <div className="flex items-center gap-1.5 text-slate-500 text-[10px] mt-0.5">
+                          <FaUserTie size={8} />
+                          <span className="truncate">{c.agentName}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ✅ Botones controlados por permisos */}
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>

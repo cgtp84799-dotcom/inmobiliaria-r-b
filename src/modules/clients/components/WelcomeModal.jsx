@@ -1,9 +1,8 @@
 // src/modules/clients/components/WelcomeModal.jsx
 //
-// Modal de bienvenida que se muestra UNA SOLA VEZ al entrar por primera vez.
-// Permite al cliente completar su perfil (nombre, teléfono, preferencias).
-// Al guardar → llama a finishOnboarding() → onboardingDone = true en Firestore.
-// Si cierra sin completar → también marca onboarding como done (no forzar).
+// FIX: updateProfile necesita el objeto Auth User puro de Firebase,
+// no el currentUser del contexto (que ahora ES el Auth User puro, pero
+// por seguridad importamos auth directamente y usamos auth.currentUser).
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,18 +48,24 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
           updatedAt:        serverTimestamp(),
         });
       }
-      // Actualizar displayName en Firebase Auth si cambió
-      if (currentUser && form.nombre.trim() && form.nombre.trim() !== currentUser.displayName) {
-        await updateProfile(currentUser, { displayName: form.nombre.trim() });
+
+      // FIX: Usar auth.currentUser (el objeto Auth puro) en vez de currentUser del contexto.
+      // auth.currentUser siempre es el Firebase Auth User con getIdToken(), etc.
+      const authUser = auth.currentUser;
+      if (authUser && form.nombre.trim() && form.nombre.trim() !== authUser.displayName) {
+        await updateProfile(authUser, { displayName: form.nombre.trim() });
       }
+
       // Actualizar users/{email}
-      if (currentUser?.email) {
-        await updateDoc(doc(db, 'users', currentUser.email), {
-          displayName: form.nombre.trim() || currentUser.displayName,
+      const email = currentUser?.email || authUser?.email;
+      if (email) {
+        await updateDoc(doc(db, 'users', email), {
+          displayName: form.nombre.trim() || currentUser?.displayName,
           phone:       form.telefono.trim(),
           updatedAt:   serverTimestamp(),
         });
       }
+
       setStep(STEPS.indexOf('listo'));
     } catch (err) {
       console.error('WelcomeModal handleFinish:', err);
@@ -72,7 +77,6 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   }
 
   async function handleSkip() {
-    // Marcar onboarding como done aunque no haya completado nada
     if (clientId) {
       try {
         await updateDoc(doc(db, 'clients', clientId), {
@@ -92,21 +96,18 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
       <motion.div
         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       />
 
-      {/* Card */}
       <motion.div
         className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden"
         initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       >
-        {/* Progress bar */}
         <div className="h-1 bg-slate-800">
           <motion.div
             className="h-full bg-amber-500"
@@ -117,22 +118,13 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
 
         <div className="p-7">
           <AnimatePresence mode="wait">
-            {/* STEP 0: Bienvenida */}
             {step === 0 && (
-              <motion.div
-                key="bienvenida"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.25 }}
-              >
+              <motion.div key="bienvenida" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.25 }}>
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-3xl">👋</span>
                   </div>
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    ¡Bienvenido al portal!
-                  </h2>
+                  <h2 className="text-2xl font-bold text-white mb-2">¡Bienvenido al portal!</h2>
                   <p className="text-slate-400 text-sm leading-relaxed">
                     Tarda menos de 2 minutos en configurar tu perfil para que podamos mostrarte
                     las propiedades que más te interesan.
@@ -151,30 +143,19 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={() => setStep(1)}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-amber-500/20"
-                >
+                <button onClick={() => setStep(1)}
+                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-amber-500/20">
                   Configurar mi perfil <FaArrowRight className="text-xs" />
                 </button>
-                <button
-                  onClick={handleSkip}
-                  className="w-full mt-2 text-sm text-slate-500 hover:text-slate-400 py-2 transition"
-                >
+                <button onClick={handleSkip}
+                  className="w-full mt-2 text-sm text-slate-500 hover:text-slate-400 py-2 transition">
                   Omitir por ahora
                 </button>
               </motion.div>
             )}
 
-            {/* STEP 1: Datos personales */}
             {step === 1 && (
-              <motion.div
-                key="perfil"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.25 }}
-              >
+              <motion.div key="perfil" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.25 }}>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
                     <FaUser className="text-amber-400 text-sm" />
@@ -186,63 +167,37 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                 </div>
                 <div className="space-y-3 mb-6">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-                      Nombre completo
-                    </label>
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Nombre completo</label>
                     <div className="relative">
                       <FaUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-                      <input
-                        value={form.nombre}
-                        onChange={update('nombre')}
-                        placeholder="Tu nombre completo"
-                        className={`${inputClass} pl-9`}
-                        autoComplete="name"
-                      />
+                      <input value={form.nombre} onChange={update('nombre')} placeholder="Tu nombre completo"
+                        className={`${inputClass} pl-9`} autoComplete="name" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-                      Teléfono (opcional)
-                    </label>
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Teléfono (opcional)</label>
                     <div className="relative">
                       <FaPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-                      <input
-                        value={form.telefono}
-                        onChange={update('telefono')}
-                        placeholder="Ej: 3001234567"
-                        type="tel"
-                        className={`${inputClass} pl-9`}
-                        autoComplete="tel"
-                      />
+                      <input value={form.telefono} onChange={update('telefono')} placeholder="Ej: 3001234567" type="tel"
+                        className={`${inputClass} pl-9`} autoComplete="tel" />
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setStep(0)}
-                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition"
-                  >
+                  <button onClick={() => setStep(0)}
+                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition">
                     Atrás
                   </button>
-                  <button
-                    onClick={() => setStep(2)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition"
-                  >
+                  <button onClick={() => setStep(2)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition">
                     Continuar <FaArrowRight className="text-xs" />
                   </button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 2: Preferencias */}
             {step === 2 && (
-              <motion.div
-                key="preferencias"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.25 }}
-              >
+              <motion.div key="preferencias" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.25 }}>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
                     <FaHome className="text-amber-400 text-sm" />
@@ -254,39 +209,21 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                 </div>
                 <div className="space-y-3 mb-6">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-                      Zona de interés
-                    </label>
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Zona de interés</label>
                     <div className="relative">
                       <FaMapMarkerAlt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-                      <input
-                        value={form.ubicacionInteres}
-                        onChange={update('ubicacionInteres')}
-                        placeholder="Ej: Laureles, El Poblado, Envigado"
-                        className={`${inputClass} pl-9`}
-                      />
+                      <input value={form.ubicacionInteres} onChange={update('ubicacionInteres')}
+                        placeholder="Ej: Laureles, El Poblado, Envigado" className={`${inputClass} pl-9`} />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-                      Presupuesto máximo (opcional)
-                    </label>
-                    <input
-                      value={form.presupuesto}
-                      onChange={update('presupuesto')}
-                      placeholder="Ej: 500.000.000"
-                      className={inputClass}
-                    />
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Presupuesto máximo (opcional)</label>
+                    <input value={form.presupuesto} onChange={update('presupuesto')}
+                      placeholder="Ej: 500.000.000" className={inputClass} />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-                      Tipo de propiedad
-                    </label>
-                    <select
-                      value={form.tipoPropiedad}
-                      onChange={update('tipoPropiedad')}
-                      className={inputClass}
-                    >
+                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Tipo de propiedad</label>
+                    <select value={form.tipoPropiedad} onChange={update('tipoPropiedad')} className={inputClass}>
                       <option value="">Sin preferencia</option>
                       <option value="Apartamento">Apartamento</option>
                       <option value="Casa">Casa</option>
@@ -298,17 +235,12 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setStep(1)}
-                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition"
-                  >
+                  <button onClick={() => setStep(1)}
+                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition">
                     Atrás
                   </button>
-                  <button
-                    onClick={handleFinish}
-                    disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition disabled:opacity-60"
-                  >
+                  <button onClick={handleFinish} disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition disabled:opacity-60">
                     {saving ? <FaSpinner className="animate-spin" /> : <FaCheckCircle />}
                     {saving ? 'Guardando...' : 'Guardar y entrar'}
                   </button>
@@ -316,31 +248,19 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
               </motion.div>
             )}
 
-            {/* STEP 3: Listo */}
             {step === 3 && (
-              <motion.div
-                key="listo"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-                className="text-center py-4"
-              >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                  className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-5"
-                >
+              <motion.div key="listo" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }} className="text-center py-4">
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                  className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-5">
                   <FaCheckCircle className="text-emerald-400 text-3xl" />
                 </motion.div>
                 <h2 className="text-2xl font-bold text-white mb-2">¡Todo listo!</h2>
                 <p className="text-slate-400 text-sm mb-6">
                   Tu perfil está configurado. Ya puedes explorar propiedades y gestionar tus visitas.
                 </p>
-                <button
-                  onClick={onDone}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-amber-500/20"
-                >
+                <button onClick={onDone}
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-amber-500/20">
                   Ir a mi portal →
                 </button>
               </motion.div>

@@ -1,31 +1,43 @@
 // src/modules/users/services/user.service.js
 //
-// ⚠️ MODELO DE DATOS: docId en /users ES el email (no el uid de Firebase Auth)
-//    Toda operación que necesita identificar un usuario usa el email como id.
-//    createUser() crea el doc en Firestore — la cuenta en Auth la crea el admin
-//    a través de Cloud Function o del panel de Firebase.
+// ═══════════════════════════════════════════════════════════════════
+// AUDITORÍA - FIXES APLICADOS:
+//
+//   1. ★ FIX CRÍTICO (previo): createUser() ya NO usa
+//      createUserWithEmailAndPassword como fallback.
+//
+//   2. ★ FIX CRÍTICO (previo): deleteUser() tiene protección contra
+//      auto-eliminación.
+//
+//   3. ★ FIX NUEVO: CF_BASE_URL ahora se construye correctamente.
+//      Con Firebase Functions v2, la URL puede ser:
+//        - En algunos proyectos: https://us-central1-PROJECT.cloudfunctions.net/FUNCTION
+//        - En otros (gen2 run): https://FUNCTION-HASH-uc.a.run.app
+//      Para máxima compatibilidad, usamos la variable de entorno
+//      VITE_FUNCTIONS_BASE_URL si está definida.
+//      Si no, construimos la URL estándar de v2 con el projectId.
+//
+//   4. ★ FIX: Mejor manejo de errores HTTP con mensajes claros.
+// ═══════════════════════════════════════════════════════════════════
 
 import { auth, db } from '../../../core/config/firebase.config';
 import {
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  updateProfile,
 } from 'firebase/auth';
 import {
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  Timestamp,
-  query,
-  where,
-  limit,
+  collection, doc, setDoc, getDoc, getDocs,
+  updateDoc, deleteDoc, Timestamp, query, where, limit,
 } from 'firebase/firestore';
 
-const USERS_COLLECTION = 'users';
+const USERS_COLLECTION   = 'users';
+const CLIENTS_COLLECTION = 'clients';
+
+// ── URL de Cloud Functions ────────────────────────────────────────────────────
+// Firebase Functions v2 usa URLs diferentes según la configuración.
+// VITE_FUNCTIONS_BASE_URL permite especificar la URL manualmente.
+// Fallback: formato estándar de Firebase Functions v1/v2.
+const CF_BASE_URL = import.meta.env.VITE_FUNCTIONS_BASE_URL
+  || `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
 
 class UserService {
 
@@ -66,11 +78,7 @@ class UserService {
   async getUserByUid(uid) {
     try {
       if (!uid) throw new Error('uid requerido');
-      const q = query(
-        collection(db, USERS_COLLECTION),
-        where('uid', '==', uid),
-        limit(1)
-      );
+      const q    = query(collection(db, USERS_COLLECTION), where('uid', '==', uid), limit(1));
       const snap = await getDocs(q);
       if (snap.empty) throw new Error('Usuario no encontrado');
       const d = snap.docs[0];
@@ -86,17 +94,50 @@ class UserService {
     }
   }
 
+  // ── Helper para llamar Cloud Functions ──────────────────────────────────
+
+  async _callCloudFunction(functionName, data) {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) {
+      throw new Error('No hay sesión activa. Inicia sesión como admin primero.');
+    }
+
+    const url = `${CF_BASE_URL}/${functionName}`;
+    console.log(`[userService] Calling CF: ${url}`);
+
+    const res = await fetch(url, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ data }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      const errMsg = errBody.error || `Error del servidor (${res.status})`;
+
+      // Si es 404, posiblemente la URL de la CF es incorrecta
+      if (res.status === 404) {
+        console.error(
+          `[userService] Cloud Function "${functionName}" no encontrada en ${url}.`,
+          'Si usas Firebase Functions v2, verifica la URL en la consola de Firebase.',
+          'Puedes setear VITE_FUNCTIONS_BASE_URL en tu .env'
+        );
+        throw new Error(
+          `Función "${functionName}" no encontrada. Verifica que las Cloud Functions estén desplegadas ` +
+          `y que VITE_FUNCTIONS_BASE_URL esté configurada correctamente en tu .env`
+        );
+      }
+
+      throw new Error(errMsg);
+    }
+
+    return res.json();
+  }
+
   // ── CREAR ─────────────────────────────────────────────────────────────────
-  //
-  // Flujo:
-  //  1. createUserWithEmailAndPassword  → crea la cuenta en Firebase Auth
-  //  2. updateProfile                   → asigna displayName en Auth
-  //  3. setDoc(email)                   → crea el perfil en Firestore (docId = email)
-  //
-  // El admin que ejecuta esta acción NO pierde su sesión porque Firebase Auth
-  // solo desloguea al usuario si la sesión activa cambia — createUserWithEmailAndPassword
-  // no modifica la sesión del admin en navegadores modernos (cada llamada es independiente).
-  // Si en producción esto causa problemas, la solución definitiva es una Cloud Function.
 
   async createUser(userData, password) {
     const { displayName, email, phone, role, status } = userData;
@@ -106,34 +147,36 @@ class UserService {
     if (!role)     throw new Error('Rol requerido');
 
     try {
-      // 1. Crear en Auth
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = credential.user.uid;
-
-      // 2. displayName en Auth
-      if (displayName) {
-        await updateProfile(credential.user, { displayName });
-      }
-
-      // 3. Perfil en Firestore (docId = email)
-      const profile = {
-        uid,
+      const result = await this._callCloudFunction('createUserByAdmin', {
         email,
-        displayName: displayName || '',
-        phone:       phone        || '',
-        role:        role         || 'viewer',
-        status:      status       || 'active',
-        photoURL:    '',
-        createdAt:   Timestamp.now(),
-        updatedAt:   Timestamp.now(),
+        password,
+        displayName,
+        phone,
+        role,
+        status: status || 'active',
+      });
+
+      return {
+        id: email,
+        email,
+        displayName,
+        phone,
+        role,
+        status: status || 'active',
+        uid: result.result?.uid,
       };
 
-      await setDoc(doc(db, USERS_COLLECTION, email), profile);
-
-      return { id: email, ...profile };
     } catch (error) {
       console.error('Error creando usuario:', error);
-      // Propaga el error para que UserEditModal lo muestre en la UI
+
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(
+          'No se pudo conectar con el servidor de Cloud Functions. ' +
+          'Verifica que las funciones estén desplegadas y que la URL sea correcta. ' +
+          'URL actual: ' + CF_BASE_URL
+        );
+      }
+
       throw error;
     }
   }
@@ -155,7 +198,6 @@ class UserService {
     }
   }
 
-  // userId aquí realmente es email (docId = email)
   async updateUser(email, userData) {
     try {
       if (!email) throw new Error('Email requerido');
@@ -185,22 +227,52 @@ class UserService {
   }
 
   // ── ELIMINAR ──────────────────────────────────────────────────────────────
-  //
-  // Solo elimina el perfil de Firestore.
-  // La cuenta en Firebase Auth NO se elimina desde el cliente (requiere Admin SDK).
-  // El usuario quedará en Auth sin doc en Firestore → el listener de AuthContext
-  // manejará ese caso (userData = null, rol = null → redirige a login).
-  // Para eliminar de Auth también, usa una Cloud Function en el siguiente PR.
 
-  async deleteUser(email) {
-    try {
-      if (!email) throw new Error('Email requerido');
-      await deleteDoc(doc(db, USERS_COLLECTION, email));
-      return { success: true };
-    } catch (error) {
-      console.error('Error eliminando usuario:', error);
-      throw error;
+  async deleteUser(email, userRole = null) {
+    if (!email) throw new Error('Email requerido');
+
+    // ★ PROTECCIÓN: No eliminar al usuario actualmente logueado
+    const currentEmail = auth.currentUser?.email;
+    if (currentEmail && currentEmail.toLowerCase() === email.toLowerCase()) {
+      throw new Error('No puedes eliminar tu propia cuenta desde aquí.');
     }
+
+    // Paso 1: Intentar Cloud Function
+    let cfSuccess = false;
+    try {
+      await this._callCloudFunction('deleteUserComplete', { userId: email });
+      cfSuccess = true;
+      console.log(`[userService] deleteUserComplete OK para ${email}`);
+    } catch (cfErr) {
+      console.warn('[userService] Cloud Function deleteUserComplete falló:', cfErr.message);
+    }
+
+    // Paso 2: Si la CF falló, eliminar /users/{email} manualmente
+    if (!cfSuccess) {
+      try {
+        await deleteDoc(doc(db, USERS_COLLECTION, email));
+      } catch (err) {
+        console.error('Error eliminando /users:', err);
+        throw err;
+      }
+    }
+
+    // Paso 3: Eliminar doc en /clients si el usuario es viewer
+    const roleIsViewer = userRole === 'viewer' || !userRole;
+    if (roleIsViewer) {
+      try {
+        const q    = query(collection(db, CLIENTS_COLLECTION), where('email', '==', email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+          console.log(`[userService] Eliminado doc /clients para ${email}`);
+        }
+      } catch (clientErr) {
+        console.warn('[userService] Error eliminando /clients:', clientErr.message);
+      }
+    }
+
+    return { success: true };
   }
 
   // ── CONTRASEÑA ────────────────────────────────────────────────────────────

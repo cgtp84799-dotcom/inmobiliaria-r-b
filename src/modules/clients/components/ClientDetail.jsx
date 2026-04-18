@@ -1,4 +1,15 @@
 // src/modules/clients/components/ClientDetail.jsx
+//
+// BUG CORREGIDO:
+//   const canEdit = hasPermission(currentUser?.role, 'clients', 'update');
+//   → currentUser.role NO ES CONFIABLE. Firebase Auth no tiene `role`.
+//     El rol viene de Firestore /users/{email} y se expone en `userData.role`.
+//   → Resultado: canEdit = hasPermission(undefined, ...) = false SIEMPRE
+//   → El botón "Editar" nunca aparecía en el detalle del cliente.
+//
+// FIX: usar userData?.role en lugar de currentUser?.role.
+// También: eliminado orderBy en AppointmentsTab (requería índice compuesto).
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -28,7 +39,6 @@ import { formatShort } from '../../../shared/utils/formatDate';
 import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 import toast from 'react-hot-toast';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function toDate(val) {
   if (!val) return null;
   if (val?.toDate) return val.toDate();
@@ -46,7 +56,6 @@ function cleanPhone(p = '') {
   return d.startsWith('57') ? d : `57${d}`;
 }
 
-// ── Config de actividad ───────────────────────────────────────────────────────
 const ACT_CFG = {
   visita:            { icon: FaEye,           color: 'text-blue-400',    label: 'Visita' },
   visit_approved:    { icon: FaCheckCircle,   color: 'text-emerald-400', label: 'Visita aprobada' },
@@ -69,7 +78,6 @@ const STATUS_CFG = {
   rescheduled: { icon: FaCalendarAlt, color: 'text-blue-300',   label: 'Reagendada' },
 };
 
-// ── Badges ────────────────────────────────────────────────────────────────────
 const TipoBadge = ({ tipo }) => {
   const s = {
     Lead: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
@@ -80,7 +88,6 @@ const TipoBadge = ({ tipo }) => {
   };
   return <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${s[tipo] || s.Lead}`}>{tipo}</span>;
 };
-
 const EstadoBadge = ({ estado }) => {
   const s = {
     Activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
@@ -91,7 +98,6 @@ const EstadoBadge = ({ estado }) => {
   return <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${s[estado] || s.Activo}`}>{estado}</span>;
 };
 
-// ── ActivityTab ───────────────────────────────────────────────────────────────
 function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,9 +117,18 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
       query(collection(db, 'clients', client.id, 'history'), orderBy('createdAt', 'desc')),
       (s) => { histItems = s.docs.map((d) => ({ _id: d.id, _src: 'history', _sort: d.data().createdAt, ...d.data() })); done[0] = true; merge(); }
     );
+    // FIX: eliminado orderBy('date', 'desc') de appointments — requería índice compuesto
     const u2 = onSnapshot(
-      query(collection(db, 'appointments'), where('clientId', '==', client.id), orderBy('date', 'desc')),
-      (s) => { apptItems = s.docs.map((d) => { const data = d.data(); const dt = data.date ? parseISO(`${data.date}T${data.time || '09:00'}`) : null; return { _id: d.id, _src: 'appointment', _sort: (dt && isValid(dt)) ? dt : data.createdAt, ...data }; }); done[1] = true; merge(); },
+      query(collection(db, 'appointments'), where('clientId', '==', client.id)),
+      (s) => {
+        apptItems = s.docs.map((d) => {
+          const data = d.data();
+          const dt = data.date ? parseISO(`${data.date}T${data.time || '09:00'}`) : null;
+          return { _id: d.id, _src: 'appointment', _sort: (dt && isValid(dt)) ? dt : data.createdAt, ...data };
+        });
+        done[1] = true;
+        merge();
+      },
       () => { done[1] = true; merge(); }
     );
     return () => { u1(); u2(); };
@@ -180,16 +195,26 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
   );
 }
 
-// ── ContractsTab ──────────────────────────────────────────────────────────────
 function ContractsTab({ clientId }) {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!clientId) return;
+    // FIX: eliminado orderBy — podría requerir índice. Ordenar en cliente.
     const unsub = onSnapshot(
-      query(collection(db, 'contracts'), where('clientId', '==', clientId), orderBy('createdAt', 'desc')),
-      (s) => { setContracts(s.docs.map((d) => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      query(collection(db, 'contracts'), where('clientId', '==', clientId)),
+      (s) => {
+        const docs = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // Ordenar por createdAt desc en cliente
+        docs.sort((a, b) => {
+          const at = a.createdAt?.toDate?.()?.getTime?.() ?? a.createdAt?.seconds ?? 0;
+          const bt = b.createdAt?.toDate?.()?.getTime?.() ?? b.createdAt?.seconds ?? 0;
+          return bt - at;
+        });
+        setContracts(docs);
+        setLoading(false);
+      },
       () => setLoading(false)
     );
     return unsub;
@@ -227,7 +252,6 @@ function ContractsTab({ clientId }) {
   );
 }
 
-// ── FavoritesTab ──────────────────────────────────────────────────────────────
 function FavoritesTab({ favoriteIds }) {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -268,7 +292,6 @@ function FavoritesTab({ favoriteIds }) {
   );
 }
 
-// ── NUEVO: PortalTab ──────────────────────────────────────────────────────────
 function PortalTab({ client }) {
   const hasPortal = !!client?.createdViaPortal;
   const email     = client?.email;
@@ -279,16 +302,18 @@ function PortalTab({ client }) {
   const [sending, setSending] = useState(false);
   const [sendingInvite, setSendingInvite] = useState(false);
 
-  // Últimas notificaciones del cliente
   useEffect(() => {
-    if (!email) return;
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', email),
-      orderBy('createdAt', 'desc')
-    );
+    if (!email) { setLoadingNotifs(false); return; }
+    // FIX: eliminado orderBy — podría requerir índice
+    const q = query(collection(db, 'notifications'), where('userId', '==', email));
     const unsub = onSnapshot(q, (s) => {
-      setNotifications(s.docs.slice(0, 10).map((d) => ({ id: d.id, ...d.data() })));
+      const docs = s.docs.slice(0, 10).map((d) => ({ id: d.id, ...d.data() }));
+      docs.sort((a, b) => {
+        const at = a.createdAt?.toDate?.()?.getTime?.() ?? a.createdAt?.seconds ?? 0;
+        const bt = b.createdAt?.toDate?.()?.getTime?.() ?? b.createdAt?.seconds ?? 0;
+        return bt - at;
+      });
+      setNotifications(docs);
       setLoadingNotifs(false);
     }, () => setLoadingNotifs(false));
     return unsub;
@@ -347,14 +372,13 @@ function PortalTab({ client }) {
   }
 
   const NOTIF_TYPE_OPTS = [
-    { value: NOTIF_TYPES.MANUAL,        label: 'General' },
-    { value: NOTIF_TYPES.NEW_PROPERTY,  label: 'Nueva propiedad' },
-    { value: NOTIF_TYPES.WELCOME,       label: 'Bienvenida' },
+    { value: NOTIF_TYPES.MANUAL,       label: 'General' },
+    { value: NOTIF_TYPES.NEW_PROPERTY, label: 'Nueva propiedad' },
+    { value: NOTIF_TYPES.WELCOME,      label: 'Bienvenida' },
   ];
 
   return (
     <div className="space-y-5">
-      {/* Portal status */}
       <div className={`flex items-center gap-3 p-4 rounded-xl border ${hasPortal ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-slate-800/40 border-slate-700/40'}`}>
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${hasPortal ? 'bg-emerald-500/15' : 'bg-slate-700/40'}`}>
           {hasPortal ? <FaGlobe className="text-emerald-400" size={14} /> : <FaLock className="text-slate-500" size={14} />}
@@ -369,26 +393,18 @@ function PortalTab({ client }) {
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={handleSendInvite}
-          disabled={sendingInvite || !email}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-300 border border-amber-600/40 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
-        >
+        <button onClick={handleSendInvite} disabled={sendingInvite || !email}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-300 border border-amber-600/40 hover:bg-amber-500/10 transition-colors disabled:opacity-50">
           {sendingInvite ? <FaSpinner className="animate-spin" size={10} /> : <FaEnvelope size={10} />}
           Enviar invitación al portal
         </button>
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={!email}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-blue-300 border border-blue-600/40 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
-        >
+        <button onClick={() => setShowModal(true)} disabled={!email}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-blue-300 border border-blue-600/40 hover:bg-blue-500/10 transition-colors disabled:opacity-50">
           <FaBell size={10} /> Enviar notificación
         </button>
       </div>
 
-      {/* Recent notifications */}
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Últimas notificaciones</p>
         {loadingNotifs ? (
@@ -418,7 +434,6 @@ function PortalTab({ client }) {
         )}
       </div>
 
-      {/* Send notification modal */}
       <AnimatePresence>
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -436,38 +451,26 @@ function PortalTab({ client }) {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1.5">Tipo</label>
-                  <select
-                    value={notifForm.type}
-                    onChange={(e) => setNotifForm((f) => ({ ...f, type: e.target.value }))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 transition"
-                  >
+                  <select value={notifForm.type} onChange={(e) => setNotifForm((f) => ({ ...f, type: e.target.value }))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 transition">
                     {NOTIF_TYPE_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1.5">Título</label>
-                  <input
-                    value={notifForm.title}
-                    onChange={(e) => setNotifForm((f) => ({ ...f, title: e.target.value }))}
+                  <input value={notifForm.title} onChange={(e) => setNotifForm((f) => ({ ...f, title: e.target.value }))}
                     placeholder="Ej: Nueva propiedad disponible"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition"
-                  />
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1.5">Mensaje</label>
-                  <textarea
-                    value={notifForm.message}
-                    onChange={(e) => setNotifForm((f) => ({ ...f, message: e.target.value }))}
+                  <textarea value={notifForm.message} onChange={(e) => setNotifForm((f) => ({ ...f, message: e.target.value }))}
                     placeholder="Escribe el mensaje para el cliente..."
                     rows={3}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition resize-none"
-                  />
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition resize-none" />
                 </div>
-                <button
-                  onClick={handleSendNotif}
-                  disabled={sending}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-60"
-                >
+                <button onClick={handleSendNotif} disabled={sending}
+                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-60">
                   {sending ? <FaSpinner className="animate-spin" size={12} /> : <FaPaperPlane size={12} />}
                   Enviar notificación
                 </button>
@@ -480,31 +483,31 @@ function PortalTab({ client }) {
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
 export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit, onAddActivity }) {
-  const { currentUser } = useAuth();
+  // FIX CRÍTICO: usar userData?.role, NO currentUser?.role
+  // currentUser es el objeto de Firebase Auth — no tiene el campo `role`
+  // El rol viene de Firestore /users/{email} → expuesto en userData.role
+  const { userData } = useAuth();
   const [tab, setTab] = useState('actividad');
 
   if (!client) return null;
 
-  const canEdit = hasPermission(currentUser?.role, 'clients', 'update');
-  const waLink  = client.telefono
+  // FIX: ahora usa el rol correcto → los botones Editar etc. aparecen
+  const canEdit = hasPermission(userData?.role, 'clients', 'update');
+
+  const waLink = client.telefono
     ? `https://wa.me/${cleanPhone(client.telefono)}?text=Hola%20${encodeURIComponent(client.nombre)}%2C%20te%20contactamos%20de%20R%26B%20Inmobiliaria.`
     : null;
 
   const TABS = [
-    { id: 'actividad', label: 'Actividad',  icon: FaHistory },
+    { id: 'actividad', label: 'Actividad',  icon: FaHistory      },
     { id: 'contratos', label: 'Contratos',  icon: FaFileContract },
-    { id: 'favoritos', label: 'Favoritos',  icon: FaHeart },
-    { id: 'portal',    label: 'Portal',     icon: FaMobileAlt },
+    { id: 'favoritos', label: 'Favoritos',  icon: FaHeart        },
+    { id: 'portal',    label: 'Portal',     icon: FaMobileAlt    },
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-4 h-full"
-    >
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 h-full">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -516,7 +519,6 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <TipoBadge  tipo={client.tipoCliente} />
               <EstadoBadge estado={client.estado} />
-              {/* Portal badge */}
               {client.createdViaPortal && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 flex items-center gap-1">
                   <FaMobileAlt size={8} /> Portal
@@ -526,8 +528,8 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {canEdit && (
-            <button onClick={onEdit} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Editar cliente">
+          {canEdit && onEdit && (
+            <button onClick={() => onEdit(client)} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Editar cliente">
               <FaEdit size={13} />
             </button>
           )}
@@ -580,7 +582,6 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
         )}
       </div>
 
-      {/* Notas */}
       {client.notas && (
         <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
           <div className="flex items-center gap-2 mb-1">
@@ -591,7 +592,6 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-slate-900 rounded-xl p-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
@@ -601,10 +601,9 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
         ))}
       </div>
 
-      {/* Tab content */}
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-y-auto">
-          {tab === 'actividad' && <ActivityTab client={client} onScheduleVisit={onScheduleVisit} onAddActivity={onAddActivity} />}
+          {tab === 'actividad' && <ActivityTab client={client} onScheduleVisit={() => onScheduleVisit?.(client)} onAddActivity={() => onAddActivity?.(client)} />}
           {tab === 'contratos' && <ContractsTab clientId={client.id} />}
           {tab === 'favoritos' && <FavoritesTab favoriteIds={client.favorites || []} />}
           {tab === 'portal'    && <PortalTab client={client} />}

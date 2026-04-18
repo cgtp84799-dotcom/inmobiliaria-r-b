@@ -1,66 +1,49 @@
+// src/modules/public/pages/CatalogPage.jsx
+// FIX CRÍTICO: handleFavorite era solo un console.log — no usaba useFavorites.
+// Ahora integra correctamente useFavorites para que el corazón en el catálogo
+// persista en Firestore y se refleje en el portal del cliente.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import {
-  FaSearch,
-  FaFilter,
-  FaHome,
-  FaMapMarkerAlt,
-  FaMoneyBillWave,
-  FaBed,
-  FaBath,
-  FaTimesCircle,
-  FaPlusCircle,
-  FaSpinner,
-  FaChevronLeft,
-  FaChevronRight,
+  FaSearch, FaFilter, FaHome, FaMapMarkerAlt,
+  FaMoneyBillWave, FaBed, FaBath, FaTimesCircle,
+  FaPlusCircle, FaSpinner, FaChevronLeft, FaChevronRight,
 } from "react-icons/fa";
 import propertyService from "../../properties/services/property.service";
 import PropertyCard from "../components/PropertyCard";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
+import { useFavorites } from "../../clients/hooks/useFavorites";
 
 const CatalogPage = () => {
   const [properties, setProperties] = useState([]);
   const [filteredProperties, setFilteredProperties] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // En móvil es mejor iniciar cerrado
   const [filtersOpen, setFiltersOpen] = useState(false);
-
-  // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
-
-  // Para subir al inicio del listado al paginar
   const listTopRef = useRef(null);
 
+  // ── Favoritos: estado real desde Firestore ───────────────────────────────
+  const { isFavorite, toggleFavorite } = useFavorites();
+
   const [filters, setFilters] = useState({
-    searchTerm: "",
-    type: "",
-    transactionType: "",
-    minPrice: "",
-    maxPrice: "",
-    bedrooms: "",
-    bathrooms: "",
-    city: "",
+    searchTerm: "", type: "", transactionType: "",
+    minPrice: "", maxPrice: "", bedrooms: "", bathrooms: "", city: "",
   });
 
-  useEffect(() => {
-    loadProperties();
-  }, []);
+  useEffect(() => { loadProperties(); }, []);
 
-  // Page size según dispositivo
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
-      if (w < 640) return 6; // mobile
-      if (w < 1024) return 8; // tablet
-      return 9; // desktop
+      if (w < 640)  return 6;
+      if (w < 1024) return 8;
+      return 9;
     };
-
     const apply = () => setItemsPerPage(compute());
     apply();
-
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
   }, []);
@@ -88,20 +71,19 @@ const CatalogPage = () => {
 
     if (filters.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.title?.toLowerCase().includes(term) ||
-          p.description?.toLowerCase().includes(term) ||
-          p.city?.toLowerCase().includes(term) ||
-          p.address?.toLowerCase().includes(term) ||
-          p.location?.city?.toLowerCase().includes(term) ||
-          p.location?.address?.toLowerCase().includes(term)
+      filtered = filtered.filter((p) =>
+        p.title?.toLowerCase().includes(term) ||
+        p.description?.toLowerCase().includes(term) ||
+        p.city?.toLowerCase().includes(term) ||
+        p.address?.toLowerCase().includes(term) ||
+        p.location?.city?.toLowerCase().includes(term) ||
+        p.location?.address?.toLowerCase().includes(term)
       );
     }
 
     if (filters.type) {
       filtered = filtered.filter((p) => {
-        const propType = String(p.type || "").toLowerCase();
+        const propType   = String(p.type || "").toLowerCase();
         const filterType = filters.type.toLowerCase();
         return (
           propType === filterType ||
@@ -113,60 +95,35 @@ const CatalogPage = () => {
 
     if (filters.transactionType) {
       filtered = filtered.filter((p) => {
-        const trans = String(p.transactionType || "").toLowerCase();
+        const trans      = String(p.transactionType || "").toLowerCase();
         const filterTrans = filters.transactionType.toLowerCase();
-
-        if (filterTrans === "sale") {
-          return (
-            trans === "sale" ||
-            trans === "venta" ||
-            trans === "compra"
-          );
-        }
-        if (filterTrans === "rent") {
-          return (
-            trans === "rent" ||
-            trans === "arriendo" ||
-            trans === "alquiler" ||
-            trans === "renta"
-          );
-        }
-
+        if (filterTrans === "sale") return ["sale", "venta", "compra"].includes(trans);
+        if (filterTrans === "rent") return ["rent", "arriendo", "alquiler", "renta"].includes(trans);
         return trans === filterTrans;
       });
     }
 
     if (filters.minPrice) {
-      filtered = filtered.filter(
-        (p) => Number(p.price || 0) >= Number(filters.minPrice)
-      );
+      filtered = filtered.filter((p) => Number(p.price || 0) >= Number(filters.minPrice));
     }
-
     if (filters.maxPrice) {
-      filtered = filtered.filter(
-        (p) => Number(p.price || 0) <= Number(filters.maxPrice)
-      );
+      filtered = filtered.filter((p) => Number(p.price || 0) <= Number(filters.maxPrice));
     }
-
     if (filters.bedrooms) {
       filtered = filtered.filter((p) => {
         const rooms = Number(p.rooms || p.features?.bedrooms || 0);
         return rooms >= Number(filters.bedrooms);
       });
     }
-
     if (filters.bathrooms) {
       filtered = filtered.filter((p) => {
         const baths = Number(p.bathrooms || p.features?.bathrooms || 0);
         return baths >= Number(filters.bathrooms);
       });
     }
-
     if (filters.city) {
       filtered = filtered.filter((p) => {
-        const city = String(
-          p.city || p.location?.city || ""
-        ).toLowerCase();
+        const city = String(p.city || p.location?.city || "").toLowerCase();
         return city.includes(filters.city.toLowerCase());
       });
     }
@@ -178,46 +135,25 @@ const CatalogPage = () => {
 
   const clearFilters = () => {
     const cleared = {
-      searchTerm: "",
-      type: "",
-      transactionType: "",
-      minPrice: "",
-      maxPrice: "",
-      bedrooms: "",
-      bathrooms: "",
-      city: "",
+      searchTerm: "", type: "", transactionType: "",
+      minPrice: "", maxPrice: "", bedrooms: "", bathrooms: "", city: "",
     };
     setFilters(cleared);
     setFilteredProperties(properties);
     setCurrentPage(1);
   };
 
-  const handleFavorite = (propertyId) => {
-    console.log("Favorito:", propertyId);
-  };
-
   const hasActiveFilters = useMemo(() => {
-    return Object.values(filters).some(
-      (v) => String(v).trim() !== ""
-    );
+    return Object.values(filters).some((v) => String(v).trim() !== "");
   }, [filters]);
 
-  // Datos paginados
+  // Paginación
   const totalItems = filteredProperties.length;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalItems / itemsPerPage)
-  );
-  const safePage = Math.min(
-    Math.max(currentPage, 1),
-    totalPages
-  );
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safePage   = Math.min(Math.max(currentPage, 1), totalPages);
   const startIndex = (safePage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProperties = filteredProperties.slice(
-    startIndex,
-    endIndex
-  );
+  const endIndex   = startIndex + itemsPerPage;
+  const paginatedProperties = filteredProperties.slice(startIndex, endIndex);
 
   useEffect(() => {
     if (safePage !== currentPage) setCurrentPage(safePage);
@@ -227,12 +163,8 @@ const CatalogPage = () => {
   const goToPage = (page) => {
     const next = Math.min(Math.max(page, 1), totalPages);
     setCurrentPage(next);
-
     setTimeout(() => {
-      listTopRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   };
 
@@ -241,27 +173,13 @@ const CatalogPage = () => {
 
   const PaginationNumbers = ({ className = "" }) => {
     if (totalPages <= 1) return null;
-
-    const pages = Array.from(
-      { length: totalPages },
-      (_, i) => i + 1
-    );
-
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
     return (
-      <div
-        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${className}`}
-      >
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${className}`}>
         <p className="text-xs text-slate-500">
-          Página{" "}
-          <span className="text-slate-200 font-semibold">
-            {safePage}
-          </span>{" "}
-          de{" "}
-          <span className="text-slate-200 font-semibold">
-            {totalPages}
-          </span>
+          Página <span className="text-slate-200 font-semibold">{safePage}</span> de{" "}
+          <span className="text-slate-200 font-semibold">{totalPages}</span>
         </p>
-
         <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-end">
           <button
             onClick={goPrev}
@@ -270,11 +188,8 @@ const CatalogPage = () => {
             aria-label="Página anterior"
           >
             <FaChevronLeft />
-            <span className="hidden sm:inline">
-              Anterior
-            </span>
+            <span className="hidden sm:inline">Anterior</span>
           </button>
-
           {pages.map((p) => (
             <button
               key={p}
@@ -284,23 +199,18 @@ const CatalogPage = () => {
                   ? "bg-primary/20 border-primary/40 text-primary font-black"
                   : "border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-slate-900"
               }`}
-              aria-current={
-                p === safePage ? "page" : undefined
-              }
+              aria-current={p === safePage ? "page" : undefined}
             >
               {p}
             </button>
           ))}
-
           <button
             onClick={goNext}
             disabled={safePage === totalPages}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700 text-slate-200 text-sm hover:border-slate-500 hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Página siguiente"
           >
-            <span className="hidden sm:inline">
-              Siguiente
-            </span>
+            <span className="hidden sm:inline">Siguiente</span>
             <FaChevronRight />
           </button>
         </div>
@@ -308,19 +218,18 @@ const CatalogPage = () => {
     );
   };
 
-  // --- SEO dinámico del catálogo ---
+  // SEO dinámico
   const cityLabel = filters.city.trim();
   const typeLabel = (() => {
     const t = filters.type.toLowerCase();
     if (!t) return "";
     if (t.includes("apart")) return "apartamentos";
-    if (t.includes("casa")) return "casas";
-    if (t.includes("lote")) return "lotes";
+    if (t.includes("casa"))  return "casas";
+    if (t.includes("lote"))  return "lotes";
     if (t.includes("finca")) return "fincas";
     if (t.includes("commercial")) return "locales comerciales";
     return "propiedades";
   })();
-
   const operationLabel = (() => {
     const o = filters.transactionType.toLowerCase();
     if (o === "sale") return "en venta";
@@ -328,111 +237,50 @@ const CatalogPage = () => {
     return "";
   })();
 
-  const baseTitle =
-    "Propiedades en Venta y Arriendo en Anserma, Caldas | Inmobiliaria Rincón Bedoya";
-  const baseDescription =
-    "Explora casas, apartamentos, lotes y fincas disponibles para compra, venta y arriendo en Anserma, Riosucio, Supía, Belalcázar, Dosquebradas y Caldas. Inmobiliaria Rincón Bedoya y Asociados.";
+  const baseTitle       = "Propiedades en Venta y Arriendo en Anserma, Caldas | Inmobiliaria Rincón Bedoya";
+  const baseDescription = "Explora casas, apartamentos, lotes y fincas disponibles para compra, venta y arriendo en Anserma, Riosucio, Supía, Belalcázar, Dosquebradas y Caldas. Inmobiliaria Rincón Bedoya y Asociados.";
 
-  let seoTitle = baseTitle;
+  let seoTitle       = baseTitle;
   let seoDescription = baseDescription;
 
   if (cityLabel || typeLabel || operationLabel) {
     const pieces = [];
-
-    if (typeLabel) {
-      pieces.push(
-        `${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(1)}`
-      );
-    } else {
-      pieces.push("Propiedades");
-    }
-
-    if (operationLabel) {
-      pieces.push(operationLabel);
-    }
-
-    if (cityLabel) {
-      pieces.push(`en ${cityLabel}`);
-    } else {
-      pieces.push("en Anserma y Caldas");
-    }
+    if (typeLabel) pieces.push(`${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(1)}`);
+    else           pieces.push("Propiedades");
+    if (operationLabel) pieces.push(operationLabel);
+    if (cityLabel)  pieces.push(`en ${cityLabel}`);
+    else            pieces.push("en Anserma y Caldas");
 
     seoTitle = `${pieces.join(" ")} | Inmobiliaria Rincón Bedoya`;
 
     const descParts = [];
-
-    if (typeLabel) {
-      descParts.push(
-        `${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(
-          1
-        )} ${operationLabel || "disponibles"}`
-      );
-    } else {
-      descParts.push(
-        `Propiedades ${
-          operationLabel || "disponibles"
-        }`
-      );
-    }
-
-    if (cityLabel) {
-      descParts.push(`en ${cityLabel}`);
-    } else {
-      descParts.push("en Anserma, Riosucio, Supía y Caldas");
-    }
-
-    descParts.push(
-      "con respaldo jurídico y acompañamiento completo. Inmobiliaria Rincón Bedoya y Asociados."
-    );
-
+    if (typeLabel) descParts.push(`${typeLabel.charAt(0).toUpperCase()}${typeLabel.slice(1)} ${operationLabel || "disponibles"}`);
+    else           descParts.push(`Propiedades ${operationLabel || "disponibles"}`);
+    if (cityLabel) descParts.push(`en ${cityLabel}`);
+    else           descParts.push("en Anserma, Riosucio, Supía y Caldas");
+    descParts.push("con respaldo jurídico y acompañamiento completo. Inmobiliaria Rincón Bedoya y Asociados.");
     seoDescription = descParts.join(" ");
   }
 
-  const canonicalUrl =
-    "https://inmobiliaria-ryb-y-asociados.com/propiedades";
-
-  // Breadcrumbs dinámicos (Inicio → Propiedades)
-  const breadcrumbItems = [
-    {
-      label: "Propiedades",
-      href: "/propiedades",
-    },
-  ];
+  const canonicalUrl     = "https://inmobiliaria-ryb-y-asociados.com/propiedades";
+  const breadcrumbItems  = [{ label: "Propiedades", href: "/propiedades" }];
 
   return (
     <>
-      {/* SEO CATÁLOGO dinámico */}
       <Helmet>
         <title>{seoTitle}</title>
-        <meta
-          name="description"
-          content={seoDescription}
-        />
+        <meta name="description" content={seoDescription} />
         <link rel="canonical" href={canonicalUrl} />
-
-        <meta
-          property="og:title"
-          content={seoTitle}
-        />
-        <meta
-          property="og:description"
-          content={seoDescription}
-        />
-        <meta
-          property="og:url"
-          content={canonicalUrl}
-        />
-        <meta
-          property="og:image"
-          content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
-        />
+        <meta property="og:title"       content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:url"         content={canonicalUrl} />
+        <meta property="og:image"       content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
       </Helmet>
 
       <div className="max-w-7xl mx-auto py-6 sm:py-10 lg:py-12 px-4 sm:px-6">
-        {/* Breadcrumbs */}
         <Breadcrumbs items={breadcrumbItems} />
 
-        {/* HERO / HEADER */}
+        {/* HERO */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -445,22 +293,13 @@ const CatalogPage = () => {
               disponibles
             </span>
           </h1>
-
           <p className="mt-3 text-sm sm:text-base lg:text-lg leading-relaxed text-slate-300 max-w-2xl">
-            Explora propiedades urbanas y rurales para compra,
-            venta o arriendo. Filtra según tu necesidad y
-            encuentra el inmueble ideal.
+            Explora propiedades urbanas y rurales para compra, venta o arriendo. Filtra según tu necesidad y encuentra el inmueble ideal.
           </p>
-
           <div className="mt-4 h-px w-full max-w-2xl bg-gradient-to-r from-transparent via-slate-700/70 to-transparent" />
         </motion.div>
 
-        {/* PANEL DE FILTROS */}
-        {/* ... (resto del componente se mantiene exactamente igual que tu versión) */}
-        {/* Por espacio, aquí sigue TODO tu código tal cual desde el panel de filtros hacia abajo */}
-        {/* --- COPIA INTACTA DE TU BLOQUE ORIGINAL A PARTIR DE AQUÍ --- */}
-
-        {/* PANEL DE FILTROS */}
+        {/* FILTROS */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -473,36 +312,22 @@ const CatalogPage = () => {
                 <FaFilter className="text-primary" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-light">
-                  Filtros de búsqueda
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Ajusta los filtros para encontrar la
-                  propiedad perfecta
-                </p>
+                <h2 className="text-base sm:text-lg font-bold text-light">Filtros de búsqueda</h2>
+                <p className="text-xs text-slate-400">Ajusta los filtros para encontrar la propiedad perfecta</p>
               </div>
             </div>
-
             <div className="flex items-center gap-3 sm:justify-end">
               {hasActiveFilters && (
                 <span className="text-xs text-slate-400">
-                  Filtros activos:{" "}
-                  <span className="text-primary font-bold">
-                    Sí
-                  </span>
+                  Filtros activos: <span className="text-primary font-bold">Sí</span>
                 </span>
               )}
-
               <button
-                onClick={() =>
-                  setFiltersOpen((v) => !v)
-                }
+                onClick={() => setFiltersOpen((v) => !v)}
                 className="text-xs sm:text-sm text-primary hover:underline"
                 aria-expanded={filtersOpen}
               >
-                {filtersOpen
-                  ? "Ocultar filtros"
-                  : "Mostrar filtros"}
+                {filtersOpen ? "Ocultar filtros" : "Mostrar filtros"}
               </button>
             </div>
           </div>
@@ -513,51 +338,31 @@ const CatalogPage = () => {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
-              {/* Búsqueda general */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  Búsqueda general
-                </label>
+                <label className="block text-xs text-slate-400 mb-1">Búsqueda general</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                    <FaSearch />
-                  </span>
+                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaSearch /></span>
                   <input
                     type="text"
                     placeholder="Buscar por ubicación, descripción..."
                     value={filters.searchTerm}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        "searchTerm",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
 
-              {/* Grid de filtros */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Ciudad */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Ciudad
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Ciudad</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                      <FaMapMarkerAlt />
-                    </span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaMapMarkerAlt /></span>
                     <input
                       type="text"
                       placeholder="Anserma, Riosucio..."
                       value={filters.city}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "city",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleFilterChange("city", e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                   </div>
@@ -565,50 +370,30 @@ const CatalogPage = () => {
 
                 {/* Tipo */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Tipo de propiedad
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Tipo de propiedad</label>
                   <select
                     value={filters.type}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        "type",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => handleFilterChange("type", e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   >
                     <option value="">Todos</option>
-                    <option value="apartamento">
-                      Apartamento
-                    </option>
+                    <option value="apartamento">Apartamento</option>
                     <option value="casa">Casa</option>
                     <option value="lote">Lote</option>
                     <option value="finca">Finca</option>
-                    <option value="commercial">
-                      Local Comercial
-                    </option>
+                    <option value="commercial">Local Comercial</option>
                   </select>
                 </div>
 
                 {/* Operación */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Operación
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Operación</label>
                   <select
                     value={filters.transactionType}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        "transactionType",
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => handleFilterChange("transactionType", e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   >
-                    <option value="">
-                      Compra o Arriendo
-                    </option>
+                    <option value="">Compra o Arriendo</option>
                     <option value="sale">Venta</option>
                     <option value="rent">Arriendo</option>
                   </select>
@@ -616,26 +401,15 @@ const CatalogPage = () => {
 
                 {/* Dormitorios */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Dormitorios
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Dormitorios</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                      <FaBed />
-                    </span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaBed /></span>
                     <select
                       value={filters.bedrooms}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "bedrooms",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleFilterChange("bedrooms", e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     >
-                      <option value="">
-                        Cualquiera
-                      </option>
+                      <option value="">Cualquiera</option>
                       <option value="1">1+</option>
                       <option value="2">2+</option>
                       <option value="3">3+</option>
@@ -646,26 +420,15 @@ const CatalogPage = () => {
 
                 {/* Baños */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Baños
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Baños</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                      <FaBath />
-                    </span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaBath /></span>
                     <select
                       value={filters.bathrooms}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "bathrooms",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleFilterChange("bathrooms", e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     >
-                      <option value="">
-                        Cualquiera
-                      </option>
+                      <option value="">Cualquiera</option>
                       <option value="1">1+</option>
                       <option value="2">2+</option>
                       <option value="3">3+</option>
@@ -675,23 +438,14 @@ const CatalogPage = () => {
 
                 {/* Precio mínimo */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Precio mínimo
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Precio mínimo</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                      <FaMoneyBillWave />
-                    </span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaMoneyBillWave /></span>
                     <input
                       type="number"
                       placeholder="$ 0"
                       value={filters.minPrice}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "minPrice",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleFilterChange("minPrice", e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                   </div>
@@ -699,23 +453,14 @@ const CatalogPage = () => {
 
                 {/* Precio máximo */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Precio máximo
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Precio máximo</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
-                      <FaMoneyBillWave />
-                    </span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 text-sm"><FaMoneyBillWave /></span>
                     <input
                       type="number"
                       placeholder="$ Sin límite"
                       value={filters.maxPrice}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "maxPrice",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleFilterChange("maxPrice", e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                   </div>
@@ -725,17 +470,15 @@ const CatalogPage = () => {
                 <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:col-span-2 lg:col-span-1">
                   <button
                     onClick={applyFilters}
-                    className="w-full flex-1 inline-flex items-center justify-center gap-2 bg-primary text-slate-950 font-semibold text-sm py-2.5 rounded-xl hover:bg-yellow-500 transition-all duración-200"
+                    className="w-full flex-1 inline-flex items-center justify-center gap-2 bg-primary text-slate-950 font-semibold text-sm py-2.5 rounded-xl hover:bg-yellow-500 transition-all"
                   >
-                    <FaSearch />
-                    Aplicar filtros
+                    <FaSearch /> Aplicar filtros
                   </button>
                   <button
                     onClick={clearFilters}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-4 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl py-2.5 hover:border-slate-600 transition-all"
                   >
-                    <FaTimesCircle />
-                    Limpiar
+                    <FaTimesCircle /> Limpiar
                   </button>
                 </div>
               </div>
@@ -753,43 +496,28 @@ const CatalogPage = () => {
           >
             <div>
               <p className="text-slate-400 text-sm">
-                <span className="text-primary font-bold">
-                  {totalItems}
-                </span>{" "}
-                {totalItems === 1
-                  ? "propiedad encontrada"
-                  : "propiedades encontradas"}
+                <span className="text-primary font-bold">{totalItems}</span>{" "}
+                {totalItems === 1 ? "propiedad encontrada" : "propiedades encontradas"}
               </p>
-
               {totalItems > 0 && (
                 <p className="text-slate-500 text-xs mt-1">
                   Mostrando{" "}
-                  <span className="text-slate-300 font-semibold">
-                    {startIndex + 1}-
-                    {Math.min(endIndex, totalItems)}
-                  </span>{" "}
-                  de{" "}
-                  <span className="text-slate-300 font-semibold">
-                    {totalItems}
-                  </span>
+                  <span className="text-slate-300 font-semibold">{startIndex + 1}-{Math.min(endIndex, totalItems)}</span>
+                  {" "}de{" "}
+                  <span className="text-slate-300 font-semibold">{totalItems}</span>
                 </p>
               )}
             </div>
-
             <button
-              onClick={() =>
-                setFiltersOpen((v) => !v)
-              }
+              onClick={() => setFiltersOpen((v) => !v)}
               className="sm:hidden text-xs text-primary hover:underline"
             >
-              {filtersOpen
-                ? "Ocultar filtros"
-                : "Ajustar filtros"}
+              {filtersOpen ? "Ocultar filtros" : "Ajustar filtros"}
             </button>
           </motion.div>
         )}
 
-        {/* LISTADO / VACÍO / LOADING */}
+        {/* LISTADO */}
         {loading ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -797,9 +525,7 @@ const CatalogPage = () => {
             className="card-soft py-12 sm:py-16 px-6 text-center"
           >
             <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
-            <p className="text-slate-400">
-              Cargando propiedades...
-            </p>
+            <p className="text-slate-400">Cargando propiedades...</p>
           </motion.div>
         ) : filteredProperties.length === 0 ? (
           <motion.div
@@ -811,65 +537,50 @@ const CatalogPage = () => {
             <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
               <FaHome className="text-primary text-2xl sm:text-3xl" />
             </div>
-
             <h2 className="text-xl sm:text-2xl font-bold text-light mb-2">
-              {properties.length === 0
-                ? "Aún no hay propiedades publicadas"
-                : "No se encontraron propiedades"}
+              {properties.length === 0 ? "Aún no hay propiedades publicadas" : "No se encontraron propiedades"}
             </h2>
-
             <p className="text-slate-400 text-sm sm:text-base max-w-md mx-auto mb-6">
               {properties.length === 0
                 ? "Muy pronto encontrarás aquí casas, apartamentos, lotes y fincas disponibles para compra, venta y arriendo."
                 : "Intenta ajustar los filtros de búsqueda para ver más resultados."}
             </p>
-
             <a
               href="https://wa.me/573105968202?text=Hola,%20quiero%20información%20sobre%20propiedades"
               target="_blank"
               rel="noopener noreferrer"
               className="button-gold inline-flex items-center gap-2 px-6 sm:px-8 py-3"
             >
-              <FaPlusCircle />
-              Quiero que me contacten
+              <FaPlusCircle /> Quiero que me contacten
             </a>
           </motion.div>
         ) : (
           <>
             <div ref={listTopRef} />
-
             <PaginationNumbers className="mb-4" />
-
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duración: 0.55 }}
+              transition={{ duration: 0.55 }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-6"
             >
-              {paginatedProperties.map(
-                (property, index) => (
-                  <motion.div
-                    key={property.id}
-                    initial={{ opacity: 0, y: 18 }}
-                    whileInView={{
-                      opacity: 1,
-                      y: 0,
-                    }}
-                    viewport={{ once: true }}
-                    transition={{
-                      delay: index * 0.03,
-                      duration: 0.32,
-                    }}
-                  >
-                    <PropertyCard
-                      property={property}
-                      onFavorite={handleFavorite}
-                    />
-                  </motion.div>
-                )
-              )}
+              {paginatedProperties.map((property, index) => (
+                <motion.div
+                  key={property.id}
+                  initial={{ opacity: 0, y: 18 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.03, duration: 0.32 }}
+                >
+                  {/* FIX: isFavorite y toggleFavorite ahora conectados a Firestore */}
+                  <PropertyCard
+                    property={property}
+                    isFavorite={isFavorite(property.id)}
+                    onFavorite={toggleFavorite}
+                  />
+                </motion.div>
+              ))}
             </motion.div>
-
             <PaginationNumbers className="mt-8" />
           </>
         )}

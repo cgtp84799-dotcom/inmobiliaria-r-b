@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+// src/modules/dashboard/pages/DashboardPage.jsx
+// ══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD ADMIN — versión corregida y endurecida
+// Mantiene el estilo premium oscuro de la app y usa datos reales de Firestore
+// ══════════════════════════════════════════════════════════════════════════════
+
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AreaChart,
@@ -16,7 +22,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import {
@@ -31,7 +36,6 @@ import {
   FaArrowDown,
   FaEye,
   FaClock,
-  FaMapMarkerAlt,
   FaCheckCircle,
   FaHourglassHalf,
   FaFire,
@@ -40,18 +44,28 @@ import {
   FaCity,
   FaKey,
   FaHandshake,
-  FaPercent,
   FaSync,
   FaChartBar,
-  FaUserTie,
   FaExclamationTriangle,
   FaDoorOpen,
-  FaFilter,
   FaLayerGroup,
 } from 'react-icons/fa'
-import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore'
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  where,
+} from 'firebase/firestore'
 import { db } from '../../../core/config/firebase.config'
 import { useAuth } from '../../../core/contexts/AuthContext'
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const CHART_COLORS = ['#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#06b6d4', '#ec4899']
 
 const fmtCOP = (n) =>
   new Intl.NumberFormat('es-CO', {
@@ -62,18 +76,18 @@ const fmtCOP = (n) =>
   }).format(Number(n) || 0)
 
 const fmtCompactCOP = (n) => {
-  const v = Number(n) || 0
-  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1)}B`
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(0)}M`
-  return fmtCOP(v)
+  const value = Number(n) || 0
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(0)}M`
+  return fmtCOP(value)
 }
 
 const toDateSafe = (value) => {
   if (!value) return null
   if (typeof value?.toDate === 'function') return value.toDate()
   if (value instanceof Date) return value
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 const getTimeSafe = (value) => {
@@ -84,12 +98,18 @@ const getTimeSafe = (value) => {
 const timeAgo = (ts) => {
   const date = toDateSafe(ts)
   if (!date) return '–'
+
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
+
   if (diff < 60) return 'ahora'
   if (diff < 3600) return `${Math.floor(diff / 60)} min`
   if (diff < 86400) return `${Math.floor(diff / 3600)} h`
   if (diff < 604800) return `${Math.floor(diff / 86400)} d`
-  return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+
+  return date.toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+  })
 }
 
 const monthLabel = (date) =>
@@ -128,29 +148,39 @@ const normalizeVisitStatus = (status) => {
 
 const normalizeContractStatus = (contract) => {
   const raw = String(contract?.statusGeneral || contract?.status || '').toLowerCase()
+
   if (['active', 'vigente', 'activo'].includes(raw)) return 'active'
   if (['pendingsignature', 'pending_signature', 'por_firmar'].includes(raw)) return 'pendingsignature'
-  if (['draft', 'borrador', 'paused', 'pausado'].includes(raw)) return 'draft'
-  if (['completed', 'finalizado', 'finished'].includes(raw)) return 'completed'
+  if (['draft', 'borrador'].includes(raw)) return 'draft'
+  if (['completed', 'completedo', 'finalizado', 'finished'].includes(raw)) return 'completed'
   if (['cancelled', 'cancelado'].includes(raw)) return 'cancelled'
+  if (['paused', 'pausado'].includes(raw)) return 'draft'
+
   return 'draft'
 }
-
-const getClientName = (client) =>
-  client?.personalInfo?.name || client?.nombre || client?.name || 'Sin nombre'
-
-const getPropertyTitle = (property) =>
-  property?.title || property?.name || property?.address || 'Sin título'
 
 const getPropertyPrice = (property) => {
   const sale = Number(property?.price?.sale)
   const rent = Number(property?.price?.rent)
   const direct = Number(property?.price)
+
   if (!Number.isNaN(sale) && sale > 0) return sale
   if (!Number.isNaN(rent) && rent > 0) return rent
   if (!Number.isNaN(direct) && direct > 0) return direct
   return 0
 }
+
+const getClientName = (client) =>
+  client?.personalInfo?.name ||
+  client?.nombre ||
+  client?.name ||
+  'Sin nombre'
+
+const getPropertyTitle = (property) =>
+  property?.title ||
+  property?.name ||
+  property?.address ||
+  'Sin título'
 
 const getPropertyTypeLabel = (type) => {
   const map = {
@@ -165,34 +195,30 @@ const getPropertyTypeLabel = (type) => {
   return map[type] || type || 'Otros'
 }
 
-const CHART_COLORS = ['#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#06b6d4', '#ec4899']
-
 const STATUS_STYLES = {
-  disponible: 'badge-green',
-  vendida: 'badge-red',
-  arrendada: 'badge-blue',
-  reservada: 'badge-amber',
+  disponible: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  vendida: 'bg-red-500/15 text-red-400 border-red-500/30',
+  arrendada: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  reservada: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
 }
 
 const ACTIVITY_CFG = {
-  visit: { icon: FaCalendarCheck, tone: '#22c55e' },
-  contract: { icon: FaFileContract, tone: '#3b82f6' },
-  client: { icon: FaUsers, tone: '#f59e0b' },
-  property: { icon: FaBuilding, tone: '#a855f7' },
+  visit: { icon: FaCalendarCheck, bg: 'bg-green-500/15', text: 'text-green-400' },
+  contract: { icon: FaFileContract, bg: 'bg-blue-500/15', text: 'text-blue-400' },
+  client: { icon: FaUsers, bg: 'bg-amber-500/15', text: 'text-amber-400' },
+  property: { icon: FaBuilding, bg: 'bg-purple-500/15', text: 'text-purple-400' },
 }
 
-function toneBg(color, alpha = 0.14) {
-  if (color.startsWith('#')) {
-    const hex = color.replace('#', '')
-    if (hex.length === 6) {
-      const a = Math.round(alpha * 255)
-        .toString(16)
-        .padStart(2, '0')
-      return `#${hex}${a}`
-    }
-  }
-  return color
+const getGreeting = () => {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Buenos días'
+  if (hour < 19) return 'Buenas tardes'
+  return 'Buenas noches'
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HOOK DE DATOS
+// ══════════════════════════════════════════════════════════════════════════════
 
 function useDashboardData() {
   const [loading, setLoading] = useState(true)
@@ -214,11 +240,17 @@ function useDashboardData() {
       setLoading(true)
       setError(null)
 
-      const [propsSnap, clientsSnap, contractsSnap, visitsSnap, usersSnap] = await Promise.all([
+      const [
+        propsSnap,
+        clientsSnap,
+        contractsSnap,
+        visitsSnap,
+        usersSnap,
+      ] = await Promise.all([
         getDocs(collection(db, 'properties')),
         getDocs(collection(db, 'clients')),
         getDocs(collection(db, 'contracts')),
-        getDocs(query(collection(db, 'visits'), orderBy('createdAt', 'desc'), limit(250))),
+        getDocs(query(collection(db, 'visits'), orderBy('createdAt', 'desc'), limit(300))),
         getDocs(query(collection(db, 'users'), where('role', 'in', ['agent', 'member', 'admin']))),
       ])
 
@@ -242,6 +274,7 @@ function useDashboardData() {
       const normalizedContracts = contracts.map((c) => ({
         ...c,
         _status: normalizeContractStatus(c),
+        _value: Number(c?.value) || 0,
       }))
 
       const normalizedVisits = visits.map((v) => ({
@@ -258,6 +291,8 @@ function useDashboardData() {
       const arrendadas = normalizedProperties.filter((p) => p._status === 'arrendada')
       const reservadas = normalizedProperties.filter((p) => p._status === 'reservada')
 
+      const totalValue = normalizedProperties.reduce((sum, p) => sum + p._price, 0)
+
       const activeClients = normalizedClients.filter((c) => c.status === 'active')
       const leads = normalizedClients.filter((c) => c.status === 'lead')
 
@@ -265,8 +300,6 @@ function useDashboardData() {
         ['active', 'pendingsignature'].includes(c._status)
       )
       const pendingContracts = normalizedContracts.filter((c) => c._status === 'pendingsignature')
-
-      const totalValue = normalizedProperties.reduce((sum, p) => sum + p._price, 0)
 
       const visitsThisMonth = normalizedVisits.filter((v) => {
         const d = v._createdAt
@@ -328,16 +361,16 @@ function useDashboardData() {
 
       const typeMap = {}
       normalizedProperties.forEach((p) => {
-        const key = p.type || 'otros'
-        if (!typeMap[key]) typeMap[key] = { cantidad: 0, valor: 0 }
-        typeMap[key].cantidad += 1
-        typeMap[key].valor += p._price
+        const type = p.type || 'otros'
+        if (!typeMap[type]) typeMap[type] = { cantidad: 0, valor: 0 }
+        typeMap[type].cantidad += 1
+        typeMap[type].valor += p._price
       })
 
       setPropsByType(
         Object.entries(typeMap)
-          .map(([tipo, data]) => ({
-            tipo: getPropertyTypeLabel(tipo),
+          .map(([type, data]) => ({
+            tipo: getPropertyTypeLabel(type),
             ...data,
           }))
           .sort((a, b) => b.cantidad - a.cantidad)
@@ -358,11 +391,10 @@ function useDashboardData() {
 
       setContractStatus(Object.values(contractGroups).filter((g) => g.value > 0))
 
-      const propertiesSortedByViews = [...normalizedProperties].sort(
-        (a, b) => Number(b.views || b.viewCount || 0) - Number(a.views || a.viewCount || 0)
-      )
+      const propertiesSortedByViews = [...normalizedProperties]
+        .sort((a, b) => (Number(b.views || b.viewCount || 0) - Number(a.views || a.viewCount || 0)))
 
-      const topProps = propertiesSortedByViews.slice(0, 5).map((p) => ({
+      const topPropsWithViews = propertiesSortedByViews.slice(0, 5).map((p) => ({
         id: p.id,
         title: getPropertyTitle(p),
         type: p.type || '–',
@@ -372,9 +404,11 @@ function useDashboardData() {
         status: p._status,
       }))
 
+      const hasRealViews = topPropsWithViews.some((p) => p.views > 0)
+
       setTopProperties(
-        topProps.some((p) => p.views > 0)
-          ? topProps
+        hasRealViews
+          ? topPropsWithViews
           : [...normalizedProperties]
               .sort((a, b) => getTimeSafe(b.createdAt) - getTimeSafe(a.createdAt))
               .slice(0, 5)
@@ -400,7 +434,7 @@ function useDashboardData() {
               : v._status === 'rejected'
               ? 'Visita rechazada'
               : 'Visita solicitada',
-          subject: v.propertyName || 'Propiedad',
+          subject: v.propertyName || v.propertyTitle || 'Propiedad',
           user: v.clientName || v.agentName || '–',
           ts: v.createdAt,
         })
@@ -422,7 +456,7 @@ function useDashboardData() {
                 : c._status === 'cancelled'
                 ? 'Contrato cancelado'
                 : 'Contrato creado',
-            subject: c.parties?.buyer?.name || c.propertyName || 'Contrato',
+            subject: c.parties?.buyer?.name || c.clientName || c.propertyName || 'Contrato',
             user: c.agentName || c.agentEmail || '–',
             ts: c.createdAt,
           })
@@ -458,6 +492,7 @@ function useDashboardData() {
       setRecentActivity(activityItems.slice(0, 10))
 
       const AGENT_COLORS = ['#f59e0b', '#3b82f6', '#22c55e', '#a855f7', '#06b6d4', '#ec4899']
+
       const teamUsers = users.slice(0, 8).map((user, i) => {
         const email = user.email
         const agentVisits = visitsThisMonth.filter((v) => v.agentEmail === email).length
@@ -468,7 +503,9 @@ function useDashboardData() {
         const displayName = user.displayName || user.name || user.email || 'Usuario'
         const parts = displayName.split(' ').filter(Boolean)
         const initials =
-          parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : displayName.slice(0, 2)
+          parts.length >= 2
+            ? `${parts[0][0]}${parts[1][0]}`
+            : displayName.slice(0, 2)
 
         return {
           name: displayName,
@@ -484,22 +521,14 @@ function useDashboardData() {
       const totalProperties = normalizedProperties.length || 1
       const totalClients = normalizedClients.length || 1
 
+      const conversionVentas = Math.round((vendidas.length / totalProperties) * 100)
+      const conversionArriendos = Math.round((arrendadas.length / totalProperties) * 100)
+      const conversionLeads = Math.round((activeClients.length / totalClients) * 100)
+
       setConversion([
-        {
-          name: 'Ventas',
-          value: Math.round((vendidas.length / totalProperties) * 100),
-          fill: '#22c55e',
-        },
-        {
-          name: 'Arriendos',
-          value: Math.round((arrendadas.length / totalProperties) * 100),
-          fill: '#3b82f6',
-        },
-        {
-          name: 'Leads→Cli',
-          value: Math.round((activeClients.length / totalClients) * 100),
-          fill: '#f59e0b',
-        },
+        { name: 'Ventas', value: conversionVentas, fill: '#22c55e' },
+        { name: 'Arriendos', value: conversionArriendos, fill: '#3b82f6' },
+        { name: 'Leads→Cli', value: conversionLeads, fill: '#f59e0b' },
       ])
 
       setLastUpdated(new Date())
@@ -532,6 +561,10 @@ function useDashboardData() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// COUNT UP
+// ══════════════════════════════════════════════════════════════════════════════
+
 function useCountUp(target, duration = 1200) {
   const [value, setValue] = useState(0)
 
@@ -555,12 +588,9 @@ function useCountUp(target, duration = 1200) {
   return value
 }
 
-const SurfaceGlow = ({ color = '#f59e0b' }) => (
-  <div
-    className="pointer-events-none absolute -top-10 -right-10 h-28 w-28 rounded-full blur-3xl opacity-60"
-    style={{ background: `radial-gradient(circle, ${toneBg(color, 0.28)} 0%, transparent 70%)` }}
-  />
-)
+// ══════════════════════════════════════════════════════════════════════════════
+// UI SUBCOMPONENTS
+// ══════════════════════════════════════════════════════════════════════════════
 
 const KpiCard = ({
   icon: Icon,
@@ -577,71 +607,51 @@ const KpiCard = ({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: delay * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      whileHover={{ y: -2, scale: 1.01 }}
-      className="card-soft p-4 sm:p-5 relative overflow-hidden"
-      style={{
-        boxShadow: `0 0 0 1px ${toneBg(accent, 0.12)}, var(--shadow-card)`,
-      }}
+      whileHover={{ y: -3 }}
+      className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 group"
+      style={{ boxShadow: `0 0 0 1px ${accent}12` }}
     >
-      <SurfaceGlow color={accent} />
-
       <div
-        className="absolute top-0 left-0 h-[2px] w-full"
-        style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+        className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full opacity-10 blur-2xl group-hover:opacity-20 transition-opacity duration-500"
+        style={{ background: accent }}
+      />
+      <div
+        className="absolute top-0 left-0 h-0.5 w-full"
+        style={{ background: `linear-gradient(90deg, ${accent}00, ${accent}, ${accent}00)` }}
       />
 
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="t-muted text-xs sm:text-sm mb-1">{label}</p>
-          <p className="t-heading text-2xl sm:text-3xl leading-tight tabular-nums">{display}</p>
-
-          {sub ? (
-            <p className="text-[11px] sm:text-xs mt-2 flex items-center gap-1.5">
-              {typeof change === 'number' ? (
-                change >= 0 ? (
-                  <FaArrowUp className="text-emerald-500" />
-                ) : (
-                  <FaArrowDown className="text-red-500" />
-                )
-              ) : null}
-              <span
-                className={
-                  typeof change === 'number'
-                    ? change >= 0
-                      ? 'text-emerald-500'
-                      : 'text-red-500'
-                    : 't-faint'
-                }
-              >
-                {sub}
-              </span>
-            </p>
-          ) : null}
+      <div className="flex items-start justify-between mb-3">
+        <div className="rounded-xl p-2.5" style={{ background: `${accent}18` }}>
+          <Icon style={{ color: accent }} className="text-base" />
         </div>
 
-        <div
-          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 border"
-          style={{
-            background: toneBg(accent, 0.12),
-            borderColor: toneBg(accent, 0.22),
-            color: accent,
-          }}
-        >
-          <Icon className="text-lg sm:text-xl" />
-        </div>
+        {typeof change === 'number' && (
+          <span
+            className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg ${
+              change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+            }`}
+          >
+            {change >= 0 ? <FaArrowUp className="text-[8px]" /> : <FaArrowDown className="text-[8px]" />}
+            {Math.abs(change)}%
+          </span>
+        )}
       </div>
+
+      <p className="text-xs font-medium text-slate-400 mb-1">{label}</p>
+      <p className="text-2xl font-bold text-white tabular-nums leading-tight">{display}</p>
+      {sub ? <p className="text-[11px] text-slate-500 mt-1">{sub}</p> : null}
     </motion.div>
   )
 }
 
 const SectionHeader = ({ title, sub, children }) => (
-  <div className="flex items-end justify-between gap-3 mb-4">
+  <div className="flex items-end justify-between mb-4 gap-3">
     <div>
-      <p className="t-faint text-[11px] font-bold uppercase tracking-widest mb-0.5">{sub}</p>
-      <h3 className="t-heading text-base sm:text-lg">{title}</h3>
+      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-0.5">{sub}</p>
+      <h3 className="text-base font-bold text-white">{title}</h3>
     </div>
     {children}
   </div>
@@ -649,17 +659,16 @@ const SectionHeader = ({ title, sub, children }) => (
 
 const ChartCard = ({ title, sub, children, className = '', action }) => (
   <motion.div
-    initial={{ opacity: 0, y: 14 }}
+    initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-    className={`card-soft p-5 sm:p-6 relative overflow-hidden ${className}`}
+    className={`rounded-2xl border border-slate-800 bg-slate-900 p-5 ${className}`}
   >
-    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/40 to-transparent opacity-70" />
     {(title || sub) && (
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div>
-          {sub ? <p className="t-faint text-[11px] font-bold uppercase tracking-widest mb-0.5">{sub}</p> : null}
-          {title ? <p className="t-heading text-sm sm:text-base">{title}</p> : null}
+          {sub ? <p className="text-[11px] font-medium text-slate-500 uppercase tracking-widest mb-0.5">{sub}</p> : null}
+          {title ? <p className="text-sm font-semibold text-white">{title}</p> : null}
         </div>
         {action}
       </div>
@@ -670,21 +679,15 @@ const ChartCard = ({ title, sub, children, className = '', action }) => (
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
+
   return (
-    <div
-      className="px-3 py-2 text-xs shadow-2xl rounded-xl border"
-      style={{
-        background: 'var(--color-surface-2)',
-        borderColor: 'var(--color-border)',
-        color: 'var(--color-text)',
-      }}
-    >
-      {label ? <p className="t-muted mb-1.5 font-medium">{label}</p> : null}
+    <div className="rounded-xl border border-slate-700 bg-slate-800/95 backdrop-blur-sm px-3 py-2 text-xs shadow-2xl">
+      {label ? <p className="text-slate-400 mb-1.5 font-medium">{label}</p> : null}
       {payload.map((p, i) => (
         <p key={i} className="font-semibold" style={{ color: p.color || p.fill }}>
           {p.name}:{' '}
-          <span style={{ color: 'var(--color-text)' }}>
-            {typeof p.value === 'number' && p.value > 100000 ? fmtCompactCOP(p.value) : p.value}
+          <span className="text-white">
+            {typeof p.value === 'number' && p.value > 100_000 ? fmtCompactCOP(p.value) : p.value}
           </span>
         </p>
       ))}
@@ -693,14 +696,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 const Skeleton = ({ className = '' }) => (
-  <div
-    className={`animate-pulse rounded-lg ${className}`}
-    style={{ background: 'var(--color-surface-offset)' }}
-  />
+  <div className={`animate-pulse rounded-lg bg-slate-800 ${className}`} />
 )
 
 const KpiSkeleton = () => (
-  <div className="card-soft p-5 space-y-3">
+  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
     <Skeleton className="w-10 h-10 rounded-xl" />
     <Skeleton className="h-3 w-24" />
     <Skeleton className="h-7 w-16" />
@@ -708,57 +708,9 @@ const KpiSkeleton = () => (
 )
 
 const EmptyState = ({ icon: Icon = FaChartBar, message = 'Sin datos' }) => (
-  <div className="empty-state py-10">
-    <Icon className="empty-state-icon" />
-    <p className="t-muted text-sm">{message}</p>
-  </div>
-)
-
-const ActivityItem = ({ item, delay }) => {
-  const cfg = ACTIVITY_CFG[item.type] || ACTIVITY_CFG.property
-  const { icon: Icon, tone } = cfg
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 14 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.3 }}
-      className="card-inner flex items-start gap-3 p-3.5"
-      style={{ minHeight: 78 }}
-    >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 border"
-        style={{
-          background: toneBg(tone, 0.12),
-          borderColor: toneBg(tone, 0.24),
-          color: tone,
-        }}
-      >
-        <Icon className="text-xs" />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="t-body text-sm font-semibold truncate leading-tight">{item.action}</p>
-        <p className="t-muted text-[12px] truncate mt-0.5">{item.subject}</p>
-        {item.user && item.user !== 'Admin' ? (
-          <p className="text-[10px] t-faint truncate mt-1">{item.user}</p>
-        ) : null}
-      </div>
-
-      <span className="text-[10px] t-faint flex-shrink-0 mt-0.5">{timeAgo(item.ts)}</span>
-    </motion.div>
-  )
-}
-
-const DonutLegend = ({ data }) => (
-  <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3">
-    {data.map((item) => (
-      <div key={item.name} className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color || item.fill }} />
-        <span className="t-muted text-xs truncate">{item.name}</span>
-        <span className="ml-auto t-heading text-xs font-bold">{item.value}</span>
-      </div>
-    ))}
+  <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+    <Icon className="text-3xl opacity-40" />
+    <p className="text-xs">{message}</p>
   </div>
 )
 
@@ -767,41 +719,34 @@ const AgentRow = ({ agent, maxVisitas, delay }) => (
     initial={{ opacity: 0, x: -12 }}
     animate={{ opacity: 1, x: 0 }}
     transition={{ delay, duration: 0.35 }}
-    className="py-2.5"
+    className="flex items-center gap-3 py-2"
   >
-    <div className="flex items-center gap-3">
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
-        style={{ background: agent.color, color: '#0b1220' }}
-      >
-        {agent.initials}
-      </div>
+    <div
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-900 font-bold text-xs flex-shrink-0"
+      style={{ background: agent.color }}
+    >
+      {agent.initials}
+    </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold truncate leading-tight" style={{ color: 'var(--color-text)' }}>
-          {agent.name}
-        </p>
-        <div className="flex gap-1.5 mt-1.5 items-center">
-          <div
-            className="flex-1 h-1.5 rounded-full overflow-hidden"
-            style={{ background: 'var(--color-surface-offset)' }}
-          >
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: maxVisitas > 0 ? `${(agent.visitas / maxVisitas) * 100}%` : '0%' }}
-              transition={{ delay: delay + 0.2, duration: 0.7, ease: 'easeOut' }}
-              className="h-full rounded-full"
-              style={{ background: agent.color }}
-            />
-          </div>
-          <span className="text-[10px] t-faint flex-shrink-0">{agent.visitas} vis.</span>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs font-medium text-white truncate leading-tight">{agent.name}</p>
+      <div className="flex gap-1.5 mt-1.5 items-center">
+        <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: maxVisitas > 0 ? `${(agent.visitas / maxVisitas) * 100}%` : '0%' }}
+            transition={{ delay: delay + 0.2, duration: 0.7, ease: 'easeOut' }}
+            className="h-full rounded-full"
+            style={{ background: agent.color }}
+          />
         </div>
+        <span className="text-[10px] text-slate-500 flex-shrink-0">{agent.visitas} vis.</span>
       </div>
+    </div>
 
-      <div className="text-right flex-shrink-0">
-        <p className="text-sm font-bold" style={{ color: agent.color }}>{agent.contratos}</p>
-        <p className="text-[10px] t-faint">ctr</p>
-      </div>
+    <div className="text-right flex-shrink-0">
+      <p className="text-sm font-bold" style={{ color: agent.color }}>{agent.contratos}</p>
+      <p className="text-[10px] text-slate-500">ctr</p>
     </div>
   </motion.div>
 )
@@ -812,33 +757,74 @@ const AgentCard = ({ agent, delay }) => (
     animate={{ opacity: 1, scale: 1 }}
     transition={{ delay, duration: 0.4, ease: [0.34, 1.4, 0.64, 1] }}
     whileHover={{ y: -3 }}
-    className="card-inner p-4 flex flex-col items-center gap-3 text-center min-h-[158px]"
+    className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-col items-center gap-3 text-center"
   >
     <div
-      className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xs shadow-lg"
-      style={{ background: agent.color, color: '#0b1220' }}
+      className="w-11 h-11 rounded-xl flex items-center justify-center text-slate-900 font-bold text-xs shadow-lg"
+      style={{ background: agent.color }}
     >
       {agent.initials}
     </div>
 
     <div>
-      <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
-        {agent.name}
-      </p>
-      <p className="t-faint text-[10px] mt-0.5">Agente</p>
+      <p className="text-xs font-semibold text-white leading-tight">{agent.name}</p>
+      <p className="text-[10px] text-slate-500 mt-0.5">Equipo</p>
     </div>
 
-    <div className="w-full border-t pt-3 grid grid-cols-2 gap-2" style={{ borderColor: 'var(--color-divider)' }}>
+    <div className="w-full border-t border-slate-800 pt-3 grid grid-cols-2 gap-2">
       <div>
-        <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{agent.visitas}</p>
-        <p className="text-[10px] t-faint">Visitas</p>
+        <p className="text-lg font-bold text-white tabular-nums">{agent.visitas}</p>
+        <p className="text-[10px] text-slate-500">Visitas</p>
       </div>
       <div>
         <p className="text-lg font-bold tabular-nums" style={{ color: agent.color }}>{agent.contratos}</p>
-        <p className="text-[10px] t-faint">Contratos</p>
+        <p className="text-[10px] text-slate-500">Contratos</p>
       </div>
     </div>
   </motion.div>
+)
+
+const ActivityItem = ({ item, delay }) => {
+  const cfg = ACTIVITY_CFG[item.type] || ACTIVITY_CFG.property
+  const { icon: Icon, bg, text } = cfg
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.3 }}
+      className="flex items-start gap-3 py-2.5 border-b border-slate-800/70 last:border-0"
+    >
+      <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+        <Icon className={`${text} text-xs`} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-white truncate">{item.action}</p>
+        <p className="text-[11px] text-slate-400 truncate">{item.subject}</p>
+        {item.user && item.user !== 'Admin' ? (
+          <p className="text-[10px] text-slate-600 truncate">{item.user}</p>
+        ) : null}
+      </div>
+
+      <span className="text-[10px] text-slate-600 flex-shrink-0 mt-0.5 flex items-center gap-1">
+        <FaClock className="text-[8px]" />
+        {timeAgo(item.ts)}
+      </span>
+    </motion.div>
+  )
+}
+
+const DonutLegend = ({ data }) => (
+  <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3">
+    {data.map((item) => (
+      <div key={item.name} className="flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color || item.fill }} />
+        <span className="text-xs text-slate-400 truncate">{item.name}</span>
+        <span className="text-xs font-semibold text-white ml-auto">{item.value}</span>
+      </div>
+    ))}
+  </div>
 )
 
 const PortfolioSummary = ({ stats }) => {
@@ -856,11 +842,8 @@ const PortfolioSummary = ({ stats }) => {
     <ChartCard className="mb-0">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
-          <p className="t-faint text-[11px] uppercase tracking-widest mb-1">Estado del inventario</p>
-          <div
-            className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-3"
-            style={{ background: 'var(--color-surface-offset)' }}
-          >
+          <p className="text-[11px] text-slate-500 uppercase tracking-widest mb-1">Estado del inventario</p>
+          <div className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-3">
             {segments.map((s) => (
               <motion.div
                 key={s.label}
@@ -876,27 +859,30 @@ const PortfolioSummary = ({ stats }) => {
             {segments.map((s) => (
               <div key={s.label} className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                <span className="t-muted text-[11px]">{s.label}</span>
-                <span className="t-heading text-[11px] font-bold">{s.value}</span>
-                <span className="text-[10px] t-faint">({Math.round((s.value / total) * 100)}%)</span>
+                <span className="text-[11px] text-slate-400">{s.label}</span>
+                <span className="text-[11px] font-bold text-white">{s.value}</span>
+                <span className="text-[10px] text-slate-600">({Math.round((s.value / total) * 100)}%)</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="sm:text-right flex-shrink-0">
-          <p className="t-faint text-[11px] mb-0.5">Valor total portafolio</p>
-          <p className="text-2xl font-bold text-gradient-gold">{fmtCompactCOP(stats.totalValue)}</p>
-          <p className="t-faint text-[11px] mt-0.5">{stats.totalProperties} propiedades en total</p>
+          <p className="text-[11px] text-slate-500 mb-0.5">Valor total portafolio</p>
+          <p className="text-2xl font-bold text-amber-400">{fmtCompactCOP(stats.totalValue)}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{stats.totalProperties} propiedades en total</p>
         </div>
       </div>
     </ChartCard>
   )
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+
 export default function DashboardPage() {
   const { currentUser } = useAuth()
-
   const [activeTab, setActiveTab] = useState('general')
   const [searchOpen, setSearchOpen] = useState(false)
   const searchRef = useRef(null)
@@ -917,17 +903,8 @@ export default function DashboardPage() {
     conversion,
   } = useDashboardData()
 
-  const greeting = (() => {
-    const hour = new Date().getHours()
-    if (hour < 12) return 'Buenos días'
-    if (hour < 19) return 'Buenas tardes'
-    return 'Buenas noches'
-  })()
-
-  const firstName =
-    currentUser?.displayName?.split(' ')?.[0] ??
-    currentUser?.email?.split('@')?.[0] ??
-    'Admin'
+  const greeting = getGreeting()
+  const firstName = currentUser?.displayName?.split(' ')?.[0] ?? 'Admin'
 
   const TABS = [
     { id: 'general', label: 'General', icon: FaChartBar },
@@ -942,15 +919,15 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div
-          className="card-soft p-8 max-w-md text-center space-y-4"
-          style={{ border: '1px solid var(--color-error-highlight)' }}
-        >
-          <FaExclamationTriangle className="mx-auto text-3xl" style={{ color: 'var(--color-error)' }} />
-          <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Error cargando el dashboard</p>
-          <p className="t-muted text-sm">{error}</p>
-          <button onClick={load} className="button-gold mt-2">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8 max-w-md text-center space-y-4">
+          <FaExclamationTriangle className="text-red-400 text-3xl mx-auto" />
+          <p className="text-white font-semibold">Error cargando el dashboard</p>
+          <p className="text-slate-400 text-sm">{error}</p>
+          <button
+            onClick={load}
+            className="mt-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm rounded-xl transition-colors"
+          >
             Reintentar
           </button>
         </div>
@@ -959,16 +936,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 md:px-8 space-y-7 bg-bg text-t-base">
+    <div className="min-h-screen bg-slate-950 px-4 py-6 md:px-8 space-y-7">
       <motion.div
         initial={{ opacity: 0, y: -14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="min-w-0">
-          <p className="t-faint text-xs mb-1 flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <div>
+          <p className="text-xs text-slate-500 mb-1 flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {new Date().toLocaleDateString('es-CO', {
               weekday: 'long',
               day: 'numeric',
@@ -977,17 +954,17 @@ export default function DashboardPage() {
             })}
           </p>
 
-          <h1 className="t-heading text-2xl sm:text-3xl lg:text-4xl tracking-tight mb-1">
-            {greeting}, <span className="text-gradient-gold">{firstName}</span>
+          <h1 className="text-xl font-bold text-white">
+            {greeting}, <span className="text-amber-400">{firstName}</span>
           </h1>
 
           {stats ? (
-            <p className="t-muted text-sm sm:text-base">
-              Portafolio: <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{fmtCompactCOP(stats.totalValue)}</span>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Portafolio: <span className="text-white font-semibold">{fmtCompactCOP(stats.totalValue)}</span>
               {' · '}
-              <span className="text-emerald-600 dark:text-emerald-400">{stats.availableProperties} disponibles</span>
+              <span className="text-emerald-400">{stats.availableProperties} disponibles</span>
               {stats.pendingVisits > 0 ? (
-                <span className="text-amber-600 dark:text-amber-400"> · {stats.pendingVisits} visitas pendientes</span>
+                <span className="text-amber-400"> · {stats.pendingVisits} visitas pendientes</span>
               ) : null}
             </p>
           ) : null}
@@ -997,9 +974,9 @@ export default function DashboardPage() {
           <AnimatePresence>
             {searchOpen ? (
               <motion.div
-                key="search-open"
+                key="s-open"
                 initial={{ width: 36, opacity: 0 }}
-                animate={{ width: 230, opacity: 1 }}
+                animate={{ width: 210, opacity: 1 }}
                 exit={{ width: 36, opacity: 0 }}
                 className="relative"
               >
@@ -1007,23 +984,22 @@ export default function DashboardPage() {
                   ref={searchRef}
                   autoFocus
                   placeholder="Buscar propiedad, cliente…"
-                  className="input-themed pl-8 pr-8 py-2 text-sm rounded-xl"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-8 pr-8 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
                 />
-                <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
+                <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs" />
                 <button
                   onClick={() => setSearchOpen(false)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[var(--color-text)]"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                 >
                   <FaTimes className="text-xs" />
                 </button>
               </motion.div>
             ) : (
               <motion.button
-                key="search-closed"
+                key="s-closed"
                 whileTap={{ scale: 0.93 }}
                 onClick={() => setSearchOpen(true)}
-                className="theme-toggle"
-                title="Buscar"
+                className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
               >
                 <FaSearch className="text-xs" />
               </motion.button>
@@ -1036,24 +1012,24 @@ export default function DashboardPage() {
             disabled={loading}
             title={
               lastUpdated
-                ? `Actualizado: ${lastUpdated.toLocaleTimeString('es-CO', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`
+                ? `Actualizado: ${lastUpdated.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`
                 : 'Actualizar'
             }
-            className="theme-toggle disabled:opacity-50"
+            className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-colors disabled:opacity-50"
           >
             <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
           </motion.button>
 
           <div className="relative">
-            <motion.button whileTap={{ scale: 0.93 }} className="theme-toggle">
+            <motion.button
+              whileTap={{ scale: 0.93 }}
+              className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-colors"
+            >
               <FaBell className="text-xs" />
             </motion.button>
 
             {stats?.pendingVisits > 0 ? (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-[var(--color-bg)]">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-slate-950">
                 {stats.pendingVisits > 9 ? '9+' : stats.pendingVisits}
               </span>
             ) : null}
@@ -1061,30 +1037,16 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      <div
-        className="flex gap-1 p-1 rounded-xl border w-fit"
-        style={{
-          background: 'var(--color-surface)',
-          borderColor: 'var(--color-border)',
-        }}
-      >
+      <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 w-fit">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === t.id ? 'shadow-sm' : ''
-            }`}
-            style={
               activeTab === t.id
-                ? {
-                    background: 'var(--color-primary)',
-                    color: 'var(--color-text-inverse)',
-                  }
-                : {
-                    color: 'var(--color-text-muted)',
-                  }
-            }
+                ? 'bg-amber-500 text-slate-900 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
           >
             <t.icon className="text-xs" />
             {t.label}
@@ -1106,7 +1068,7 @@ export default function DashboardPage() {
 
             <section>
               <SectionHeader title="Resumen del portafolio" sub="KPIs principales" />
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => <KpiSkeleton key={i} />)
                 ) : (
@@ -1143,9 +1105,9 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={290}>
                     <BarChart data={propsByType} margin={{ top: 5, right: 5, bottom: 0, left: -15 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                      <XAxis dataKey="tipo" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="tipo" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="cantidad" name="Propiedades" radius={[8, 8, 0, 0]}>
                         {propsByType.map((_, i) => (
@@ -1199,13 +1161,13 @@ export default function DashboardPage() {
                     <AreaChart data={visitsByMonth}>
                       <defs>
                         <linearGradient id="visitsAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.5} />
-                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.55} />
+                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} />
                       <Area type="monotone" dataKey="visitas" stroke="#f59e0b" strokeWidth={2.5} fill="url(#visitsAreaGradient)" name="Visitas" />
                     </AreaChart>
@@ -1221,9 +1183,9 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={clientsTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} />
                       <Line type="monotone" dataKey="nuevos" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 3 }} name="Clientes" />
                       <Line type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} name="Leads" />
@@ -1254,9 +1216,9 @@ export default function DashboardPage() {
                     </ResponsiveContainer>
                     <div className="grid grid-cols-3 gap-2 mt-2">
                       {conversion.map((item) => (
-                        <div key={item.name} className="card-inner p-3 text-center">
+                        <div key={item.name} className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-center">
                           <p className="text-lg font-bold" style={{ color: item.fill }}>{item.value}%</p>
-                          <p className="t-faint text-[10px]">{item.name}</p>
+                          <p className="text-[10px] text-slate-500">{item.name}</p>
                         </div>
                       ))}
                     </div>
@@ -1265,8 +1227,8 @@ export default function DashboardPage() {
               </ChartCard>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-5">
-              <ChartCard title="Top propiedades" sub="Mayor interés" className="min-h-[420px]">
+            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-5">
+              <ChartCard title="Top propiedades" sub="Mayor interés">
                 {loading ? (
                   <Skeleton className="h-72 w-full" />
                 ) : topProperties.length === 0 ? (
@@ -1279,48 +1241,26 @@ export default function DashboardPage() {
                         initial={{ opacity: 0, x: 10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.05 }}
-                        className="card-inner flex items-center gap-3 px-3.5 py-3.5"
+                        className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-3"
                       >
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border"
-                          style={{
-                            background: 'var(--color-surface-offset)',
-                            borderColor: 'var(--color-border)',
-                            color: 'var(--color-primary)',
-                          }}
-                        >
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center flex-shrink-0">
                           <FaDoorOpen className="text-xs" />
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p
-                            className="text-sm sm:text-[15px] font-semibold leading-tight truncate"
-                            style={{ color: 'var(--color-text)' }}
-                            title={p.title}
-                          >
-                            {p.title}
+                          <p className="text-sm font-semibold text-white truncate">{p.title}</p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {p.city} · {getPropertyTypeLabel(p.type)}
                           </p>
-
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-[12px] t-muted truncate">
-                              {p.city} · {getPropertyTypeLabel(p.type)}
-                            </span>
-                          </div>
                         </div>
 
-                        <div className="text-right flex-shrink-0 min-w-[86px]">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${STATUS_STYLES[p.status] || 'badge-slate'}`}>
+                        <div className="text-right flex-shrink-0">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold ${STATUS_STYLES[p.status] || STATUS_STYLES.disponible}`}>
                             {p.status}
                           </span>
-                          <p className="text-[11px] mt-1.5 flex items-center justify-end gap-1 t-muted">
-                            {p.views > 0 ? (
-                              <>
-                                <FaEye className="text-[9px]" />
-                                {p.views}
-                              </>
-                            ) : (
-                              fmtCompactCOP(p.price)
-                            )}
+                          <p className="text-[11px] text-slate-400 mt-1 flex items-center justify-end gap-1">
+                            <FaEye className="text-[9px]" />
+                            {p.views > 0 ? p.views : fmtCompactCOP(p.price)}
                           </p>
                         </div>
                       </motion.div>
@@ -1329,14 +1269,14 @@ export default function DashboardPage() {
                 )}
               </ChartCard>
 
-              <ChartCard title="Actividad reciente" sub="Movimiento del sistema" className="min-h-[420px]">
+              <ChartCard title="Actividad reciente" sub="Movimiento del sistema">
                 {loading ? (
                   <Skeleton className="h-72 w-full" />
                 ) : recentActivity.length === 0 ? (
                   <EmptyState message="Sin actividad reciente" />
                 ) : (
-                  <div className="space-y-2">
-                    {recentActivity.slice(0, 8).map((item, i) => (
+                  <div className="max-h-[340px] overflow-y-auto pr-1">
+                    {recentActivity.map((item, i) => (
                       <ActivityItem key={`${item.type}-${i}-${item.subject}`} item={item} delay={i * 0.04} />
                     ))}
                   </div>
@@ -1345,7 +1285,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-5">
-              <ChartCard title="Rendimiento del equipo" sub="Visitas y contratos" className="min-h-[330px]">
+              <ChartCard title="Rendimiento del equipo" sub="Visitas y contratos">
                 {loading ? (
                   <Skeleton className="h-72 w-full" />
                 ) : agents.length === 0 ? (
@@ -1353,13 +1293,18 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-1">
                     {agents.map((agent, i) => (
-                      <AgentRow key={agent.name} agent={agent} maxVisitas={maxAgentVisits} delay={i * 0.05} />
+                      <AgentRow
+                        key={agent.name}
+                        agent={agent}
+                        maxVisitas={maxAgentVisits}
+                        delay={i * 0.05}
+                      />
                     ))}
                   </div>
                 )}
               </ChartCard>
 
-              <ChartCard title="Equipo comercial" sub="Vista rápida" className="min-h-[330px]">
+              <ChartCard title="Equipo comercial" sub="Vista rápida">
                 {loading ? (
                   <Skeleton className="h-72 w-full" />
                 ) : agents.length === 0 ? (
@@ -1406,9 +1351,9 @@ export default function DashboardPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={propsByType} margin={{ top: 5, right: 5, bottom: 0, left: -15 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                    <XAxis dataKey="tipo" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="tipo" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="cantidad" name="Propiedades" radius={[6, 6, 0, 0]}>
                       {propsByType.map((_, i) => (
@@ -1417,81 +1362,6 @@ export default function DashboardPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </ChartCard>
-
-            <ChartCard title="Valor estimado por tipo" sub="Distribución COP">
-              {loading ? (
-                <Skeleton className="h-52 w-full" />
-              ) : propsByType.length === 0 ? (
-                <EmptyState message="Sin propiedades" />
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={propsByType} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 50 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }} tickFormatter={fmtCompactCOP} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="tipo" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={60} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} fill="#f59e0b" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-
-            <ChartCard title="Listado de propiedades recientes" sub="Últimas publicadas">
-              {loading ? (
-                <Skeleton className="h-48 w-full" />
-              ) : topProperties.length === 0 ? (
-                <EmptyState message="Sin propiedades" />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr
-                        className="text-xs uppercase tracking-wider border-b"
-                        style={{ color: 'var(--color-text-faint)', borderColor: 'var(--color-divider)' }}
-                      >
-                        <th className="pb-3 text-left font-medium">#</th>
-                        <th className="pb-3 text-left font-medium">Propiedad</th>
-                        <th className="pb-3 text-left font-medium hidden sm:table-cell">Ciudad</th>
-                        <th className="pb-3 text-left font-medium">Precio</th>
-                        <th className="pb-3 text-left font-medium">Estado</th>
-                        {topProperties.some((p) => p.views > 0) ? (
-                          <th className="pb-3 text-right font-medium">Vistas</th>
-                        ) : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topProperties.map((p, i) => (
-                        <tr
-                          key={p.id}
-                          className="transition-colors"
-                          style={{ borderColor: 'var(--color-divider)' }}
-                        >
-                          <td className="py-3 text-xs t-faint font-bold">{i + 1}</td>
-                          <td className="py-3">
-                            <p className="text-xs font-semibold truncate max-w-[240px]" style={{ color: 'var(--color-text)' }}>
-                              {p.title}
-                            </p>
-                            <p className="t-muted text-[10px] capitalize mt-0.5">{p.type}</p>
-                          </td>
-                          <td className="py-3 text-xs t-muted hidden sm:table-cell">{p.city}</td>
-                          <td className="py-3 text-xs font-semibold text-amber-600 dark:text-amber-400">{fmtCompactCOP(p.price)}</td>
-                          <td className="py-3">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-[10px] font-semibold capitalize ${STATUS_STYLES[p.status] || 'badge-slate'}`}>
-                              {p.status}
-                            </span>
-                          </td>
-                          {topProperties.some((x) => x.views > 0) ? (
-                            <td className="py-3 text-right text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
-                              {p.views}
-                            </td>
-                          ) : null}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               )}
             </ChartCard>
           </motion.div>
@@ -1511,108 +1381,35 @@ export default function DashboardPage() {
                 Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />)
               ) : (
                 <>
-                  <KpiCard icon={FaUsers} label="Total clientes" value={stats?.totalClients} accent="#f59e0b" />
+                  <KpiCard icon={FaUsers} label="Total clientes" value={stats?.totalClients} accent="#3b82f6" />
                   <KpiCard icon={FaCheckCircle} label="Activos" value={stats?.activeClients} accent="#22c55e" />
                   <KpiCard icon={FaFire} label="Leads" value={stats?.leads} accent="#ef4444" />
-                  <KpiCard
-                    icon={FaPercent}
-                    label="Conversión"
-                    value={stats?.totalClients > 0 ? Math.round((stats.activeClients / stats.totalClients) * 100) : 0}
-                    accent="#a855f7"
-                  />
+                  <KpiCard icon={FaLayerGroup} label="Contratos" value={stats?.totalContracts} accent="#a855f7" />
                 </>
               )}
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <ChartCard title="Clientes nuevos vs leads" sub="Tendencia 7 meses">
-                {loading ? (
-                  <Skeleton className="h-64 w-full" />
-                ) : clientsTrend.length === 0 ? (
-                  <EmptyState message="Sin datos de clientes" />
-                ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={clientsTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-text-muted)' }} />
-                      <Line type="monotone" dataKey="nuevos" name="Clientes nuevos" stroke="#22c55e" strokeWidth={2.5} dot={{ fill: '#22c55e', r: 3 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="leads" name="Leads" stroke="#f59e0b" strokeWidth={2.5} dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 5 }} strokeDasharray="5 3" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
-
-              <ChartCard title="Tasas de conversión" sub="Por canal">
-                {loading ? (
-                  <Skeleton className="h-64 w-full" />
-                ) : conversion.length === 0 ? (
-                  <EmptyState message="Sin datos de conversión" />
-                ) : (
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
-                    <ResponsiveContainer width="100%" height={220}>
-                      <RadialBarChart cx="50%" cy="50%" innerRadius="22%" outerRadius="88%" barSize={14} data={conversion}>
-                        <RadialBar minAngle={10} background fill="var(--color-surface-offset)" dataKey="value" />
-                        <Tooltip content={<CustomTooltip />} />
-                      </RadialBarChart>
-                    </ResponsiveContainer>
-
-                    <div className="space-y-4 w-full sm:w-auto">
-                      {conversion.map((c) => (
-                        <div key={c.name} className="flex items-center gap-3">
-                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: c.fill }} />
-                          <div>
-                            <p className="t-muted text-xs">{c.name}</p>
-                            <p className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{c.value}%</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </ChartCard>
-            </div>
-
-            <ChartCard title="Visitas por mes" sub="Solicitudes y gestión">
+            <ChartCard title="Clientes nuevos vs leads" sub="Tendencia mensual">
               {loading ? (
-                <Skeleton className="h-52 w-full" />
-              ) : visitsByMonth.length === 0 ? (
-                <EmptyState message="Sin visitas registradas" />
+                <Skeleton className="h-64 w-full" />
+              ) : clientsTrend.length === 0 ? (
+                <EmptyState icon={FaUsers} message="Sin clientes" />
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={visitsByMonth} margin={{ top: 5, right: 5, bottom: 0, left: -15 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={clientsTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-text-muted)' }} />
-                    <Bar dataKey="aprobadas" name="Aprobadas" fill="#22c55e" radius={[4, 4, 0, 0]} stackId="a" />
-                    <Bar dataKey="pendientes" name="Pendientes" fill="#f59e0b" radius={[4, 4, 0, 0]} stackId="a" />
-                    <Bar dataKey="rechazadas" name="Rechazadas" fill="#ef4444" radius={[4, 4, 0, 0]} stackId="a" />
-                  </BarChart>
+                    <Line type="monotone" dataKey="nuevos" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 3 }} name="Clientes" />
+                    <Line type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} name="Leads" />
+                  </LineChart>
                 </ResponsiveContainer>
               )}
             </ChartCard>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div
-        className="pt-4 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1"
-        style={{ borderColor: 'var(--color-divider)' }}
-      >
-        <p className="text-xs t-faint">Inmobiliaria Rincón Bedoya y Asociados · Anserma, Caldas</p>
-        <p className="text-xs t-faint flex items-center gap-1.5">
-          <span className={`inline-block w-1.5 h-1.5 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
-          {loading
-            ? 'Actualizando datos'
-            : lastUpdated
-            ? `Actualizado ${lastUpdated.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`
-            : 'Datos no disponibles'}
-        </p>
-      </div>
     </div>
   )
 }

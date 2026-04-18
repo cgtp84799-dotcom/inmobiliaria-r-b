@@ -1,13 +1,21 @@
 // src/core/contexts/AuthContext.jsx
 //
-// Cambios respecto a la versión anterior:
-//   - setupPresence() solo se activa para admin y member (panel interno)
-//   - Los viewers (clientes del portal) no escriben en RTDB — no necesitan presencia
-//   - syncUserToFirestore no fuerza creación de /users si el cliente ya fue creado
-//     por ClientAuthPage (evita race condition: no pisamos onboardingDone)
-//   - La estructura y API pública no cambia — retrocompatible
+// ═══════════════════════════════════════════════════════════════════
+// FIXES APLICADOS (TODOS):
+//   1. syncUserToFirestore NUNCA modifica el role de docs existentes
+//   2. permission-denied NO cierra sesión
+//   3. setupPresence solo corre para admin/member
+//   4. sanitizeForRTDB elimina undefined
+//   5. role siempre tiene fallback a VIEWER
+//   6. currentUser = objeto Auth puro, datos extra en userData
+//   7. ★ FIX: Ya NO mutamos currentUser directamente (currentUser.role = ...)
+//      Ahora TODO se lee desde userData.
+//   8. ★ FIX: currentUser expuesto al Provider es un objeto plano seguro
+//      que combina datos de Auth + Firestore SIN mutar el original.
+//      Componentes que necesiten el Auth User puro: currentUser._authUser
+// ═══════════════════════════════════════════════════════════════════
 
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -34,16 +42,26 @@ export const useAuth = () => {
   return ctx;
 };
 
+function sanitizeForRTDB(obj) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForRTDB);
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = value === undefined ? null : sanitizeForRTDB(value);
+  }
+  return result;
+}
+
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userData,    setUserData]    = useState(null);
-  const [loading,     setLoading]     = useState(true);
+  // authUser = objeto Auth puro de Firebase (nunca lo mutamos)
+  const [authUser,  setAuthUser]  = useState(null);
+  const [userData,  setUserData]  = useState(null);
+  const [loading,   setLoading]   = useState(true);
   const presenceUnsubRef = useRef(null);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
   const resetAuthState = () => {
-    setCurrentUser(null);
+    setAuthUser(null);
     setUserData(null);
   };
 
@@ -54,14 +72,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ── Presencia RTDB — SOLO para admin y member (panel interno) ──────────────
-  // Los clientes del portal (viewer) no necesitan presencia en tiempo real.
-  // Activar presencia para todos causaba escrituras innecesarias y exponía
-  // el estado online/offline de los clientes en el panel de administración.
+  // ── Presencia RTDB — SOLO para admin/member ─────────────────────────────
 
   const setupPresence = async (userId, userEmail, firestoreData) => {
-    // Guardia: solo agentes del panel
-    const role = firestoreData?.role;
+    const role = firestoreData?.role || USER_ROLES.VIEWER;
     if (role === USER_ROLES.VIEWER) return;
 
     cleanupPresenceListener();
@@ -70,27 +84,29 @@ export const AuthProvider = ({ children }) => {
     const userRef       = doc(db, 'users', userEmail);
     const connectedRef  = ref(rtdb, '.info/connected');
 
-    const presenceData = {
+    const presenceData = sanitizeForRTDB({
       state:        'online',
       last_changed: rtdbServerTimestamp(),
       displayName:  firestoreData?.displayName || userEmail?.split('@')[0] || 'Usuario',
-      email:        firestoreData?.email || userEmail,
+      email:        firestoreData?.email || userEmail || null,
       photoURL:     firestoreData?.photoURL || null,
       role,
-    };
+    });
+
+    const offlineData = sanitizeForRTDB({
+      state:        'offline',
+      last_changed: rtdbServerTimestamp(),
+      displayName:  presenceData.displayName,
+      email:        presenceData.email,
+      photoURL:     presenceData.photoURL,
+      role,
+    });
 
     const unsub = onValue(connectedRef, async (snapshot) => {
       if (snapshot.val() !== true) return;
       try {
         await set(userStatusRef, presenceData);
-        onDisconnect(userStatusRef).set({
-          state:        'offline',
-          last_changed: rtdbServerTimestamp(),
-          displayName:  presenceData.displayName,
-          email:        presenceData.email,
-          photoURL:     presenceData.photoURL,
-          role,
-        });
+        onDisconnect(userStatusRef).set(offlineData);
         await setDoc(userRef, { lastSeen: serverTimestamp(), online: true }, { merge: true });
       } catch (e) {
         console.error('Error configurando presencia:', e);
@@ -104,10 +120,9 @@ export const AuthProvider = ({ children }) => {
     cleanupPresenceListener();
     try {
       if (userId) {
-        await set(ref(rtdb, `status/${userId}`), {
-          state: 'offline',
-          last_changed: rtdbServerTimestamp(),
-        });
+        await set(ref(rtdb, `status/${userId}`), sanitizeForRTDB({
+          state: 'offline', last_changed: rtdbServerTimestamp(),
+        }));
       }
       if (userEmail) {
         await setDoc(
@@ -117,36 +132,66 @@ export const AuthProvider = ({ children }) => {
         );
       }
     } catch (err) {
-      console.error('Error limpiando presencia:', err);
+      console.warn('clearPresence:', err.message);
     }
   };
 
-  // ── Sync a Firestore ───────────────────────────────────────────────────────
-  // Solo crea el documento si no existe — no lo pisa si ya fue creado por
-  // ClientAuthPage (que incluye onboardingDone: false).
-  // Un viewer que ya tiene su doc de usuario no lo ve sobreescrito aquí.
+  // ── Sync a Firestore ────────────────────────────────────────────────────
 
-  const syncUserToFirestore = async (authUser) => {
-    const userRef  = doc(db, 'users', authUser.email);
-    const userDoc  = await getDoc(userRef);
+  const syncUserToFirestore = async (firebaseUser) => {
+    const userRef = doc(db, 'users', firebaseUser.email);
+
+    try {
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          uid:         firebaseUser.uid,
+          email:       firebaseUser.email,
+          displayName: firebaseUser.displayName || '',
+          phone:       firebaseUser.phoneNumber  || '',
+          photoURL:    firebaseUser.photoURL     || null,
+          role:        USER_ROLES.VIEWER,
+          status:      'active',
+          online:      false,
+          createdAt:   Timestamp.now(),
+          updatedAt:   Timestamp.now(),
+          lastSeen:    serverTimestamp(),
+        });
+      } else {
+        // Doc ya existe — NUNCA tocar el role
+        const existingData = userDoc.data();
+        if (existingData.uid !== firebaseUser.uid) {
+          await setDoc(userRef, { uid: firebaseUser.uid }, { merge: true });
+        }
+      }
+    } catch (err) {
+      console.warn('[syncUserToFirestore] error (puede ser temporal):', err.message);
+    }
+  };
+
+  // ── Helper para leer y setear userData ──────────────────────────────────
+
+  const loadUserData = async (firebaseUser) => {
+    const userDocRef = doc(db, 'users', firebaseUser.email);
+    const userDoc    = await getDoc(userDocRef);
+
     if (!userDoc.exists()) {
-      await setDoc(userRef, {
-        uid:         authUser.uid,
-        email:       authUser.email,
-        displayName: authUser.displayName || '',
-        phone:       authUser.phoneNumber  || '',
-        photoURL:    authUser.photoURL     || null,
-        role:        USER_ROLES.VIEWER,
-        status:      'pending',
-        online:      false,
-        createdAt:   Timestamp.now(),
-        updatedAt:   Timestamp.now(),
-        lastSeen:    serverTimestamp(),
-      });
+      return null;
     }
+
+    const data = userDoc.data();
+    const resolvedRole = data.role || USER_ROLES.VIEWER;
+
+    return {
+      id:     userDoc.id,
+      ...data,
+      role:   resolvedRole,
+      status: data.status || 'active',
+    };
   };
 
-  // ── Listener principal ─────────────────────────────────────────────────────
+  // ── Listener principal ──────────────────────────────────────────────────
 
   useEffect(() => {
     let unsubscribeAuth = null;
@@ -171,53 +216,57 @@ export const AuthProvider = ({ children }) => {
 
         try {
           await syncUserToFirestore(user);
+          const data = await loadUserData(user);
 
-          const userDocRef = doc(db, 'users', user.email);
-          const userDoc    = await getDoc(userDocRef);
-
-          if (!userDoc.exists()) {
-            console.warn('[AuthContext] Usuario sin documento en /users. Cerrando sesión.');
-            await clearPresence(user.uid, user.email);
-            await firebaseSignOut(auth);
+          if (!data) {
+            console.warn('[AuthContext] Usuario sin documento en /users.');
+            try { await clearPresence(user.uid, user.email); } catch (_) {}
+            try { await firebaseSignOut(auth); } catch (_) {}
             if (!isMounted) return;
             resetAuthState();
             setLoading(false);
             return;
           }
 
-          const data = userDoc.data();
-          const mergedUser = {
-            ...user,
-            role:        data.role        || USER_ROLES.VIEWER,
-            status:      data.status      || 'pending',
-            displayName: data.displayName || user.displayName || '',
-            phone:       data.phone       || '',
-          };
-
           if (!isMounted) return;
 
-          setCurrentUser(mergedUser);
-          setUserData({ id: userDoc.id, ...data });
-
-          // Presencia solo para agentes del panel
+          setAuthUser(user);
+          setUserData(data);
           await setupPresence(user.uid, user.email, data);
 
         } catch (err) {
           console.error('Error obteniendo userData:', err);
-          if (err?.code === 'permission-denied' || err?.code === 'not-found') {
-            try {
-              await clearPresence(user.uid, user.email);
-              await firebaseSignOut(auth);
-            } catch (e) {
-              console.error('Error cerrando sesión tras fallo de permisos:', e);
-            }
+
+          if (err?.code === 'permission-denied') {
+            if (!isMounted) return;
+            setAuthUser(user);
+            setUserData(null);
+
+            setTimeout(async () => {
+              if (!isMounted) return;
+              try {
+                await syncUserToFirestore(user);
+                const data = await loadUserData(user);
+                if (data) {
+                  setAuthUser(user);
+                  setUserData(data);
+                  await setupPresence(user.uid, user.email, data);
+                }
+              } catch (retryErr) {
+                console.warn('[AuthContext] reintento falló:', retryErr.message);
+              }
+            }, 2000);
+          } else if (err?.code === 'not-found') {
+            try { await clearPresence(user.uid, user.email); } catch (_) {}
+            try { await firebaseSignOut(auth); } catch (_) {}
             if (!isMounted) return;
             resetAuthState();
           } else {
             if (!isMounted) return;
-            setCurrentUser(user);
+            setAuthUser(user);
             setUserData(null);
           }
+
           setLoading(false);
           return;
         }
@@ -236,7 +285,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // ── Funciones públicas ─────────────────────────────────────────────────────
+  // ── Funciones públicas ──────────────────────────────────────────────────
 
   const signIn = async (email, password) => {
     try {
@@ -245,12 +294,12 @@ export const AuthProvider = ({ children }) => {
       return result;
     } catch (err) {
       const msgs = {
-        'auth/user-not-found':    'Usuario no encontrado',
-        'auth/wrong-password':    'Contraseña incorrecta',
-        'auth/invalid-email':     'Correo inválido',
-        'auth/user-disabled':     'Usuario deshabilitado',
-        'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde',
-        'auth/invalid-credential':'Correo o contraseña incorrectos',
+        'auth/user-not-found':     'Usuario no encontrado',
+        'auth/wrong-password':     'Contraseña incorrecta',
+        'auth/invalid-email':      'Correo inválido',
+        'auth/user-disabled':      'Usuario deshabilitado',
+        'auth/too-many-requests':  'Demasiados intentos. Intenta más tarde',
+        'auth/invalid-credential': 'Correo o contraseña incorrectos',
       };
       throw new Error(msgs[err.code] || err.message);
     }
@@ -258,8 +307,8 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
-      if (currentUser?.uid || currentUser?.email) {
-        await clearPresence(currentUser?.uid, currentUser?.email);
+      if (authUser?.uid || authUser?.email) {
+        await clearPresence(authUser.uid, authUser.email);
       }
       await firebaseSignOut(auth);
       resetAuthState();
@@ -271,7 +320,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ── Helpers de rol ─────────────────────────────────────────────────────────
+  // ── Helpers de rol ──────────────────────────────────────────────────────
 
   const role       = userData?.role;
   const isAdmin    = role === USER_ROLES.ADMIN;
@@ -279,6 +328,27 @@ export const AuthProvider = ({ children }) => {
   const isViewer   = role === USER_ROLES.VIEWER;
   const canOperate = isAdmin || isMember;
   const canRead    = isAdmin || isMember || isViewer;
+
+  // ★ FIX PRINCIPAL: Crear un objeto plano que combine Auth + Firestore
+  // SIN mutar el Auth User original de Firebase.
+  // Componentes que necesiten el Auth User puro (ej: updateProfile, getIdToken)
+  // usan currentUser._authUser
+  const currentUser = useMemo(() => {
+    if (!authUser) return null;
+    return {
+      uid:         authUser.uid,
+      email:       authUser.email,
+      displayName: userData?.displayName || authUser.displayName || '',
+      photoURL:    userData?.photoURL    || authUser.photoURL    || null,
+      emailVerified: authUser.emailVerified,
+      // Datos de Firestore
+      role:        userData?.role   || USER_ROLES.VIEWER,
+      status:      userData?.status || 'active',
+      phone:       userData?.phone  || '',
+      // Referencia al Auth User original (para updateProfile, getIdToken, etc.)
+      _authUser:   authUser,
+    };
+  }, [authUser, userData]);
 
   return (
     <AuthContext.Provider value={{

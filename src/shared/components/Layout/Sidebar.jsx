@@ -91,20 +91,43 @@ export default function Sidebar({
   const RoleIcon     = roleMeta.icon;
   const isDesktop    = useIsDesktop();
 
-  /* ── Menú según permisos ──────────────────────────────────── */
-  const menuItems = [
-    { icon: FaChartLine,     label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
-    { icon: FaBuilding,      label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
-    { icon: FaUsers,         label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients",    "read") },
-    { icon: FaFileContract,  label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts",  "read") },
-    { icon: FaCalendarCheck, label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits",     "read") },
-    { icon: FaCalendar,      label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
-    { icon: FaEnvelope,      label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
-    { icon: FaFolder,        label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents",  "read") },
-    { icon: FaUserCog,       label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users",      "read") },
-    { icon: FaUserCog,       label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users",      "create") },
-    { icon: FaUser,          label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
-  ].filter((item) => item.visible);
+  /* ── Menú según permisos — organizado por secciones ──── */
+  const menuSections = [
+    {
+      label: null, // sin título = sección principal
+      items: [
+        { icon: FaChartLine,     label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
+      ],
+    },
+    {
+      label: "Gestión",
+      items: [
+        { icon: FaBuilding,      label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
+        { icon: FaFileContract,  label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts",  "read") },
+        { icon: FaUsers,         label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients",    "read") },
+      ],
+    },
+    {
+      label: "Agenda",
+      items: [
+        { icon: FaCalendarCheck, label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits",     "read") },
+        { icon: FaCalendar,      label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
+      ],
+    },
+    {
+      label: "Sistema",
+      items: [
+        { icon: FaEnvelope,      label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
+        { icon: FaFolder,        label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents",  "read") },
+        { icon: FaUserCog,       label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users",      "read") },
+        { icon: FaUserCog,       label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users",      "create") },
+        { icon: FaUser,          label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
+      ],
+    },
+  ];
+
+  // Flatten for collapsed view
+  const menuItems = menuSections.flatMap(s => s.items).filter(i => i.visible);
 
   const handleNavigation = useCallback(() => {
     if (!isDesktop) onClose();
@@ -219,78 +242,94 @@ export default function Sidebar({
     </div>
   );
 
-  /* Ítems de navegación */
+  /* Ítems de navegación con secciones */
   const NavItems = ({ showLabel = true }) => (
     <nav
-      className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5"
+      className="flex-1 min-h-0 overflow-y-auto px-2 py-3"
       aria-label="Menú de navegación"
     >
-      {menuItems.map((item) => {
-        const isActive = location.pathname === item.path ||
-          (item.path !== PRIVATE_ROUTES.DASHBOARD && location.pathname.startsWith(item.path));
-        const Icon = item.icon;
+      {menuSections.map((section, sIdx) => {
+        const visibleItems = section.items.filter(i => i.visible);
+        if (visibleItems.length === 0) return null;
 
         return (
-          <Link
-            key={item.path}
-            to={item.path}
-            onClick={handleNavigation}
-            title={!showLabel ? item.label : undefined}
-            aria-current={isActive ? "page" : undefined}
-            className={[
-              "flex items-center py-2.5 rounded-xl",
-              "transition-all duration-150 relative group overflow-hidden",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/50",
-              showLabel ? "gap-3 px-4" : "justify-center px-2",
-            ].join(" ")}
-            style={{
-              backgroundColor: isActive ? SB.activeBg   : "transparent",
-              color:           isActive ? "#fbbf24"     : SB.text,
-              fontWeight:      isActive ? 600            : 400,
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) e.currentTarget.style.backgroundColor = SB.hoverBg;
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
-            }}
-          >
-            {/* Barra indicadora de activo */}
-            {isActive && (
-              <motion.span
-                layoutId={showLabel ? "active-pill-expanded" : "active-pill-mini"}
-                className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-yellow-400 rounded-r-full"
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
+          <div key={sIdx} className={sIdx > 0 ? "mt-3 pt-3 border-t" : ""}
+            style={sIdx > 0 ? { borderColor: SB.border } : {}}>
+
+            {/* Título de sección */}
+            {section.label && showLabel && (
+              <p className="text-[10px] font-bold uppercase tracking-widest px-4 mb-2"
+                style={{ color: SB.muted }}>
+                {section.label}
+              </p>
             )}
 
-            <Icon
-              className="text-base flex-shrink-0"
-              style={{ color: isActive ? "#fbbf24" : SB.muted }}
-              aria-hidden="true"
-            />
+            <div className="space-y-0.5">
+              {visibleItems.map((item) => {
+                const isActive = location.pathname === item.path ||
+                  (item.path !== PRIVATE_ROUTES.DASHBOARD && location.pathname.startsWith(item.path));
+                const Icon = item.icon;
 
-            {showLabel && (
-              <span className="text-sm truncate">{item.label}</span>
-            )}
-
-            {/* Tooltip en modo colapsado */}
-            {!showLabel && (
-              <span
-                className="absolute left-full ml-2 px-2 py-1 text-xs font-semibold
-                           rounded-lg shadow-lg pointer-events-none
-                           opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100
-                           transition-opacity duration-150 whitespace-nowrap z-50"
-                style={{
-                  backgroundColor: "var(--color-sidebar-bg)",
-                  color:           "var(--color-sidebar-text)",
-                  border:          `1px solid ${SB.border}`,
-                }}
-              >
-                {item.label}
-              </span>
-            )}
-          </Link>
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={handleNavigation}
+                    title={!showLabel ? item.label : undefined}
+                    aria-current={isActive ? "page" : undefined}
+                    className={[
+                      "flex items-center py-2.5 rounded-xl",
+                      "transition-all duration-150 relative group overflow-hidden",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/50",
+                      showLabel ? "gap-3 px-4" : "justify-center px-2",
+                    ].join(" ")}
+                    style={{
+                      backgroundColor: isActive ? SB.activeBg   : "transparent",
+                      color:           isActive ? "#fbbf24"     : SB.text,
+                      fontWeight:      isActive ? 600            : 400,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.backgroundColor = SB.hoverBg;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                    }}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId={showLabel ? "active-pill-expanded" : "active-pill-mini"}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-yellow-400 rounded-r-full"
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <Icon
+                      className="text-base flex-shrink-0"
+                      style={{ color: isActive ? "#fbbf24" : SB.muted }}
+                      aria-hidden="true"
+                    />
+                    {showLabel && (
+                      <span className="text-sm truncate">{item.label}</span>
+                    )}
+                    {!showLabel && (
+                      <span
+                        className="absolute left-full ml-2 px-2 py-1 text-xs font-semibold
+                                   rounded-lg shadow-lg pointer-events-none
+                                   opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100
+                                   transition-opacity duration-150 whitespace-nowrap z-50"
+                        style={{
+                          backgroundColor: "var(--color-sidebar-bg)",
+                          color:           "var(--color-sidebar-text)",
+                          border:          `1px solid ${SB.border}`,
+                        }}
+                      >
+                        {item.label}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>

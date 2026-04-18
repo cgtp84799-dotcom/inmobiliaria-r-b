@@ -25,6 +25,7 @@ import ImageGallery from "../components/ImageGallery";
 import PropertyContactForm from "../components/PropertyContactForm";
 import PropertyMap from "../../properties/components/PropertyMap";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
+import { useFavorites } from "../../clients/hooks/useFavorites";
 
 const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME = "Inmobiliaria Rincón Bedoya y Asociados";
@@ -293,8 +294,9 @@ const PropertyDetailPage = () => {
 
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
+
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const loadProperty = async () => {
     setLoading(true);
@@ -671,6 +673,11 @@ const PropertyDetailPage = () => {
       ? [realEstateListing, breadcrumbsSchema]
       : realEstateListing || breadcrumbsSchema || null;
 
+  const isFavoriteProperty = useMemo(
+    () => (property?.id ? isFavorite(property.id) : false),
+    [property?.id, isFavorite]
+  );
+
   const handleShare = async () => {
     const url = canonicalUrl || window.location.href;
 
@@ -691,9 +698,12 @@ const PropertyDetailPage = () => {
   };
 
   const handleFavorite = () => {
-    setIsFavorite((prev) => !prev);
+    if (!property?.id) return;
+    toggleFavorite(property.id);
     toast.success(
-      isFavorite ? "Eliminado de favoritos" : "¡Agregado a favoritos!"
+      isFavoriteProperty
+        ? "Eliminado de favoritos"
+        : "¡Agregado a favoritos!"
     );
   };
 
@@ -764,7 +774,6 @@ const PropertyDetailPage = () => {
     { label: property.title || "Detalle de propiedad" },
   ];
 
-  // ✔ La propiedad solo acepta visitas si su status lo permite
   const acceptsVisits = ![
     "vendida", "sold", "inactiva", "draft", "eliminada",
   ].includes(String(property?.status || "").toLowerCase());
@@ -834,10 +843,10 @@ const PropertyDetailPage = () => {
               onClick={handleFavorite}
               className="p-2.5 sm:p-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-primary/50 rounded-lg transition"
               aria-label={
-                isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"
+                isFavoriteProperty ? "Quitar de favoritos" : "Agregar a favoritos"
               }
             >
-              {isFavorite ? (
+              {isFavoriteProperty ? (
                 <FaHeart className="text-red-500" size={20} />
               ) : (
                 <FaRegHeart className="text-slate-400" size={20} />
@@ -1090,7 +1099,6 @@ const PropertyDetailPage = () => {
             </motion.div>
           </div>
 
-          {/* ─ Panel lateral sticky ─ */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -1098,8 +1106,6 @@ const PropertyDetailPage = () => {
             className="lg:col-span-1"
           >
             <div className="lg:sticky lg:top-6 space-y-4">
-
-              {/* Botón Agendar Visita — solo si la propiedad sigue disponible */}
               {acceptsVisits && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -1114,7 +1120,7 @@ const PropertyDetailPage = () => {
                     to={`/agendar-visita?propertyId=${property.id}`}
                     className="w-full flex items-center justify-center gap-2.5
                       py-3.5 px-5 rounded-xl font-bold text-slate-950
-                      bg-primary hover:bg-primary/90 transition-all duration-200
+                      bg-primary hover:bg-primary/90 transition-all duración-200
                       shadow-lg shadow-primary/20 hover:shadow-primary/40
                       text-sm sm:text-base"
                   >
@@ -1127,7 +1133,6 @@ const PropertyDetailPage = () => {
                 </motion.div>
               )}
 
-              {/* Formulario de contacto rápido */}
               <PropertyContactForm
                 propertyTitle={property.title}
                 propertyId={property.id}

@@ -1,0 +1,382 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ════════════════════════════════════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════════════════════════════════════
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function authEmail() {
+      return request.auth.token.email;
+    }
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(authEmail());
+    }
+
+    function userExists() {
+      return isSignedIn() && exists(userDocPath());
+    }
+
+    function getUserData() {
+      return userExists() ? get(userDocPath()).data : null;
+    }
+
+    function hasRole(roles) {
+      return userExists() && getUserData() != null && getUserData().role in roles;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && authEmail() == userId;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // ROLES
+    // ════════════════════════════════════════════════════════════════════════
+
+    function isAdmin()    { return hasRole(['admin']); }
+    function isMember()   { return hasRole(['member']); }
+    function isViewer()   { return hasRole(['viewer']); }
+    function canOperate() { return hasRole(['admin', 'member']); }
+    function canRead()    { return hasRole(['admin', 'member', 'viewer']); }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // HELPERS PORTAL CLIENTES
+    // ════════════════════════════════════════════════════════════════════════
+
+    function isClientOwnerByResource() {
+      return isSignedIn() && resource.data.email == authEmail();
+    }
+
+    function isClientOwnerByRequest() {
+      return isSignedIn() && request.resource.data.email == authEmail();
+    }
+
+    function isNotifOwner() {
+      return isSignedIn() && resource.data.userId == authEmail();
+    }
+
+    function isVisitOwner() {
+      return isSignedIn() && resource.data.clientEmail == authEmail();
+    }
+
+    function isContractOwner() {
+      return isSignedIn() && resource.data.clientEmail == authEmail();
+    }
+
+    function isDocumentOwner() {
+      return isSignedIn() && resource.data.clientEmail == authEmail();
+    }
+
+    function clientAllowedUpdateFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'nombre',
+        'telefono',
+        'ubicacionInteres',
+        'presupuesto',
+        'tipoPropiedad',
+        'favorites',
+        'updatedAt',
+        'onboardingDone',
+        'photoURL'
+      ]);
+    }
+
+    function userSelfAllowedFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'displayName',
+        'phone',
+        'photoURL',
+        'updatedAt',
+        'lastSeen',
+        'online',
+        'fcmToken',
+        'lastTokenUpdate',
+        'notificationsEnabled'
+      ]);
+    }
+
+    function notifAllowedUpdateFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'read',
+        'readAt'
+      ]);
+    }
+
+    function clientVisitAllowedUpdateFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'updatedAt',
+        'cancelledByClient',
+        'cancelReason'
+      ]);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // USUARIOS
+    // ════════════════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      allow read: if canRead() || isOwner(userId);
+
+      allow create: if isSignedIn() && userId == authEmail();
+
+      allow update: if isAdmin()
+                    || (isOwner(userId) && userSelfAllowedFields());
+
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SOLICITUDES DE ACCESO
+    // ════════════════════════════════════════════════════════════════════════
+    match /accessRequests/{requestId} {
+      allow create:         if true;
+      allow read:           if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PRESENCIA (solo panel interno)
+    // ════════════════════════════════════════════════════════════════════════
+    match /presence/{userId} {
+      allow read:  if canOperate();
+      allow write: if canOperate() && request.auth.uid == userId;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PROPIEDADES
+    // ════════════════════════════════════════════════════════════════════════
+    match /properties/{propertyId} {
+      allow read:           if true;
+      allow create, update: if canOperate();
+      allow delete:         if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CLIENTES
+    // ════════════════════════════════════════════════════════════════════════
+    match /clients/{clientId} {
+      allow read: if canRead() || isClientOwnerByResource();
+
+      allow create: if canOperate() || isClientOwnerByRequest();
+
+      allow update: if canOperate()
+                    || (isClientOwnerByResource() && clientAllowedUpdateFields());
+
+      allow delete: if isAdmin();
+
+      match /history/{historyId} {
+        allow read:   if canRead() || isClientOwnerByResource();
+        allow create: if canOperate() || isClientOwnerByResource();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONTRATOS
+    // ════════════════════════════════════════════════════════════════════════
+    match /contracts/{contractId} {
+      allow read: if canRead() || isContractOwner();
+      allow create, update: if canOperate();
+      allow delete: if isAdmin();
+
+      // ── Subcolecciones de contratos ──────────────────────────────────────
+      // Estas subcolecciones son escritas por contract.service.js (milestones,
+      // payments) y por ContractDetail.jsx (documents, history).
+      // El cliente puede LEER sus propias subcolecciones a través del portal.
+      // Solo operadores (admin/member) pueden escribir.
+      // La Cloud Function processContractAlerts escribe en alerts_sent
+      // usando el Admin SDK, así que no necesita reglas aquí.
+
+      match /milestones/{milestoneId} {
+        allow read:           if canRead() || isContractOwner();
+        allow create, update: if canOperate();
+        allow delete:         if isAdmin();
+      }
+
+      match /payments/{paymentId} {
+        allow read:           if canRead() || isContractOwner();
+        allow create, update: if canOperate();
+        allow delete:         if isAdmin();
+      }
+
+      match /documents/{documentId} {
+        allow read:           if canRead() || isContractOwner();
+        allow create, update: if canOperate();
+        allow delete:         if canOperate();
+      }
+
+      match /history/{historyId} {
+        allow read:           if canRead() || isContractOwner();
+        allow create:         if canOperate();
+        allow update, delete: if isAdmin();
+      }
+
+      match /alerts_sent/{alertId} {
+        // Solo lectura para operadores (las alertas las escribe la Cloud Function
+        // con Admin SDK, que bypasea las rules). Lectura útil para debugging.
+        allow read:  if canOperate();
+        allow write: if false; // Solo Admin SDK (Cloud Functions)
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // DOCUMENTOS
+    // ════════════════════════════════════════════════════════════════════════
+    match /documents/{documentId} {
+      allow read: if canRead() || isDocumentOwner();
+      allow create, update: if canOperate();
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONTACTOS
+    // ════════════════════════════════════════════════════════════════════════
+    match /contacts/{contactId} {
+      allow create:         if true;
+      allow read:           if canRead();
+      allow update, delete: if canOperate();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISITAS
+    // ════════════════════════════════════════════════════════════════════════
+    match /visits/{visitId} {
+      allow create: if true;
+
+      allow read: if canRead() || isVisitOwner();
+
+      allow update: if canOperate()
+                    || (
+                      isVisitOwner()
+                      && clientVisitAllowedUpdateFields()
+                      && request.resource.data.status == 'cancelada'
+                      && (resource.data.status == 'pending'
+                          || resource.data.status == 'approved')
+                    );
+
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // NOTIFICACIONES
+    // ════════════════════════════════════════════════════════════════════════
+    match /notifications/{notificationId} {
+      allow read: if canOperate() || isNotifOwner();
+
+      allow create: if canOperate()
+                    || (isSignedIn() && request.resource.data.userId == authEmail());
+
+      allow update: if (isSignedIn() && isNotifOwner() && notifAllowedUpdateFields())
+                    || isAdmin();
+
+      allow delete: if isAdmin() || isNotifOwner();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // EMAILS AUTOMÁTICOS
+    // ════════════════════════════════════════════════════════════════════════
+    match /mail/{mailId} {
+      allow create: if canOperate()
+                    || (isSignedIn()
+                        && request.resource.data.to is string
+                        && request.resource.data.to == authEmail());
+      allow read:   if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONSENTIMIENTO DE PRIVACIDAD
+    // ════════════════════════════════════════════════════════════════════════
+    match /privacyConsents/{consentId} {
+      allow create: if true;
+      allow read:   if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CHAT
+    // ════════════════════════════════════════════════════════════════════════
+    match /conversations/{conversationId} {
+      allow read:           if canOperate();
+      allow create, update: if canOperate();
+      allow delete:         if isAdmin();
+
+      match /messages/{messageId} {
+        allow read:   if canOperate();
+        allow create: if canOperate();
+        allow update: if canOperate()
+                      && request.auth.token.email == resource.data.senderEmail;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /groupChat/{document=**} {
+      allow read:  if canOperate();
+      allow write: if canOperate();
+    }
+
+    match /chatMessages/{messageId} {
+      allow read:           if canOperate();
+      allow create:         if canOperate();
+      allow update, delete: if isAdmin();
+    }
+
+    match /chatRooms/{roomId} {
+      allow read:  if canOperate();
+      allow write: if canOperate();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CALENDARIO / CITAS
+    // ════════════════════════════════════════════════════════════════════════
+    match /events/{eventId} {
+      allow read:  if canRead();
+      allow write: if canOperate();
+    }
+
+    match /appointments/{appointmentId} {
+      allow create:         if true;
+      allow read:           if canRead();
+      allow update, delete: if canOperate();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // ANALYTICS / STATS
+    // ════════════════════════════════════════════════════════════════════════
+    match /analytics/{document=**} {
+      allow read:  if canRead();
+      allow write: if isAdmin();
+    }
+
+    match /activity/{document=**} {
+      allow read:  if canRead();
+      allow write: if canOperate();
+    }
+
+    match /stats/{document=**} {
+      allow read:  if canRead();
+      allow write: if isAdmin();
+    }
+
+    match /counters/{document=**} {
+      allow read:  if canRead();
+      allow write: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONFIGURACIÓN
+    // ════════════════════════════════════════════════════════════════════════
+    match /settings/{document=**} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

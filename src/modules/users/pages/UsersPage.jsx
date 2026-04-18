@@ -1,14 +1,7 @@
 // src/modules/users/pages/UsersPage.jsx
 //
-// CAMBIO PRINCIPAL respecto a versión anterior:
-// El panel de usuarios ahora tiene dos pestañas separadas:
-//   1. "Equipo"    — admin y member (usuarios del panel interno)
-//   2. "Clientes"  — viewers (usuarios del portal de clientes)
-//
-// Esto hace explícita la separación que ya existe a nivel de roles,
-// evita confusión entre "usuario del sistema" y "cliente del portal",
-// y permite diferentes acciones según el universo (ej: un cliente del portal
-// no tiene contraseña que resetear desde aquí, tiene su propio flujo).
+// FIX: handleDelete ahora pasa el rol del usuario a userService.deleteUser()
+// para que cuando se elimine un viewer, también se elimine su doc en /clients.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -28,7 +21,6 @@ import UserDetailPanel from '../components/UserDetailPanel';
 import { useAuth }     from '../../../core/contexts/AuthContext';
 import ConfirmModal    from '../../../shared/components/UI/ConfirmModal';
 
-// ── Roles de cada universo ─────────────────────────────────────────────────────
 const PANEL_ROLES  = [USER_ROLES.ADMIN, USER_ROLES.MEMBER];
 const PORTAL_ROLES = [USER_ROLES.VIEWER];
 
@@ -41,7 +33,7 @@ const UsersPage = () => {
 
   const [users,        setUsers]        = useState([]);
   const [loading,      setLoading]      = useState(true);
-  const [activeTab,    setActiveTab]    = useState('team'); // 'team' | 'clients'
+  const [activeTab,    setActiveTab]    = useState('team');
   const [filtersOpen,  setFiltersOpen]  = useState(true);
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editingUser,  setEditingUser]  = useState(null);
@@ -52,7 +44,6 @@ const UsersPage = () => {
   const [detailUser,  setDetailUser]  = useState(null);
   const [panelOpen,   setPanelOpen]   = useState(false);
 
-  // ── Cargar usuarios ────────────────────────────────────────────────────────
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -67,13 +58,10 @@ const UsersPage = () => {
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  // ── Separación por universo ────────────────────────────────────────────────
   const teamUsers   = useMemo(() => users.filter((u) => PANEL_ROLES.includes(u.role)),  [users]);
   const clientUsers = useMemo(() => users.filter((u) => PORTAL_ROLES.includes(u.role)), [users]);
-
   const activeUsers = activeTab === 'team' ? teamUsers : clientUsers;
 
-  // ── Filtrado ───────────────────────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
     let result = [...activeUsers];
     if (filters.searchTerm) {
@@ -84,31 +72,26 @@ const UsersPage = () => {
         u.phone?.includes(filters.searchTerm)
       );
     }
-    // En la pestaña de clientes, el filtro por rol solo muestra viewer — no tiene sentido
     if (filters.role && activeTab === 'team') result = result.filter((u) => u.role === filters.role);
     if (filters.status) result = result.filter((u) => u.status === filters.status);
     return result;
   }, [activeUsers, filters, activeTab]);
 
   const stats = useMemo(() => ({
-    teamTotal:   teamUsers.length,
-    admins:      teamUsers.filter((u) => u.role === USER_ROLES.ADMIN).length,
-    members:     teamUsers.filter((u) => u.role === USER_ROLES.MEMBER).length,
-    clientTotal: clientUsers.length,
+    teamTotal:     teamUsers.length,
+    admins:        teamUsers.filter((u) => u.role === USER_ROLES.ADMIN).length,
+    members:       teamUsers.filter((u) => u.role === USER_ROLES.MEMBER).length,
+    clientTotal:   clientUsers.length,
     activeClients: clientUsers.filter((u) => u.status === 'active').length,
   }), [teamUsers, clientUsers]);
 
-  // ── Filtros ────────────────────────────────────────────────────────────────
   const handleFilterChange = (field, value) =>
     setFilters((prev) => ({ ...prev, [field]: value }));
-
   const clearFilters = () => setFilters({ searchTerm: '', role: '', status: '' });
 
-  // ── Panel lateral ──────────────────────────────────────────────────────────
   const handleViewDetail = (user) => { setDetailUser(user); setPanelOpen(true); };
   const closePanel = () => setPanelOpen(false);
 
-  // ── Modal crear / editar ───────────────────────────────────────────────────
   const openCreateModal = () => {
     if (!canCreate) { toast.error('No tienes permisos para crear usuarios'); return; }
     setEditingUser(null);
@@ -146,23 +129,32 @@ const UsersPage = () => {
     loadUsers();
   };
 
-  // ── Acciones ───────────────────────────────────────────────────────────────
+  // FIX: pasar el rol del usuario a deleteUser para que también limpie /clients
   const handleDelete = (user) => {
     if (!canDelete) { toast.error('No tienes permisos para eliminar usuarios'); return; }
     if (user.email === currentUser?.email) { toast.error('No puedes eliminar tu propia cuenta'); return; }
+
+    const isClient = user.role === USER_ROLES.VIEWER;
+    const warningMsg = isClient
+      ? `¿Seguro que quieres eliminar al cliente ${user.displayName || user.email}?\n\nEsto eliminará:\n• Su acceso al portal\n• Su historial de favoritos\n• Su perfil de cliente\n\nEsta acción es permanente.`
+      : `¿Seguro que quieres eliminar a ${user.displayName || user.email}? Esta acción no se puede deshacer.`;
+
     setConfirmModal({
       isOpen: true,
-      title: 'Eliminar usuario',
-      message: `¿Seguro que quieres eliminar a ${user.displayName || user.email}? Esta acción no se puede deshacer.`,
-      confirmText: 'Sí, eliminar',
+      title: isClient ? 'Eliminar cliente del portal' : 'Eliminar usuario',
+      message: warningMsg,
+      confirmText: 'Sí, eliminar definitivamente',
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
-          await userService.deleteUser(user.id);
-          toast.success('Usuario eliminado');
+          // FIX: pasar el rol para que se limpie /clients si es viewer
+          await userService.deleteUser(user.id, user.role);
+          toast.success(isClient ? 'Cliente eliminado del portal y del sistema' : 'Usuario eliminado');
           loadUsers();
           closePanel();
-        } catch { toast.error('Error al eliminar usuario'); }
+        } catch (err) {
+          toast.error(`Error al eliminar: ${err.message}`);
+        }
       },
     });
   };
@@ -194,7 +186,6 @@ const UsersPage = () => {
     });
   };
 
-  // ── Tabs ───────────────────────────────────────────────────────────────────
   const TABS = [
     {
       id:    'team',
@@ -212,21 +203,15 @@ const UsersPage = () => {
     },
   ];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="px-4 py-6 space-y-6">
 
       {/* Encabezado */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold text-primary mb-1">Gestión de usuarios</h1>
           <p className="text-muted text-sm">Panel interno y portal de clientes separados.</p>
         </div>
-        {/* Solo crear usuarios del panel (no crear clientes manualmente) */}
         {canCreate && activeTab === 'team' && (
           <button onClick={openCreateModal} className="button-gold inline-flex items-center gap-2 px-6 py-3">
             <FaUserPlus /> Nuevo usuario
@@ -235,18 +220,13 @@ const UsersPage = () => {
       </motion.div>
 
       {/* KPIs */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-5 gap-4"
-      >
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: 'Total equipo',    value: stats.teamTotal,      color: 'primary',   Icon: FaUsers      },
-          { label: 'Admins',          value: stats.admins,         color: 'red-400',   Icon: FaShieldAlt  },
-          { label: 'Agentes',         value: stats.members,        color: 'blue-400',  Icon: FaUserShield },
-          { label: 'Clientes portal', value: stats.clientTotal,    color: 'amber-400', Icon: FaPortrait   },
-          { label: 'Clientes activos',value: stats.activeClients,  color: 'green-400', Icon: FaEye        },
+          { label: 'Total equipo',     value: stats.teamTotal,     color: 'primary',   Icon: FaUsers      },
+          { label: 'Admins',           value: stats.admins,        color: 'red-400',   Icon: FaShieldAlt  },
+          { label: 'Agentes',          value: stats.members,       color: 'blue-400',  Icon: FaUserShield },
+          { label: 'Clientes portal',  value: stats.clientTotal,   color: 'amber-400', Icon: FaPortrait   },
+          { label: 'Clientes activos', value: stats.activeClients, color: 'green-400', Icon: FaEye        },
         ].map(({ label, value, color, Icon }) => (
           <div key={label} className="card-soft p-4">
             <div className="flex items-center gap-3">
@@ -263,12 +243,7 @@ const UsersPage = () => {
       </motion.div>
 
       {/* Tabs de universo */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.12 }}
-        className="flex gap-2 border-b border-slate-800 pb-0"
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="flex gap-2 border-b border-slate-800">
         {TABS.map((t) => {
           const Icon   = t.icon;
           const active = activeTab === t.id;
@@ -276,13 +251,9 @@ const UsersPage = () => {
             <button
               key={t.id}
               onClick={() => { setActiveTab(t.id); clearFilters(); }}
-              className={`
-                flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all
-                ${active
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
-                }
-              `}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+                active ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
             >
               <Icon className="text-xs" />
               {t.label}
@@ -294,23 +265,16 @@ const UsersPage = () => {
         })}
       </motion.div>
 
-      {/* Descripción del universo activo */}
       <p className="text-slate-500 text-xs -mt-3">
         {TABS.find((t) => t.id === activeTab)?.desc}
         {activeTab === 'clients' && (
-          <span className="ml-1 text-slate-600">
-            — Los clientes se registran desde el portal (/acceso-clientes) y no pueden acceder al panel interno.
-          </span>
+          <span className="ml-1 text-slate-600">— Los clientes se registran desde el portal (/acceso-clientes).</span>
         )}
       </p>
 
-      {/* Info roles — solo en pestaña equipo */}
+      {/* Info roles */}
       {activeTab === 'team' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="card-soft p-4 border border-blue-500/20"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card-soft p-4 border border-blue-500/20">
           <div className="flex items-start gap-3">
             <FaInfoCircle className="text-blue-400 mt-1 flex-shrink-0" />
             <div className="w-full">
@@ -329,12 +293,7 @@ const UsersPage = () => {
       )}
 
       {/* Filtros */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="card-soft border border-slate-800/80"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card-soft border border-slate-800/80">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -363,7 +322,6 @@ const UsersPage = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Filtro de rol solo visible en pestaña equipo */}
               {activeTab === 'team' && (
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Rol</label>
@@ -441,11 +399,7 @@ const UsersPage = () => {
           )}
         </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredUsers.map((user) => (
             <UserCard
               key={user.id}

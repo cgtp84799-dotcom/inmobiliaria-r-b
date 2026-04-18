@@ -1,4 +1,30 @@
 // src/modules/visits/services/visit.service.js
+//
+// ═══════════════════════════════════════════════════════════════════
+// AUDITORÍA FINAL — CORRECCIÓN DEFINITIVA
+//
+// SISTEMA DE EMAILS:
+//   Tu proyecto tiene DOS mecanismos de envío:
+//
+//   A) Extensión "Trigger Email from Firestore" (ext-firestore-send-email)
+//      → Escucha la colección /mail → envía con SMTP configurado en la extensión
+//      → visit.service.js escribe en /mail para: approved, rejected, rescheduled
+//
+//   B) Cloud Function onVisitStatusChanged (functions/index.js)
+//      → Trigger de Firestore en /visits/{visitId} → envía con nodemailer
+//      → Maneja: pending (nueva solicitud), approved, rejected, rescheduled
+//
+// PROBLEMA: Ambos enviaban emails para approved/rejected/rescheduled = DUPLICADOS
+//
+// SOLUCIÓN APLICADA:
+//   → visit.service.js MANTIENE sus sendMail para approved/rejected/rescheduled
+//     (usa la extensión que SÍ está instalada)
+//   → functions/index.js onVisitStatusChanged SOLO maneja "pending"
+//     (el email de "solicitud recibida" que visit.service.js NO envía)
+//   → Se eliminan los emails de approved/rejected/rescheduled del CF
+//     para evitar duplicados (ver archivo functions/index.js corregido)
+// ═══════════════════════════════════════════════════════════════════
+
 import {
   collection, addDoc, updateDoc, deleteDoc,
   doc, getDocs, getDoc, query, where, orderBy, limit,
@@ -14,7 +40,8 @@ const col = () => collection(db, COLLECTION);
 const ref = (id) => doc(db, COLLECTION, id);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EMAIL HELPERS
+// EMAIL VÍA EXTENSIÓN "Trigger Email from Firestore"
+// Escribe en /mail → la extensión ext-firestore-send-email lo procesa y envía
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sendMail(to, subject, html) {
@@ -30,6 +57,10 @@ async function sendMail(to, subject, html) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPLATES DE EMAIL
+// ─────────────────────────────────────────────────────────────────────────────
+
 function emailHeader(previewText = '') {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -37,19 +68,15 @@ function emailHeader(previewText = '') {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <meta name="x-apple-disable-message-reformatting" />
-  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
   <title></title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body{margin:0;padding:0;background:#f4f4f0;font-family:'Inter',Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
-    table{border-collapse:collapse;}
-    img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
+    body{margin:0;padding:0;background:#f4f4f0;font-family:'Inter',Helvetica,Arial,sans-serif;}
     .email-wrapper{background:#f4f4f0;padding:32px 16px;}
     .email-card{background:#ffffff;border-radius:16px;overflow:hidden;max-width:560px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
     .email-header{background:#0d0d0b;padding:28px 40px 24px;text-align:center;}
     .brand-logo-img{display:block;margin:0 auto;}
-    .brand-sub{font-family:'Inter',Helvetica,Arial,sans-serif;font-size:9px;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;color:#8a7a5a;margin-top:8px;display:block;text-align:center;}
+    .brand-sub{font-size:9px;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;color:#8a7a5a;margin-top:8px;display:block;text-align:center;}
     .email-body{padding:36px 40px 32px;}
     .email-footer{background:#f9f8f6;border-top:1px solid #e8e5e0;padding:20px 40px;text-align:center;}
     .footer-text{font-size:12px;color:#a09a8e;line-height:1.7;margin:0;}
@@ -67,7 +94,6 @@ function emailHeader(previewText = '') {
     .badge-rejected{background:#fce8ee;color:#8b1a2e;}
     .badge-rescheduled{background:#e8f0fc;color:#1a3d8b;}
     .badge-assigned{background:#fdf3e0;color:#7a4d00;}
-    .cta-button{display:inline-block;background:#c8a44a;color:#0d0d0b;font-family:'Inter',Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.04em;text-decoration:none;padding:14px 28px;border-radius:8px;margin-top:8px;}
     .divider{border:none;border-top:1px solid #ede9e2;margin:24px 0;}
     .greeting{font-size:16px;color:#3d3c38;margin:0 0 20px;}
     @media only screen and (max-width:600px){
@@ -76,7 +102,6 @@ function emailHeader(previewText = '') {
       .email-footer{padding:16px 20px;}
       h1{font-size:20px;}
       .detail-label{min-width:80px;font-size:11px;}
-      .brand-logo-img{max-width:140px !important;}
     }
   </style>
 </head>
@@ -85,16 +110,7 @@ function emailHeader(previewText = '') {
 <div class="email-wrapper">
 <div class="email-card">
   <div class="email-header">
-    <img
-      src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png"
-      alt="R&amp;B Inmobiliaria"
-      width="160"
-      height="auto"
-      class="brand-logo-img"
-      style="display:block;margin:0 auto;max-width:160px;height:auto;"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
-    />
-    <div style="display:none;font-family:'Inter',Helvetica,Arial,sans-serif;font-size:26px;font-weight:700;letter-spacing:0.08em;color:#c8a44a;text-align:center;line-height:1;">R&amp;B</div>
+    <img src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" alt="R&B Inmobiliaria" width="160" height="auto" class="brand-logo-img" style="display:block;margin:0 auto;max-width:160px;height:auto;" />
     <span class="brand-sub">Inmobiliaria &middot; Real Estate</span>
   </div>`;
 }
@@ -103,8 +119,8 @@ function emailFooter() {
   return `
   <div class="email-footer">
     <p class="footer-text">
-      &copy; ${new Date().getFullYear()} R&amp;B Inmobiliaria. Todos los derechos reservados.<br />
-      Si tienes preguntas, <a class="footer-link" href="mailto:contacto@rybinmobiliaria.com">contáctanos</a>.
+      &copy; ${new Date().getFullYear()} R&B Inmobiliaria. Todos los derechos reservados.<br />
+      Si tienes preguntas, <a class="footer-link" href="mailto:inmojuridi09@gmail.com">contáctanos</a>.
     </p>
   </div>
 </div>
@@ -120,7 +136,7 @@ function tplApprovedClient({ clientName, propertyName, requestedDate, requestedT
     <h1 style="margin-top:16px;">¡Tu visita está aprobada!</h1>
     <p class="subtitle">Tenemos todo listo para recibirte.</p>
     <p class="greeting">Hola, <strong>${clientName}</strong>:</p>
-    <p>Nos complace informarte que tu solicitud de visita ha sido <strong>revisada y aprobada</strong>. Te esperamos con gusto.</p>
+    <p>Nos complace informarte que tu solicitud de visita ha sido <strong>revisada y aprobada</strong>.</p>
     <div class="highlight-box">
       <table style="width:100%;border-collapse:collapse;">
         <tr class="detail-row"><td class="detail-label">Propiedad</td><td class="detail-value">${propertyName}</td></tr>
@@ -143,7 +159,7 @@ function tplApprovedAgent({ agentName, agentEmail, clientName, clientEmail, clie
     <span class="status-badge badge-assigned">📋 Visita asignada</span>
     <h1 style="margin-top:16px;">Tienes una nueva visita</h1>
     <p class="greeting">Hola, <strong>${agentName || agentEmail}</strong>:</p>
-    <p>Se te ha asignado una visita aprobada. Detalles completos:</p>
+    <p>Se te ha asignado una visita aprobada:</p>
     <div class="highlight-box">
       <table style="width:100%;border-collapse:collapse;">
         <tr class="detail-row"><td class="detail-label">Cliente</td><td class="detail-value">${clientName}</td></tr>
@@ -170,7 +186,7 @@ function tplRejectedClient({ clientName, propertyName, adminNotes }) {
     ${adminNotes ? `<div class="highlight-box"><p style="margin:0;font-size:14px;color:#5a5650;"><strong>Motivo:</strong> ${adminNotes}</p></div>` : ''}
     <p>Si deseas explorar otras propiedades o reagendar, no dudes en contactarnos.</p>
     <hr class="divider" />
-    <p style="font-size:13px;color:#9a9288;margin:0;">Gracias por tu interés en R&amp;B Inmobiliaria.</p>
+    <p style="font-size:13px;color:#9a9288;margin:0;">Gracias por tu interés en R&B Inmobiliaria.</p>
   </div>
   ` + emailFooter();
 }
@@ -288,6 +304,8 @@ export const visitService = {
   },
 
   async requestVisit(payload) {
+    // El email de "solicitud recibida" lo envía el CF onVisitStatusChanged
+    // cuando detecta null → pending. NO lo enviamos aquí.
     const visitRef = await addDoc(col(), {
       ...payload,
       sourceCollection: 'visits',
@@ -418,7 +436,7 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // Notificación in-app al agente (sistema interno)
+    // Notificación in-app al agente
     if (agentEmail) {
       notificationService.createNotification({
         userId: agentEmail, type: 'visit_assigned',
@@ -428,7 +446,7 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // Correos
+    // ── Email vía extensión /mail ────────────────────────────────────────────
     await sendMail(
       visit.clientEmail,
       `Visita confirmada — ${visit.propertyName} · R&B Inmobiliaria`,
@@ -449,7 +467,6 @@ export const visitService = {
     await this.syncAppointmentStatus(visit.id, VISIT_STATUS.REJECTED, adminNotes);
 
     if (visit.clientEmail) {
-      // Notificación in-app portal
       sendClientNotification(visit.clientEmail, {
         title:    'Solicitud de visita no aprobada',
         message:  `Tu solicitud para "${visit.propertyName}" no pudo confirmarse.${adminNotes ? ' ' + adminNotes : ''}`,
@@ -457,6 +474,7 @@ export const visitService = {
         relatedId: visit.id,
       }).catch(() => {});
 
+      // Email vía extensión /mail
       await sendMail(
         visit.clientEmail,
         `Actualización sobre tu visita a "${visit.propertyName}" · R&B Inmobiliaria`,
@@ -499,7 +517,7 @@ export const visitService = {
       proposedDate,
       proposedTime,
       adminNotes,
-      newDate:       proposedDate,   // campo extra para el portal
+      newDate:       proposedDate,
       newTime:       proposedTime,
       updatedAt:     serverTimestamp(),
       rescheduledAt: serverTimestamp(),
@@ -507,7 +525,6 @@ export const visitService = {
     await this.syncAppointmentStatus(visitId, VISIT_STATUS.RESCHEDULED, adminNotes);
 
     if (clientEmail) {
-      // Notificación in-app portal
       sendClientNotification(clientEmail, {
         title:    '📅 Nueva propuesta de fecha para tu visita',
         message:  `Te proponemos reagendar tu visita a "${propName}" para el ${proposedDate} a las ${proposedTime}.`,
@@ -515,6 +532,7 @@ export const visitService = {
         relatedId: visitId,
       }).catch(() => {});
 
+      // Email vía extensión /mail
       await sendMail(
         clientEmail,
         `Nueva fecha propuesta para tu visita a "${propName}" · R&B Inmobiliaria`,

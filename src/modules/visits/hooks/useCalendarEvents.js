@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../core/config/firebase.config';
 import { visitService } from '../services/visit.service';
 
 /**
- * useCalendarEvents — 3C
+ * useCalendarEvents
  *
  * Combina en tiempo real:
- *   - visits (aprobadas/completadas) de Firestore /visits
- *   - appointments nativos del CRM (excluye espejos sourceCollection='visits')
+ *   - visits aprobadas/completadas/reprogramadas de /visits
+ *   - visits PENDIENTES de /visits (con estilo diferenciado)
+ *   - appointments nativos del CRM
  *
- * Devuelve un array plano de eventos normalizados:
- *   { id, title, date, time, clientName, propertyName, agentName,
- *     status, source, color }
- *
- * FIX: colorCache movido a useRef para evitar que se recree en cada render
- * y causar re-renders en bucle que disparan múltiples listeners.
+ * Cada evento tiene un campo `pending: boolean` para que el
+ * CalendarPage pueda renderizarlo con estilo rayado/opaco.
  */
 
 const AGENT_COLORS = [
   '#f59e0b', '#10b981', '#3b82f6', '#a855f7',
   '#ef4444', '#f97316', '#06b6d4', '#84cc16',
 ];
+
+const PENDING_COLOR = '#94a3b8'; // slate-400
 
 function agentColor(agentId, cache) {
   if (!agentId) return '#64748b';
@@ -32,17 +33,19 @@ function agentColor(agentId, cache) {
 
 export function useCalendarEvents() {
   const [visitsEvents,      setVisitsEvents]      = useState([]);
+  const [pendingEvents,     setPendingEvents]     = useState([]);
   const [appointmentEvents, setAppointmentEvents] = useState([]);
   const [loading,           setLoading]           = useState(true);
 
-  // FIX: useRef en lugar de objeto literal para que no se recree en cada render
   const colorCacheRef = useRef({});
 
   useEffect(() => {
     let loadedA = false;
     let loadedB = false;
-    const check = () => { if (loadedA && loadedB) setLoading(false); };
+    let loadedC = false;
+    const check = () => { if (loadedA && loadedB && loadedC) setLoading(false); };
 
+    // 1. Visitas confirmadas (aprobadas/completadas/reprogramadas)
     const unsubVisits = visitService.subscribeCalendar(
       (data) => {
         setVisitsEvents(data.map((v) => ({
@@ -56,6 +59,7 @@ export function useCalendarEvents() {
           status:       v.status,
           source:       'visits',
           color:        agentColor(v.agentId, colorCacheRef.current),
+          pending:      false,
         })));
         loadedA = true;
         check();
@@ -63,6 +67,37 @@ export function useCalendarEvents() {
       () => { loadedA = true; check(); }
     );
 
+    // 2. Visitas PENDIENTES — estilo diferenciado en el calendario
+    const pendingQuery = query(
+      collection(db, 'visits'),
+      where('status', '==', 'pending'),
+      orderBy('requestedDate', 'asc')
+    );
+    const unsubPending = onSnapshot(pendingQuery,
+      (snap) => {
+        setPendingEvents(snap.docs.map((d) => {
+          const v = d.data();
+          return {
+            id:           d.id,
+            title:        v.propertyName ?? 'Visita pendiente',
+            date:         v.requestedDate,
+            time:         v.requestedTime,
+            clientName:   v.clientName,
+            propertyName: v.propertyName,
+            agentName:    v.agentName ?? null,
+            status:       'pending',
+            source:       'visits',
+            color:        PENDING_COLOR,
+            pending:      true,
+          };
+        }));
+        loadedB = true;
+        check();
+      },
+      () => { loadedB = true; check(); }
+    );
+
+    // 3. Appointments nativos del CRM
     const unsubAppts = visitService.subscribeCalendarAppointments(
       (data) => {
         setAppointmentEvents(data.map((a) => ({
@@ -76,22 +111,23 @@ export function useCalendarEvents() {
           status:       a.status,
           source:       'appointments',
           color:        agentColor(a.agentId, colorCacheRef.current),
+          pending:      false,
         })));
-        loadedB = true;
+        loadedC = true;
         check();
       },
-      () => { loadedB = true; check(); }
+      () => { loadedC = true; check(); }
     );
 
     return () => {
       unsubVisits();
+      unsubPending();
       unsubAppts();
     };
   }, []);
 
-  // Combinar y ordenar por fecha+hora
-  const events = [...visitsEvents, ...appointmentEvents].sort((a, b) => {
-    const da  = `${a.date} ${a.time  || '00:00'}`;
+  const events = [...visitsEvents, ...pendingEvents, ...appointmentEvents].sort((a, b) => {
+    const da  = `${a.date} ${a.time || '00:00'}`;
     const db_ = `${b.date} ${b.time || '00:00'}`;
     return da.localeCompare(db_);
   });

@@ -1,10 +1,13 @@
 // src/modules/clients/pages/ClientPortal.jsx
-// v3 — Integra módulos A→E:
-//   A: Pestaña "Comparar" en favoritos (toggle desde SectionFavoritos)
-//   B: Botón "Visitar" en SectionFavoritos con pre-llenado de ScheduleVisitPage
-//   C: Pestaña "Actividad" — timeline de historial + notificaciones
-//   D: Alertas de nuevas propiedades (llegan como notificaciones, se ven en la campana)
-//   E: SectionContratos con timeline visual de estados + alerta de vencimiento
+//
+// FIX: WelcomeModal volvía a aparecer porque:
+//   1. onDone() primero llamaba finishOnboarding() (escritura async a Firestore)
+//   2. Si la escritura fallaba por permisos → onboardingDone seguía false → modal re-aparecía
+//   3. Incluso si tenía éxito, había un flash de 1-2s mientras Firestore actualizaba
+//
+// SOLUCIÓN: dismissWelcome() se llama PRIMERO (ocultar localmente de inmediato),
+// y finishOnboarding() corre en background. El modal nunca vuelve a aparecer en
+// la misma sesión gracias al estado local `dismissed` en useWelcome.
 
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -22,26 +25,24 @@ import { useClientPortal } from '../hooks/useClientPortal';
 import { useWelcome }       from '../hooks/useWelcome';
 import toast from 'react-hot-toast';
 
-// Secciones
 import SectionInicio    from '../components/portal/SectionInicio';
-import SectionFavoritos from '../components/portal/SectionFavoritos';   // v3: + Visitar + Comparar
-import SectionComparar  from '../components/portal/SectionComparar';    // A
-import SectionActividad from '../components/portal/SectionActividad';   // C
+import SectionFavoritos from '../components/portal/SectionFavoritos';
+import SectionComparar  from '../components/portal/SectionComparar';
+import SectionActividad from '../components/portal/SectionActividad';
 import SectionVisitas   from '../components/portal/SectionVisitas';
-import SectionContratos from '../components/portal/SectionContratos';   // E
+import SectionContratos from '../components/portal/SectionContratos';
 import SectionPerfil    from '../components/portal/SectionPerfil';
 import PortalNotificationBell from '../components/portal/PortalNotificationBell';
 import WelcomeModal from '../components/WelcomeModal';
 
-// ── Definición de tabs ────────────────────────────────────────────────────────
 const TAB_DEFS = [
-  { id: 'inicio',     label: 'Inicio',       icon: FaHome,         always: true  },
-  { id: 'favoritos',  label: 'Favoritos',    icon: FaHeart,        always: true  },
-  { id: 'comparar',   label: 'Comparar',     icon: FaBalanceScale, always: false, needsFavs: true  },
-  { id: 'visitas',    label: 'Mis visitas',  icon: FaCalendarAlt,  always: false },
-  { id: 'contratos',  label: 'Contratos',    icon: FaFileContract, always: false },
-  { id: 'actividad',  label: 'Actividad',    icon: FaHistory,      always: false, needsActivity: true },
-  { id: 'perfil',     label: 'Mi perfil',    icon: FaUser,         always: true  },
+  { id: 'inicio',    label: 'Inicio',      icon: FaHome,         always: true  },
+  { id: 'favoritos', label: 'Favoritos',   icon: FaHeart,        always: true  },
+  { id: 'comparar',  label: 'Comparar',    icon: FaBalanceScale, always: false, needsFavs: true },
+  { id: 'visitas',   label: 'Mis visitas', icon: FaCalendarAlt,  always: false },
+  { id: 'contratos', label: 'Contratos',   icon: FaFileContract, always: false },
+  { id: 'actividad', label: 'Actividad',   icon: FaHistory,      always: false, needsActivity: true },
+  { id: 'perfil',    label: 'Mi perfil',   icon: FaUser,         always: true  },
 ];
 
 function UserMenu({ name, photo, onProfile, onSignOut }) {
@@ -97,7 +98,6 @@ function UserMenu({ name, photo, onProfile, onSignOut }) {
   );
 }
 
-// ─── MAIN ──────────────────────────────────────────────────────────────────────
 export default function ClientPortal() {
   useForceDark();
   const { currentUser, userData } = useAuth();
@@ -105,16 +105,11 @@ export default function ClientPortal() {
   const [tab, setTab] = useState('inicio');
 
   const portal = useClientPortal();
+  const { showWelcome, dismiss: dismissWelcome } = useWelcome(portal.onboardingDone, portal.loading);
 
-  const { showWelcome, dismiss: dismissWelcome } = useWelcome(
-    portal.onboardingDone,
-    portal.loading
-  );
-
-  // Tabs visibles — progressive disclosure
   const visibleTabs = useMemo(() => TAB_DEFS.filter((t) => {
-    if (t.always) return true;
-    if (t.needsFavs)     return portal.favProps.length >= 2; // comparar: min 2 favoritos
+    if (t.always)        return true;
+    if (t.needsFavs)     return portal.favProps.length >= 2;
     if (t.needsActivity) return portal.visits.length > 0 || portal.notifications.length > 0;
     if (t.id === 'visitas')   return portal.hasVisits;
     if (t.id === 'contratos') return portal.hasContracts;
@@ -132,6 +127,14 @@ export default function ClientPortal() {
     } catch {
       toast.error('Error al cerrar sesión');
     }
+  }
+
+  // FIX: cerrar modal PRIMERO (local), luego escribir a Firestore en background
+  // Antes: await finishOnboarding() → si fallaba, el modal volvía
+  // Ahora: dismiss() local inmediato → finishOnboarding() async sin bloquear
+  function handleModalDone() {
+    dismissWelcome();                    // ← ocultar AHORA, no esperar a Firestore
+    portal.finishOnboarding();          // ← escribir en background (no await)
   }
 
   const displayName = portal.clientData?.nombre
@@ -155,16 +158,13 @@ export default function ClientPortal() {
   return (
     <div className="min-h-screen bg-slate-950 text-white" style={{ colorScheme: 'dark' }}>
 
-      {/* Welcome Modal */}
+      {/* Welcome Modal — se oculta localmente de inmediato al cerrar */}
       <AnimatePresence>
         {showWelcome && (
           <WelcomeModal
             clientId={portal.clientId}
             clientData={portal.clientData}
-            onDone={async () => {
-              await portal.finishOnboarding();
-              dismissWelcome();
-            }}
+            onDone={handleModalDone}
           />
         )}
       </AnimatePresence>
@@ -255,7 +255,6 @@ export default function ClientPortal() {
                 onToggleCompare={() => setTab('comparar')}
               />
             )}
-            {/* MÓDULO A */}
             {tab === 'comparar' && (
               <SectionComparar favProps={portal.favProps} />
             )}
@@ -265,11 +264,9 @@ export default function ClientPortal() {
                 onCancelVisit={portal.cancelClientVisit}
               />
             )}
-            {/* MÓDULO E */}
             {tab === 'contratos' && (
               <SectionContratos contracts={portal.contracts} />
             )}
-            {/* MÓDULO C */}
             {tab === 'actividad' && (
               <SectionActividad
                 clientId={portal.clientId}

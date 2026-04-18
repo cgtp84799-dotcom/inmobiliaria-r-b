@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../../core/config/firebase.config";
 import PropertyMap from "../../properties/components/PropertyMap";
 import PropertyPrintView from "./PropertyPrintView";
 import PropertyClientPrint  from "./PropertyClientPrint";
@@ -31,6 +33,8 @@ import {
   FaExclamationTriangle,
   FaDollarSign,
   FaLayerGroup,
+  FaUserTie,
+  FaCalendarAlt,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import ConfirmModal from "../../../shared/components/UI/ConfirmModal";
@@ -87,6 +91,26 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
   const [confirmModal, setConfirmModal]             = useState(false);
   const [showClientPrint, setShowClientPrint] = useState(false);
   const [showAdminPrint,  setShowAdminPrint]  = useState(false);
+  const [activeContract, setActiveContract]   = useState(null);
+
+  // ── Cargar contrato activo de esta propiedad ───
+  useEffect(() => {
+    if (!property?.id) return;
+    (async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, 'contracts'), where('propertyId', '==', property.id))
+        );
+        const blocking = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .find((c) => {
+            const s = c.statusGeneral || c.status;
+            return s === 'vigente' || s === 'borrador' || s === 'pausado';
+          });
+        setActiveContract(blocking || null);
+      } catch { setActiveContract(null); }
+    })();
+  }, [property?.id]);
 
   // ── Bloquear scroll ─────────────────────────
   useEffect(() => {
@@ -234,6 +258,59 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
               <FaTimes className="text-light" />
             </button>
           </div>
+
+          {/* ── Contrato activo vinculado ── */}
+          {activeContract && (
+            <div className={`mx-4 sm:mx-6 mt-4 p-4 border rounded-xl ${
+              activeContract.statusGeneral === 'vigente'
+                ? 'bg-emerald-500/10 border-emerald-500/20'
+                : 'bg-slate-500/10 border-slate-500/20'
+            }`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <FaFileContract className={`${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-slate-400'}`} size={14} />
+                  <span className={`text-sm font-bold ${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {activeContract.type === 'arriendo' ? 'Arriendo' : activeContract.type === 'venta' ? 'Venta' : 'Promesa'} · {
+                      activeContract.statusGeneral === 'vigente' ? 'Vigente' :
+                      activeContract.statusGeneral === 'borrador' ? 'Borrador' : 'Pausado'
+                    }
+                  </span>
+                </div>
+                {activeContract.value > 0 && (
+                  <span className="text-primary font-bold text-sm">
+                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(activeContract.value)}
+                    {activeContract.type === 'arriendo' ? ' /mes' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
+                {activeContract.clientName && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <FaUser size={10} className="text-slate-500" />
+                    <span><strong>{activeContract.type === 'arriendo' ? 'Arrendatario:' : 'Comprador:'}</strong> {activeContract.clientName}</span>
+                  </div>
+                )}
+                {activeContract.clientEmail && (
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <FaEnvelope size={10} className="text-slate-500" />
+                    <span>{activeContract.clientEmail}</span>
+                  </div>
+                )}
+                {activeContract.agentName && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <FaUserTie size={10} className="text-slate-500" />
+                    <span><strong>Agente:</strong> {activeContract.agentName}</span>
+                  </div>
+                )}
+                {activeContract.startDate && (
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <FaCalendarAlt size={10} className="text-slate-500" />
+                    <span>{activeContract.startDate}{activeContract.endDate ? ` → ${activeContract.endDate}` : ''}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Contenido ── */}
           <div className="p-4 sm:p-6">

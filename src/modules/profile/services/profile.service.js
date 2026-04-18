@@ -1,3 +1,12 @@
+// src/modules/profile/services/profile.service.js
+//
+// ═══════════════════════════════════════════════════════════════════
+// NOTA: Este servicio usa auth.currentUser (el objeto Auth nativo de Firebase)
+// directamente, NO el currentUser del contexto (que ahora es un objeto plano).
+// Esto es correcto porque las operaciones de Auth (reauthenticate, updatePassword)
+// necesitan el Auth User puro de Firebase.
+// ═══════════════════════════════════════════════════════════════════
+
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -47,7 +56,7 @@ class ProfileService {
 
   /**
    * Cambia la contraseña. Re-autentica primero con la contraseña actual.
-   * Lanza un error descriptivo si la contraseña actual es incorrecta.
+   * ★ Usa auth.currentUser (Auth User nativo de Firebase), NO el del contexto.
    */
   async changePassword(currentPassword, newPassword) {
     const user = auth.currentUser;
