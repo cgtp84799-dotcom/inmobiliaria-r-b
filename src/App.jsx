@@ -103,8 +103,8 @@ function AppRoutes() {
         <Route element={<PublicLayout />}>
           <Route path={PUBLIC_ROUTES.HOME}                 element={<HomePage />} />
           <Route path={PUBLIC_ROUTES.CATALOG}              element={<CatalogPage />} />
-          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES}      element={<CatalogPage />} />
-          <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<CatalogPage />} />
+          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES}      element={<LocationPage />} />
+          <Route path={PUBLIC_ROUTES.TYPE_CITY_PROPERTIES} element={<LocationPage />} />
           <Route path={PUBLIC_ROUTES.PROPERTY_DETAIL}      element={<PropertyDetailPage />} />
           <Route path={PUBLIC_ROUTES.CONTACT}              element={<ContactPage />} />
           <Route path="/ubicacion"                         element={<LocationPage />} />

@@ -1,248 +1,1026 @@
-import { Link } from "react-router-dom";
+// src/modules/public/pages/HomePage.jsx
+// ─────────────────────────────────────────────────────────────
+// Home editorial — Inmobiliaria Rincón Bedoya & Asociados
+// · Sistema de tokens CSS (sin hardcoding de colores)
+// · Dark + Light mode ambos cuidados
+// · Preparado para expansión regional
+// · Refleja la esencia: gestión integral + respaldo jurídico
+// ─────────────────────────────────────────────────────────────
+
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import {
-  FaSearch, FaHome, FaCheckCircle, FaBalanceScale,
-  FaBuilding, FaKey, FaGavel, FaFileContract,
-  FaHandshake, FaShieldAlt, FaPhone, FaUserTie,
-  FaWhatsapp
+  FaSearch, FaMapMarkerAlt, FaArrowRight, FaWhatsapp,
+  FaBalanceScale, FaBuilding, FaKey, FaGavel,
+  FaFileContract, FaHandshake, FaHome, FaChartLine,
+  FaShieldAlt, FaCheckCircle, FaRegCompass,
+  FaRegLightbulb, FaUsers, FaQuoteLeft,
 } from "react-icons/fa";
 import { PUBLIC_ROUTES } from "../../../core/config/routes.config";
 
-const serviceColorMap = {
-  primary: {
-    border: "border-primary/30 hover:border-primary/60",
-    bg: "bg-primary/20",
-    text: "text-primary"
+/* ─────────────────────────────────────────────────────────── */
+/*  DATA                                                       */
+/* ─────────────────────────────────────────────────────────── */
+
+const PILLARS = [
+  {
+    num: "01",
+    icon: FaBalanceScale,
+    title: "Respaldo jurídico",
+    desc: "Cada negocio pasa por nuestro equipo legal: verificación de tradición, saneamientos y acompañamiento en notaría. No vendemos promesas, entregamos títulos al día.",
   },
-  "blue-500": {
-    border: "border-blue-500/30 hover:border-blue-500/60",
-    bg: "bg-blue-500/20",
-    text: "text-blue-500"
+  {
+    num: "02",
+    icon: FaRegCompass,
+    title: "Gestión integral",
+    desc: "Arriendo, compra, venta, sucesiones, remates y avalúos bajo un solo techo. Un solo equipo acompaña al cliente de principio a fin, sin intermediarios.",
   },
-  "green-500": {
-    border: "border-green-500/30 hover:border-green-500/60",
-    bg: "bg-green-500/20",
-    text: "text-green-500"
+  {
+    num: "03",
+    icon: FaUsers,
+    title: "Red de confianza",
+    desc: "Propietarios, compradores, inversionistas y aliados judiciales en una misma red. Cada cliente entra a una base donde todos son potenciales socios.",
   },
-  "purple-500": {
-    border: "border-purple-500/30 hover:border-purple-500/60",
-    bg: "bg-purple-500/20",
-    text: "text-purple-500"
+];
+
+const SERVICES = [
+  {
+    icon: FaBuilding,
+    title: "Compra y venta",
+    desc: "Propiedades urbanas y rurales con verificación jurídica y de usos del suelo.",
   },
-  "orange-500": {
-    border: "border-orange-500/30 hover:border-orange-500/60",
-    bg: "bg-orange-500/20",
-    text: "text-orange-500"
+  {
+    icon: FaKey,
+    title: "Arriendo y administración",
+    desc: "Vivienda urbana, locales comerciales, fincas, aparcerías y turismo con contratos blindados.",
   },
-  "red-500": {
-    border: "border-red-500/30 hover:border-red-500/60",
-    bg: "bg-red-500/20",
-    text: "text-red-500"
-  }
-};
+  {
+    icon: FaGavel,
+    title: "Saneamiento jurídico",
+    desc: "Procesos de pertenencia, falsa tradición y Ley 1561 de 2012 para pequeña vivienda rural y urbana.",
+  },
+  {
+    icon: FaFileContract,
+    title: "Sucesiones y remates",
+    desc: "Levantamiento de sucesiones notariales y judiciales, representación en remates de juzgados.",
+  },
+  {
+    icon: FaHandshake,
+    title: "Créditos e inversión",
+    desc: "Gestión de créditos hipotecarios con bancos y red de inversionistas privados aliados.",
+  },
+  {
+    icon: FaChartLine,
+    title: "Avalúos y proyectos",
+    desc: "Avalúos certificados, subdivisiones urbanísticas y reglamentos de propiedad horizontal.",
+  },
+];
+
+const PROCESS = [
+  {
+    title: "Escucha y diagnóstico",
+    desc: "Conversamos sobre tu objetivo — comprar, vender, arrendar o sanear — y revisamos el estado jurídico del inmueble.",
+  },
+  {
+    title: "Plan y estrategia",
+    desc: "Diseñamos la ruta: documentación necesaria, valor de mercado, canales de difusión o proceso legal requerido.",
+  },
+  {
+    title: "Ejecución transparente",
+    desc: "Tú ves cada paso. Nuestro equipo legal avanza en paralelo al inmobiliario, sin letras pequeñas.",
+  },
+  {
+    title: "Cierre y acompañamiento",
+    desc: "Firma en notaría, entrega física y seguimiento posterior. Seguimos siendo tu inmobiliaria después del cierre.",
+  },
+];
+
+const DIFFERENTIATORS = [
+  "Equipo propio de abogados especializados en finca raíz",
+  "Base de datos curada de propietarios e inversionistas",
+  "Cobertura regional con presencia local en cada municipio",
+  "Tarifas preferenciales para clientes afiliados a múltiples servicios",
+  "Portal privado para seguimiento de tu proceso en tiempo real",
+  "Mediación en conflictos antes de llegar a instancias judiciales",
+];
+
+const TICKER_ITEMS = [
+  "Gestión inmobiliaria integral",
+  "Saneamiento Ley 1561 / 2012",
+  "Procesos de pertenencia",
+  "Sucesiones notariales y judiciales",
+  "Representación en remates",
+  "Avalúos certificados",
+  "Propiedad horizontal",
+  "Créditos hipotecarios",
+  "Subdivisiones urbanísticas",
+];
+
+const COVERAGE_REGIONS = [
+  {
+    region: "Caldas",
+    cities: ["Anserma", "Riosucio", "Supía", "Belalcázar", "La Merced", "Filadelfia", "Marmato", "Manizales"],
+  },
+  {
+    region: "Risaralda",
+    cities: ["Pereira", "Dosquebradas", "La Virginia", "Santa Rosa de Cabal", "Quinchía", "Viterbo"],
+  },
+];
+
+const slugifyCity = (city = "") =>
+  city
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ñ/g, "n")
+    .replace(/\s+/g, "-");
+
+/* ─────────────────────────────────────────────────────────── */
+/*  COMPONENT                                                  */
+/* ─────────────────────────────────────────────────────────── */
 
 const HomePage = () => {
+  const navigate = useNavigate();
+  const [searchForm, setSearchForm] = useState({
+    city: "",
+    operation: "",
+    type: "",
+  });
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+
+    if (searchForm.city) params.set("ciudad", searchForm.city);
+    if (searchForm.operation) params.set("operacion", searchForm.operation);
+    if (searchForm.type) params.set("tipo", searchForm.type);
+
+    const qs = params.toString();
+    navigate(qs ? `${PUBLIC_ROUTES.CATALOG}?${qs}` : PUBLIC_ROUTES.CATALOG);
+  };
+
   return (
-  <div className="overflow-hidden">
-    <Helmet>
-      <title>Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas</title>
-      <meta name="description" content="Compra, vende o arrienda casas, apartamentos, lotes y fincas en Anserma, Riosucio, Supía, Belalcázar y Caldas. Asesoría jurídica especializada en finca raíz. Inmobiliaria Rincón Bedoya y Asociados." />
-      <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
-      <meta property="og:title" content="Inmobiliaria Rincón Bedoya y Asociados | Anserma, Caldas" />
-      <meta property="og:description" content="Tu inmobiliaria de confianza en Anserma, Caldas. Casas, apartamentos, lotes y fincas para compra, venta y arriendo." />
-      <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/" />
-      <meta property="og:image" content="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" />
-      <meta property="og:type" content="website" />
-    </Helmet>
+    <div className="overflow-hidden">
+      <Helmet>
+        <title>Inmobiliaria Rincón Bedoya y Asociados | Gestión inmobiliaria integral</title>
+        <meta
+          name="description"
+          content="Gestión inmobiliaria integral con respaldo jurídico especializado. Compra, venta, arriendo, saneamiento, sucesiones y avalúos en Caldas, Risaralda y la región cafetera."
+        />
+        <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
+      </Helmet>
 
-    <motion.section
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
-      className="relative min-h-[78vh] sm:min-h-[85vh] lg:min-h-[90vh] flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden"
-    >
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-20 left-10 w-56 h-56 sm:w-72 sm:h-72 bg-primary rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-72 h-72 sm:w-96 sm:h-96 bg-blue-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-      </div>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 text-center">
-        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.8 }}>
-          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-5 sm:mb-6 leading-tight">
-            Tu próxima propiedad
-            <span className="block text-primary mt-2">está aquí</span>
-          </h1>
-        </motion.div>
-        <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.8 }} className="text-slate-300 text-base sm:text-lg lg:text-2xl max-w-3xl mx-auto mb-8 sm:mb-12">
-          Gestión inmobiliaria integral con respaldo jurídico especializado.
-          Encuéntranos en Anserma y municipios aledaños
-        </motion.p>
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.8 }} className="flex flex-col items-center gap-5">
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center w-full">
-            <Link to={PUBLIC_ROUTES.CATALOG} className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-yellow-500 text-slate-950 font-bold text-base sm:text-lg rounded-xl shadow-2xl hover:shadow-primary/50 transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3">
-              <FaSearch className="text-lg sm:text-xl" /> Buscar Propiedades
-            </Link>
-            <a href="https://wa.me/573105968202?text=Hola,%20quiero%20informaci%C3%B3n%20para%20vender/arrendar%20mi%20propiedad" target="_blank" rel="noopener noreferrer" className="group relative w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-base sm:text-lg rounded-xl border-2 border-primary/50 hover:border-primary shadow-2xl transition-all duration-300 transform hover:scale-[1.02] flex items-center justify-center gap-3">
-              <FaHome className="text-lg sm:text-xl" /> Vender / Arrendar
-            </a>
-          </div>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9, duration: 0.6 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 w-full max-w-3xl">
-            <div className="flex flex-col items-center sm:items-end text-center sm:text-right">
-              <div className="flex items-center gap-2 mb-1">
-                <FaSearch className="text-primary text-sm" />
-                <span className="text-slate-300 text-sm font-semibold">Para Compradores</span>
-              </div>
-              <p className="text-slate-400 text-xs">Encuentra tu propiedad ideal</p>
-            </div>
-            <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <FaHome className="text-primary text-sm" />
-                <span className="text-slate-300 text-sm font-semibold">Para Propietarios</span>
-              </div>
-              <p className="text-slate-400 text-xs">Publica tu inmueble con nosotros</p>
-            </div>
-          </motion.div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1, duration: 0.8 }} className="mt-8 sm:mt-10 inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-800/50 backdrop-blur-sm rounded-full border border-primary/30">
-          <FaBalanceScale className="text-primary text-lg sm:text-xl" />
-          <span className="text-slate-300 text-xs sm:text-sm font-medium">Respaldo jurídico especializado</span>
-        </motion.div>
-      </div>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4, duration: 0.8 }} className="hidden sm:block absolute bottom-8 left-1/2 transform -translate-x-1/2">
-        <div className="w-6 h-10 border-2 border-primary rounded-full flex justify-center p-2">
-          <motion.div animate={{ y: [0, 12, 0] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-1.5 h-1.5 bg-primary rounded-full" />
-        </div>
-      </motion.div>
-    </motion.section>
-
-    <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-900 to-slate-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">¿Qué estás buscando?</h2>
-          <p className="text-slate-400 text-sm sm:text-base lg:text-lg max-w-2xl mx-auto">Soluciones personalizadas para compradores y propietarios</p>
-        </motion.div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-          <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.2 }} viewport={{ once: true }} className="card-soft p-6 sm:p-8 border-2 border-primary/30 hover:border-primary/60 transition-all duration-300 group">
-            <div className="flex items-center gap-4 mb-5 sm:mb-6">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-primary/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FaSearch className="text-primary text-2xl sm:text-3xl" />
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-primary">Para Compradores</h3>
-            </div>
-            <ul className="space-y-3 sm:space-y-4">
-              {["Asesoría personalizada en tu búsqueda","Verificación jurídica completa de propiedades","Gestión de créditos hipotecarios y financiación","Acompañamiento en trámites notariales","Inspección y avaluó profesional","Negociación directa con propietarios"].map((item, i) => (
-                <motion.li key={i} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.1 }} viewport={{ once: true }} className="flex items-start gap-3">
-                  <FaCheckCircle className="text-primary mt-1 flex-shrink-0" />
-                  <span className="text-slate-300 text-sm sm:text-base">{item}</span>
-                </motion.li>
-              ))}
-            </ul>
-            <Link to={PUBLIC_ROUTES.CATALOG} className="mt-7 sm:mt-8 w-full button-gold inline-flex items-center justify-center gap-2">Ver propiedades disponibles <FaSearch /></Link>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.2 }} viewport={{ once: true }} className="card-soft p-6 sm:p-8 border-2 border-blue-500/30 hover:border-blue-500/60 transition-all duration-300 group">
-            <div className="flex items-center gap-4 mb-5 sm:mb-6">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FaHome className="text-blue-500 text-2xl sm:text-3xl" />
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-blue-500">Para Propietarios</h3>
-            </div>
-            <ul className="space-y-3 sm:space-y-4">
-              {["Publicidad en múltiples plataformas","Fotografía y videos profesionales","Gestión integral de contratos de arriendo","Verificación de inquilinos/compradores","Asesoría jurídica en todo el proceso","Avaluó profesional"].map((item, i) => (
-                <motion.li key={i} initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.1 }} viewport={{ once: true }} className="flex items-start gap-3">
-                  <FaCheckCircle className="text-blue-500 mt-1 flex-shrink-0" />
-                  <span className="text-slate-300 text-sm sm:text-base">{item}</span>
-                </motion.li>
-              ))}
-            </ul>
-            <a href="https://wa.me/573105968202?text=Hola,%20quiero%20vender/arrendar%20mi%20propiedad" target="_blank" rel="noopener noreferrer" className="mt-7 sm:mt-8 w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300">
-              Publicar mi propiedad <FaWhatsapp />
-            </a>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-
-    <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">Servicios Especializados</h2>
-          <p className="text-slate-400 text-sm sm:text-base lg:text-lg max-w-2xl mx-auto">Con respaldo de nuestro equipo jurídico profesional</p>
-        </motion.div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8">
-          {[
-            { icon: FaBuilding,     title: "Compra y Venta",              description: "Propiedades urbanas y rurales con verificación del estado jurídico completo.",                     color: "primary",    delay: 0.1 },
-            { icon: FaKey,          title: "Arriendo y Administración",   description: "Gestión de contratos: vivienda, locales comerciales, turismo y aparcerías.",              color: "blue-500",   delay: 0.2 },
-            { icon: FaGavel,        title: "Saneamiento Jurídico",        description: "Pertenencia, falsas tradiciones, pequeña propiedad rural (Ley 1561/2012).",                color: "green-500",  delay: 0.3 },
-            { icon: FaFileContract, title: "Sucesiones y Remates",        description: "Levantamiento de sucesiones notariales y representación en remates judiciales.",         color: "purple-500", delay: 0.4 },
-            { icon: FaHandshake,    title: "Créditos Hipotecarios",       description: "Asesoría y gestión de financiación con bancos e inversionistas privados.",              color: "orange-500", delay: 0.5 },
-            { icon: FaShieldAlt,    title: "Avalúos y Proyectos",        description: "Asesoría en Avaluüos certificados, subdivisión de lotes y reglamentos de PH.",    color: "red-500",    delay: 0.6 },
-          ].map((service, index) => {
-            const c = serviceColorMap[service.color] ?? serviceColorMap.primary;
-            return (
+      <section className="home-hero section-pad relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            <div className="lg:col-span-7 relative z-10">
               <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: service.delay, duration: 0.6 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -10, scale: 1.02 }}
-                className={`card-soft p-5 sm:p-6 text-center ${c.border} transition-all duration-300 group`}
-            >
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 ${c.bg} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                  <service.icon className={`${c.text} text-3xl sm:text-4xl`} />
-                </div>
-                <h3 className="text-light font-bold text-lg sm:text-xl mb-2 sm:mb-3">{service.title}</h3>
-                <p className="text-muted text-sm leading-relaxed">{service.description}</p>
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <span className="eyebrow">Gestión inmobiliaria integral</span>
               </motion.div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
 
-    <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-slate-950 to-slate-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="text-center mb-10 sm:mb-14 lg:mb-16">
-          <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-3 sm:mb-4">¿Cómo trabajamos?</h2>
-          <p className="text-slate-400 text-sm sm:text-base lg:text-lg max-w-2xl mx-auto">Un proceso simple, transparente y seguro</p>
-        </motion.div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
-          {[
-            { step: "01", title: "Contacto Inicial",   desc: "Cuéntanos tus necesidades",      icon: FaPhone        },
-            { step: "02", title: "Asesoría Experta",   desc: "Te guiamos en todo el proceso",  icon: FaUserTie      },
-            { step: "03", title: "Verificación Legal", desc: "Revisamos todo jurídicamente",   icon: FaBalanceScale },
-            { step: "04", title: "Cierre Exitoso",     desc: "Tu negocio seguro y exitoso",    icon: FaCheckCircle  },
-          ].map((item, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15, duration: 0.6 }} viewport={{ once: true }} className="relative">
-              <div className="card-soft p-5 sm:p-6 text-center hover:border-primary/50 transition-all duration-300">
-                <div className="text-primary text-5xl sm:text-6xl font-bold opacity-20 mb-2">{item.step}</div>
-                <item.icon className="text-primary text-3xl sm:text-4xl mx-auto mb-4" />
-                <h3 className="text-white font-bold text-base sm:text-lg mb-2">{item.title}</h3>
-                <p className="text-slate-400 text-sm">{item.desc}</p>
+              <motion.h1
+                initial={{ opacity: 0, y: 32 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                className="heading-display mt-6 text-[clamp(2.5rem,5vw+1rem,5rem)]"
+              >
+                Propiedades con <em>papeles al día</em>,
+                <br className="hidden sm:block" />
+                decisiones con <em>respaldo legal</em>.
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.25 }}
+                className="mt-6 text-lg sm:text-xl max-w-xl leading-relaxed"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Somos la inmobiliaria que antes de mostrarte una propiedad, la verifica
+                jurídicamente. Compra, venta, arriendo, saneamiento y avalúos, con un
+                equipo legal propio.
+              </motion.p>
+
+              <motion.form
+                onSubmit={handleSearch}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.4 }}
+                className="search-hero mt-8 max-w-3xl"
+                role="search"
+                aria-label="Buscar propiedades"
+              >
+                <div className="search-hero__inputs">
+                  <div className="search-hero__field">
+                    <label htmlFor="h-city" className="search-hero__field-label">
+                      <FaMapMarkerAlt className="inline mr-1 opacity-60" aria-hidden="true" />
+                      Ciudad o región
+                    </label>
+                    <input
+                      id="h-city"
+                      type="text"
+                      placeholder="Anserma, Pereira, Manizales..."
+                      value={searchForm.city}
+                      onChange={(e) => setSearchForm({ ...searchForm, city: e.target.value })}
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div className="search-hero__divider" aria-hidden="true" />
+
+                  <div className="search-hero__field">
+                    <label htmlFor="h-op" className="search-hero__field-label">
+                      Operación
+                    </label>
+                    <select
+                      id="h-op"
+                      value={searchForm.operation}
+                      onChange={(e) => setSearchForm({ ...searchForm, operation: e.target.value })}
+                    >
+                      <option value="">Cualquiera</option>
+                      <option value="venta">Comprar</option>
+                      <option value="arriendo">Arrendar</option>
+                    </select>
+                  </div>
+
+                  <div className="search-hero__divider hidden md:block" aria-hidden="true" />
+
+                  <div className="search-hero__field">
+                    <label htmlFor="h-type" className="search-hero__field-label">
+                      Tipo
+                    </label>
+                    <select
+                      id="h-type"
+                      value={searchForm.type}
+                      onChange={(e) => setSearchForm({ ...searchForm, type: e.target.value })}
+                    >
+                      <option value="">Todos</option>
+                      <option value="casa">Casa</option>
+                      <option value="apartamento">Apartamento</option>
+                      <option value="lote">Lote</option>
+                      <option value="finca">Finca</option>
+                      <option value="local">Local</option>
+                      <option value="oficina">Oficina</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="search-hero__submit"
+                  aria-label="Buscar propiedades"
+                >
+                  <FaSearch className="text-sm" />
+                  <span>Buscar</span>
+                </button>
+              </motion.form>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.6 }}
+                className="mt-12 grid grid-cols-3 gap-6 max-w-xl"
+              >
+                <div className="stat-editorial">
+                  <span className="stat-editorial__num">
+                    <em>11</em>
+                  </span>
+                  <span className="stat-editorial__label">Servicios integrales</span>
+                </div>
+                <div className="stat-editorial">
+                  <span className="stat-editorial__num">
+                    <em>14</em>+
+                  </span>
+                  <span className="stat-editorial__label">Municipios cubiertos</span>
+                </div>
+                <div className="stat-editorial">
+                  <span className="stat-editorial__num">
+                    <em>100</em>%
+                  </span>
+                  <span className="stat-editorial__label">Verificación jurídica</span>
+                </div>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="lg:col-span-5 relative hidden lg:block"
+            >
+              <div className="hero-visual">
+                <svg
+                  className="absolute inset-0 w-full h-full opacity-20"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <pattern id="hero-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+                      <path
+                        d="M 48 0 L 0 0 0 48"
+                        fill="none"
+                        stroke="rgba(245,158,11,0.35)"
+                        strokeWidth="0.5"
+                      />
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#hero-grid)" />
+                </svg>
+
+                <svg
+                  className="absolute inset-0 w-full h-full"
+                  viewBox="0 0 400 500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  preserveAspectRatio="xMidYMid slice"
+                >
+                  <g fill="none" stroke="rgba(245,158,11,0.22)" strokeWidth="1.5">
+                    <rect x="40" y="180" width="60" height="260" />
+                    <rect x="110" y="140" width="70" height="300" />
+                    <rect x="190" y="220" width="50" height="220" />
+                    <rect x="250" y="100" width="80" height="340" />
+                    <rect x="340" y="200" width="40" height="240" />
+                    <line x1="50" y1="210" x2="90" y2="210" />
+                    <line x1="50" y1="240" x2="90" y2="240" />
+                    <line x1="50" y1="270" x2="90" y2="270" />
+                    <line x1="50" y1="300" x2="90" y2="300" />
+                    <line x1="50" y1="330" x2="90" y2="330" />
+                    <line x1="120" y1="170" x2="170" y2="170" />
+                    <line x1="120" y1="200" x2="170" y2="200" />
+                    <line x1="120" y1="230" x2="170" y2="230" />
+                    <line x1="120" y1="260" x2="170" y2="260" />
+                    <line x1="120" y1="290" x2="170" y2="290" />
+                    <line x1="120" y1="320" x2="170" y2="320" />
+                    <line x1="260" y1="130" x2="320" y2="130" />
+                    <line x1="260" y1="160" x2="320" y2="160" />
+                    <line x1="260" y1="190" x2="320" y2="190" />
+                    <line x1="260" y1="220" x2="320" y2="220" />
+                    <line x1="260" y1="250" x2="320" y2="250" />
+                    <line x1="260" y1="280" x2="320" y2="280" />
+                    <line x1="260" y1="310" x2="320" y2="310" />
+                  </g>
+
+                  <g
+                    transform="translate(330,140)"
+                    stroke="rgba(251,191,36,0.7)"
+                    strokeWidth="1.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  >
+                    <line x1="0" y1="0" x2="0" y2="28" />
+                    <line x1="-14" y1="6" x2="14" y2="6" />
+                    <path d="M -14 6 L -18 16 L -10 16 Z" />
+                    <path d="M 14 6 L 10 16 L 18 16 Z" />
+                    <circle cx="0" cy="0" r="2" fill="rgba(251,191,36,0.7)" />
+                  </g>
+                </svg>
+
+                <div
+                  className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none"
+                  style={{
+                    background: "linear-gradient(to top, rgba(2,6,23,0.8) 0%, transparent 100%)",
+                  }}
+                />
+
+                <div className="hero-visual__badge">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "var(--gradient-gold)" }}
+                  >
+                    <FaShieldAlt className="text-slate-900" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider opacity-70">
+                      Con respaldo legal
+                    </p>
+                    <p className="font-display text-lg italic leading-tight">
+                      100% papeles verificados
+                    </p>
+                  </div>
+                </div>
               </div>
-              {i < 3 && <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-0.5 bg-primary/30" />}
+
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 1, duration: 0.7 }}
+                className="absolute -left-8 top-10 hidden xl:block max-w-[220px]"
+                style={{
+                  background: "var(--color-surface)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "1rem",
+                  padding: "1rem 1.25rem",
+                  boxShadow: "var(--shadow-card)",
+                }}
+              >
+                <FaQuoteLeft className="text-lg mb-2" style={{ color: "#d97706" }} />
+                <p
+                  className="font-display italic text-sm leading-snug"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  La gestión inmobiliaria sólo tiene amigos, socios y aliados.
+                </p>
+              </motion.div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      <div className="ticker-wrap">
+        <div className="ticker-track">
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+            <span key={i} className="ticker-item">
+              <span className="ticker-item__dot" />
+              {item}
+            </span>
           ))}
         </div>
       </div>
-    </section>
 
-    <section className="py-12 sm:py-16 lg:py-20 bg-slate-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} viewport={{ once: true }} className="card-soft p-6 sm:p-10 lg:p-12 text-center border-2 border-primary/30">
-          <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-4 sm:mb-6">¿Listo para dar el siguiente paso?</h2>
-          <p className="text-slate-300 text-sm sm:text-base lg:text-lg mb-6 sm:mb-8 max-w-2xl mx-auto">Nuestro equipo de profesionales está listo para asesorarte en tu próximo proyecto inmobiliario</p>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
-            <a href="https://wa.me/573105968202?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20propiedades" target="_blank" rel="noopener noreferrer" className="button-gold inline-flex items-center justify-center gap-3 text-base sm:text-lg px-6 sm:px-8 py-3.5 sm:py-4">
-              <FaWhatsapp className="text-xl sm:text-2xl" /> Contactar por WhatsApp
-            </a>
-            <Link to={PUBLIC_ROUTES.CATALOG} className="inline-flex items-center justify-center gap-3 text-base sm:text-lg px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border-2 border-primary/50 hover:border-primary shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-              Ver Catálogo Completo <FaSearch />
+      <section className="section-pad">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl mb-14 lg:mb-20">
+            <motion.span
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true, margin: "-80px" }}
+              className="eyebrow mb-6"
+            >
+              Por qué elegirnos
+            </motion.span>
+
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.6 }}
+              className="heading-section mt-5 text-4xl sm:text-5xl lg:text-6xl"
+            >
+              Una inmobiliaria que piensa
+              <br className="hidden sm:block" />
+              como <em>tu abogado de confianza.</em>
+            </motion.h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
+            {PILLARS.map((pillar, i) => {
+              const Icon = pillar.icon;
+              return (
+                <motion.div
+                  key={pillar.num}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.6, delay: i * 0.1 }}
+                  className="pillar-card"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <span className="pillar-card__number">{pillar.num}</span>
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center"
+                      style={{
+                        background: "rgba(245, 158, 11, 0.1)",
+                        color: "var(--color-text)",
+                      }}
+                    >
+                      <Icon style={{ color: "#d97706" }} />
+                    </div>
+                  </div>
+
+                  <h3
+                    className="font-display text-2xl mb-3"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    {pillar.title}
+                  </h3>
+                  <p
+                    style={{ color: "var(--color-text-muted)" }}
+                    className="leading-relaxed"
+                  >
+                    {pillar.desc}
+                  </p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="section-pad"
+        style={{ background: "var(--color-surface-off)" }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-end mb-12 lg:mb-16">
+            <div className="lg:col-span-7">
+              <span className="eyebrow mb-5">Portafolio completo</span>
+              <h2 className="heading-section mt-5 text-4xl sm:text-5xl">
+                Once servicios, <em>un solo equipo.</em>
+              </h2>
+            </div>
+            <p
+              className="lg:col-span-5 text-base lg:text-lg leading-relaxed"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Desde un contrato de arriendo simple hasta procesos de pertenencia o
+              sucesiones complejas lo hacemos todo. Y lo hacemos con el respaldo de
+              nuestra firma jurídica.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
+            {SERVICES.map((service, i) => {
+              const Icon = service.icon;
+              return (
+                <motion.div
+                  key={service.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.5, delay: i * 0.06 }}
+                  className="service-tile"
+                >
+                  <span className="service-tile__icon">
+                    <Icon className="text-xl" />
+                  </span>
+                  <div>
+                    <h3
+                      className="font-display text-xl mb-2 leading-tight"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {service.title}
+                    </h3>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      {service.desc}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
+            <p style={{ color: "var(--color-text-muted)" }} className="text-sm">
+              Necesitas algo que no aparece aquí?{" "}
+              <span style={{ color: "var(--color-text)" }} className="font-medium">
+                Muy probablemente también lo hacemos.
+              </span>
+            </p>
+            <Link to={PUBLIC_ROUTES.CONTACT} className="btn-ghost">
+              Hablar con un asesor <FaArrowRight className="text-sm" />
             </Link>
           </div>
-        </motion.div>
-      </div>
-    </section>
-  </div>
-);
+        </div>
+      </section>
+
+      <section className="section-pad">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
+            <div className="lg:col-span-7">
+              <span className="eyebrow mb-5">Cómo trabajamos</span>
+              <h2 className="heading-section mt-5 text-4xl sm:text-5xl mb-12">
+                Sin sorpresas. <em>Paso a paso.</em>
+              </h2>
+
+              <div className="space-y-5">
+                {PROCESS.map((step, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ duration: 0.5, delay: i * 0.1 }}
+                    className="process-step"
+                  >
+                    <span className="process-step__dot">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <h3
+                        className="font-display text-xl mb-2"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        {step.title}
+                      </h3>
+                      <p
+                        className="leading-relaxed max-w-xl"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        {step.desc}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-5">
+              <div className="lg:sticky lg:top-28">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6 }}
+                  className="card-soft p-7 sm:p-8"
+                >
+                  <div className="flex items-center gap-3 mb-5">
+                    <FaRegLightbulb style={{ color: "#d97706" }} className="text-lg" />
+                    <span
+                      className="text-xs font-bold uppercase tracking-[0.15em]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      Lo que nos diferencia
+                    </span>
+                  </div>
+
+                  <h3
+                    className="font-display text-2xl lg:text-3xl mb-6 leading-tight"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    Seis detalles que nuestros clientes notan desde la primera reunión.
+                  </h3>
+
+                  <div className="space-y-3">
+                    {DIFFERENTIATORS.map((item) => (
+                      <div key={item} className="differentiator">
+                        <span className="differentiator__check">
+                          <FaCheckCircle />
+                        </span>
+                        <span
+                          className="text-sm leading-relaxed"
+                          style={{ color: "var(--color-text)" }}
+                        >
+                          {item}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-pad-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="coverage-panel">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+              <div className="lg:col-span-5">
+                <span
+                  className="eyebrow mb-5"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    color: "#cbd5e1",
+                  }}
+                >
+                  Cobertura regional
+                </span>
+
+                <h2
+                  className="heading-section mt-5 text-4xl sm:text-5xl"
+                  style={{ color: "#ffffff" }}
+                >
+                  De Anserma al <em>Eje Cafetero</em>, y creciendo.
+                </h2>
+
+                <p
+                  className="mt-5 text-base leading-relaxed"
+                  style={{ color: "#94a3b8" }}
+                >
+                  Nuestra base está en Anserma, pero operamos en toda la región cafetera.
+                  Si tu propiedad o tu búsqueda está en Caldas, Risaralda o más allá,
+                  podemos acompañarte.
+                </p>
+
+                <Link
+                  to={PUBLIC_ROUTES.CATALOG}
+                  className="btn-ghost mt-6 inline-flex"
+                  style={{ color: "#fbbf24" }}
+                >
+                  Explorar todas las propiedades <FaArrowRight className="text-sm" />
+                </Link>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                {COVERAGE_REGIONS.map((region) => (
+                  <div key={region.region}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span
+                        className="font-display text-xl italic"
+                        style={{ color: "#fbbf24" }}
+                      >
+                        {region.region}
+                      </span>
+                      <span
+                        className="flex-1 h-px"
+                        style={{
+                          background: "linear-gradient(to right, rgba(251,191,36,0.3), transparent)",
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {region.cities.map((city) => (
+                        <Link
+                          key={city}
+                          to={`/propiedades/zona/${slugifyCity(city)}`}
+                          className="city-tag"
+                        >
+                          <span className="city-tag__dot" />
+                          {city}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div
+                  className="mt-6 pt-6 border-t flex items-start gap-3"
+                  style={{ borderColor: "rgba(255,255,255,0.08)" }}
+                >
+                  <FaMapMarkerAlt
+                    className="text-lg flex-shrink-0 mt-0.5"
+                    style={{ color: "#fbbf24" }}
+                  />
+                  <p className="text-sm leading-relaxed" style={{ color: "#94a3b8" }}>
+                    <span
+                      className="font-display italic text-base"
+                      style={{ color: "#e2e8f0" }}
+                    >
+                      En expansión
+                    </span>
+                    <br />
+                    Estamos abriendo operación en nuevos departamentos. Si tu zona no está
+                    listada, <Link to={PUBLIC_ROUTES.CONTACT} className="underline" style={{ color: "#fbbf24" }}>escríbenos</Link>; probablemente podamos ayudarte.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-pad-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="eyebrow">Tu próximo paso</span>
+            <h2 className="heading-section mt-5 text-4xl sm:text-5xl">
+              Buscas o <em>tienes</em> una propiedad?
+            </h2>
+          </div>
+
+          <div className="cta-split">
+            <div className="cta-split__panel">
+              <span
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em]"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <FaSearch style={{ color: "#d97706" }} />
+                Para compradores
+              </span>
+
+              <h3 className="cta-split__title">
+                Encuentra tu próxima propiedad
+                <br />
+                <em>con papeles al día.</em>
+              </h3>
+
+              <p className="cta-split__desc">
+                Explora propiedades verificadas, con historial jurídico revisado y
+                acompañamiento en cada paso del proceso de compra.
+              </p>
+
+              <div className="flex flex-wrap gap-3 mt-auto pt-2">
+                <Link to={PUBLIC_ROUTES.CATALOG} className="btn-primary">
+                  Ver propiedades <FaArrowRight className="text-xs" />
+                </Link>
+                <Link to={PUBLIC_ROUTES.CONTACT} className="btn-secondary">
+                  Agendar asesoría
+                </Link>
+              </div>
+            </div>
+
+            <div className="cta-split__panel cta-split__panel--dark">
+              <span
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em]"
+                style={{ color: "#fbbf24" }}
+              >
+                <FaHome />
+                Para propietarios
+              </span>
+
+              <h3 className="cta-split__title">
+                Publica tu inmueble
+                <br />
+                <em>y déjanos el resto.</em>
+              </h3>
+
+              <p className="cta-split__desc">
+                Desde la valoración hasta la firma en notaría gestionamos la difusión,
+                los visitantes, la negociación y la documentación legal.
+              </p>
+
+              <div className="flex flex-wrap gap-3 mt-auto pt-2">
+                <a
+                  href="https://wa.me/573105968202?text=Hola,%20quiero%20publicar%20mi%20propiedad"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary"
+                >
+                  <FaWhatsapp />
+                  Publicar mi propiedad
+                </a>
+
+                <Link
+                  to={PUBLIC_ROUTES.CONTACT}
+                  className="btn-secondary"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    borderColor: "rgba(255,255,255,0.15)",
+                    color: "#e2e8f0",
+                  }}
+                >
+                  Solicitar avalúo
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-pad-sm pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="portal-teaser">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative">
+              <div className="md:col-span-7">
+                <span className="eyebrow">Portal del cliente</span>
+                <h2 className="heading-section mt-5 text-3xl sm:text-4xl">
+                  Tu proceso inmobiliario,
+                  <br />
+                  <em>siempre a un clic.</em>
+                </h2>
+
+                <p
+                  className="mt-4 text-base leading-relaxed max-w-xl"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Agenda visitas, sigue el estado de tu contrato, consulta pagos de
+                  arriendo y recibe notificaciones en tiempo real. Todo en un solo lugar.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link to="/acceso-clientes" className="btn-primary">
+                    Crear mi portal <FaArrowRight className="text-xs" />
+                  </Link>
+                  <Link to="/acceso-clientes" className="btn-ghost">
+                    Ya tengo cuenta
+                  </Link>
+                </div>
+              </div>
+
+              <div className="md:col-span-5 relative">
+                <div
+                  className="rounded-2xl overflow-hidden"
+                  style={{
+                    background: "var(--color-surface-2)",
+                    border: "1px solid var(--color-border)",
+                    boxShadow: "0 20px 50px -20px rgba(60,40,10,0.25)",
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1.5 px-4 py-2.5"
+                    style={{
+                      borderBottom: "1px solid var(--color-divider)",
+                      background: "var(--color-surface)",
+                    }}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#ef4444" }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#f59e0b" }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#22c55e" }} />
+                    <span
+                      className="ml-3 text-xs font-mono"
+                      style={{ color: "var(--color-text-faint)" }}
+                    >
+                      mi-portal
+                    </span>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <p
+                        className="text-[10px] font-bold uppercase tracking-[0.15em]"
+                        style={{ color: "var(--color-text-faint)" }}
+                      >
+                        Tu proceso activo
+                      </p>
+                      <p
+                        className="font-display text-lg mt-1"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        Compra <em style={{ color: "#d97706" }}>Casa en Anserma</em>
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {[
+                        { label: "Documentación", done: true },
+                        { label: "Verificación jurídica", done: true },
+                        { label: "Firma en notaría", done: false, active: true },
+                        { label: "Entrega", done: false },
+                      ].map((s) => (
+                        <div key={s.label} className="flex items-center gap-2.5">
+                          <span
+                            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] flex-shrink-0"
+                            style={{
+                              background: s.done
+                                ? "#d97706"
+                                : s.active
+                                ? "rgba(245,158,11,0.15)"
+                                : "var(--color-surface-off)",
+                              color: s.done ? "#fff" : "#d97706",
+                              border: s.active ? "1px solid #d97706" : "none",
+                            }}
+                          >
+                            {s.done ? "✓" : s.active ? "•" : ""}
+                          </span>
+                          <span
+                            className="text-xs"
+                            style={{
+                              color:
+                                s.done || s.active
+                                  ? "var(--color-text)"
+                                  : "var(--color-text-faint)",
+                              fontWeight: s.active ? 600 : 400,
+                            }}
+                          >
+                            {s.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      className="pt-3 mt-3 flex items-center justify-between text-xs"
+                      style={{
+                        borderTop: "1px solid var(--color-divider)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
+                      <span>Próxima visita</span>
+                      <span
+                        className="font-semibold"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        Vie 25 Abr · 10:00 a.m.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-pad-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <div className="fine-divider mb-8">R-B</div>
+          <motion.blockquote
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="heading-display text-3xl sm:text-4xl lg:text-5xl leading-tight"
+          >
+            La gestión inmobiliaria sólo tiene
+            <br className="hidden sm:block" />
+            <em>amigos, socios y aliados.</em>
+            <br className="hidden sm:block" />
+            La competencia no es un problema,
+            <br className="hidden sm:block" />
+            es <em>una oportunidad.</em>
+          </motion.blockquote>
+          <p
+            className="mt-8 text-sm font-semibold uppercase tracking-[0.2em]"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Filosofía R-B &amp; Asociados
+          </p>
+        </div>
+      </section>
+    </div>
+  );
 };
 
 export default HomePage;

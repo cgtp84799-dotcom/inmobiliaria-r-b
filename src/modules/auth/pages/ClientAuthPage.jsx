@@ -1,30 +1,15 @@
-// src/modules/auth/pages/ClientAuthPage.jsx
-//
-// ═══════════════════════════════════════════════════════════════════
-// FIXES APLICADOS:
-//   1. ensureClientDocs VERIFICA si el usuario ya es admin/member
-//      ANTES de crear docs. Si ya tiene un rol de panel interno,
-//      NO lo convierte a viewer ni crea doc en /clients.
-//   2. ensureClientDocs crea /users con status:'active'
-//   3. ensureClientDocs es idempotente y no crea duplicados
-//   4. Si un admin/member llega a esta página, redirige al dashboard
-//   5. Si status:'pending' → lo corrige a 'active' solo para viewers
-// ═══════════════════════════════════════════════════════════════════
-
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import {
   FaEnvelope, FaLock, FaUser, FaPhone,
   FaEye, FaEyeSlash, FaSpinner,
-  FaHome, FaHeart, FaCalendarAlt, FaFileContract,
+  FaArrowRight, FaMoon, FaSun, FaMapMarkerAlt,
+  FaHeart, FaCalendarCheck, FaFileAlt, FaBell, FaShieldAlt,
 } from 'react-icons/fa';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
-  updateProfile,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signInWithPopup, GoogleAuthProvider, updateProfile,
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, updateDoc, serverTimestamp,
@@ -32,205 +17,423 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
-import { PRIVATE_ROUTES, PUBLIC_ROUTES } from '../../../core/config/routes.config';
+import { useTheme } from '../../../core/contexts/ThemeContext';
+import { PRIVATE_ROUTES } from '../../../core/config/routes.config';
 import { USER_ROLES } from '../../users/types/user.types';
 import toast from 'react-hot-toast';
 
+
 const googleProvider = new GoogleAuthProvider();
 
-// ── Helpers Firestore ─────────────────────────────────────────────────────────
 
-/**
- * Garantiza que existan ambos documentos: users/{email} y un doc en /clients.
- *
- * ★ FIX CRÍTICO: Ahora verifica si el usuario ya tiene un rol de panel
- * (admin/member). Si es así, NO toca nada — el usuario simplemente
- * será redirigido al dashboard por el useEffect de abajo.
- *
- * Solo crea/actualiza docs para usuarios viewer (clientes del portal).
- */
-async function ensureClientDocs(user, extraData = {}) {
+async function ensureClientDocs(user, extra = {}) {
   const email = user.email;
-
-  // 1. users/{email} — verificar si ya existe
-  const userRef  = doc(db, 'users', email);
-  const userSnap = await getDoc(userRef);
-
-  if (userSnap.exists()) {
-    const existingData = userSnap.data();
-    const existingRole = existingData.role;
-
-    // ★ FIX: Si el usuario ya es admin o member, NO tocar su doc.
-    // Un admin que inicia sesión desde /acceso-clientes no debe
-    // ser convertido a viewer.
-    if (existingRole === USER_ROLES.ADMIN || existingRole === USER_ROLES.MEMBER) {
-      console.log('[ensureClientDocs] Usuario es', existingRole, '— no se modifica.');
-      return; // No crear doc en /clients tampoco
-    }
-
-    // Si es viewer con status 'pending', corregir a 'active'
-    if (existingData.status === 'pending' && existingRole === USER_ROLES.VIEWER) {
-      await updateDoc(userRef, {
-        status:    'active',
-        updatedAt: serverTimestamp(),
-      });
-    }
+  const uRef = doc(db, 'users', email);
+  const uSnap = await getDoc(uRef);
+  if (uSnap.exists()) {
+    const d = uSnap.data();
+    if (d.role === USER_ROLES.ADMIN || d.role === USER_ROLES.MEMBER) return;
+    if (d.status === 'pending' && d.role === USER_ROLES.VIEWER)
+      await updateDoc(uRef, { status: 'active', updatedAt: serverTimestamp() });
   } else {
-    // Doc no existe → crear como viewer activo
-    await setDoc(userRef, {
-      uid:         user.uid,
-      role:        USER_ROLES.VIEWER,
-      status:      'active',
-      displayName: extraData.displayName ?? user.displayName ?? email.split('@')[0],
-      phone:       extraData.phone ?? '',
-      photoURL:    user.photoURL ?? null,
-      favorites:   [],
-      createdAt:   serverTimestamp(),
-      updatedAt:   serverTimestamp(),
+    await setDoc(uRef, {
+      uid: user.uid, role: USER_ROLES.VIEWER, status: 'active',
+      displayName: extra.displayName ?? user.displayName ?? email.split('@')[0],
+      phone: extra.phone ?? '', photoURL: user.photoURL ?? null,
+      favorites: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
   }
-
-  // 2. clients/{} — buscar por email, crear solo si no existe
-  // ★ Solo para viewers (si llegamos aquí, el usuario no es admin/member)
-  const clientsRef = collection(db, 'clients');
-  const q          = query(clientsRef, where('email', '==', email));
-  const snap       = await getDocs(q);
-
-  if (snap.empty) {
-    await addDoc(clientsRef, {
-      nombre:           extraData.displayName ?? user.displayName ?? email.split('@')[0],
-      email,
-      telefono:         extraData.phone ?? '',
-      tipoCliente:      'portal',
-      estado:           'activo',
-      notas:            '',
-      favorites:        [],
-      ubicacionInteres: '',
-      presupuesto:      '',
-      tipoPropiedad:    '',
-      agentId:          null,
-      createdViaPortal: true,
-      onboardingDone:   false,
-      createdAt:        serverTimestamp(),
+  const q = query(collection(db, 'clients'), where('email', '==', email));
+  if ((await getDocs(q)).empty) {
+    await addDoc(collection(db, 'clients'), {
+      nombre: extra.displayName ?? user.displayName ?? email.split('@')[0],
+      email, telefono: extra.phone ?? '', tipoCliente: 'portal',
+      estado: 'activo', notas: '', favorites: [], agentId: null,
+      createdViaPortal: true, onboardingDone: false, createdAt: serverTimestamp(),
     });
   }
 }
 
-// ── Mapeo de errores Firebase ─────────────────────────────────────────────────
 
-const FIREBASE_ERRORS = {
-  'auth/user-not-found':         'No existe una cuenta con ese email.',
-  'auth/wrong-password':         'Contraseña incorrecta.',
-  'auth/email-already-in-use':   'Ya existe una cuenta con ese email.',
-  'auth/weak-password':          'La contraseña es demasiado débil (mínimo 6 caracteres).',
-  'auth/too-many-requests':      'Demasiados intentos. Intenta más tarde.',
-  'auth/invalid-credential':     'Email o contraseña incorrectos.',
-  'auth/network-request-failed': 'Sin conexión. Verifica tu internet.',
-  'auth/popup-blocked':          'El popup fue bloqueado. Permite popups para este sitio.',
+const ERR = {
+  'auth/user-not-found': 'No existe una cuenta con ese email.',
+  'auth/wrong-password': 'Contraseña incorrecta.',
+  'auth/email-already-in-use': 'Ya existe una cuenta con ese email.',
+  'auth/weak-password': 'Contraseña demasiado débil (mínimo 6 caracteres).',
+  'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde.',
+  'auth/invalid-credential': 'Email o contraseña incorrectos.',
+  'auth/network-request-failed': 'Sin conexión a internet.',
+  'auth/popup-blocked': 'Popup bloqueado. Permite popups para este sitio.',
 };
 
-// ── Animaciones ───────────────────────────────────────────────────────────────
 
-const slideVariants = {
-  enter:  (dir) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
-  center: { x: 0, opacity: 1, transition: { duration: 0.35, ease: [0.4, 0, 0.2, 1] } },
-  exit:   (dir) => ({ x: dir > 0 ? -60 : 60, opacity: 0, transition: { duration: 0.25 } }),
-};
-
-// ── Campo de input ────────────────────────────────────────────────────────────
-
-function Field({ icon: Icon, type = 'text', placeholder, value, onChange, error, rightEl, autoComplete, readOnly }) {
+/* Blueprint SVG animado — sin cambios */
+function Blueprint({ dark }) {
+  const accent = dark ? 'rgba(251,191,36,0.22)' : 'rgba(146,64,14,0.18)';
+  const faint  = dark ? 'rgba(251,191,36,0.07)' : 'rgba(146,64,14,0.07)';
+  const gridStroke = dark ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.04)';
+  const corners = [[70,70],[730,70],[70,830],[730,830]];
+  const hLines = [180, 360, 540, 720];
   return (
-    <div className="relative">
-      <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none" />
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        autoComplete={autoComplete}
-        readOnly={readOnly}
-        className={`
-          w-full bg-slate-800/60 border ${error ? 'border-red-500/60' : 'border-slate-700/60'}
-          rounded-xl pl-9 ${rightEl ? 'pr-10' : 'pr-4'} py-3 text-sm text-white
-          placeholder-slate-500 focus:outline-none focus:border-amber-500/60
-          focus:ring-1 focus:ring-amber-500/30 transition
-          ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}
-        `}
-      />
-      {rightEl && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightEl}</div>
-      )}
-      {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 800 900"
+      preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <filter id="glow2">
+          <feGaussianBlur stdDeviation="1.2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <pattern id="grid2" width="60" height="60" patternUnits="userSpaceOnUse">
+          <path d="M 60 0 L 0 0 0 60" fill="none" stroke={gridStroke} strokeWidth="0.6"/>
+        </pattern>
+      </defs>
+      <rect width="800" height="900" fill="url(#grid2)" />
+      <motion.rect x="40" y="40" width="720" height="820" rx="2" fill="none"
+        stroke={faint} strokeWidth="0.8"
+        initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+        transition={{ duration:2.5, ease:'easeInOut' }}/>
+      <motion.rect x="70" y="70" width="660" height="760" rx="1" fill="none"
+        stroke={faint} strokeWidth="0.5"
+        initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+        transition={{ duration:2.8, delay:0.3 }}/>
+      <motion.line x1="400" y1="40" x2="400" y2="860" stroke={faint} strokeWidth="0.6"
+        initial={{ scaleY:0, opacity:0 }} animate={{ scaleY:1, opacity:1 }}
+        style={{ transformOrigin:'400px 450px' }}
+        transition={{ duration:1.8, delay:0.5 }}/>
+      <motion.line x1="40" y1="450" x2="760" y2="450" stroke={faint} strokeWidth="0.6"
+        initial={{ scaleX:0, opacity:0 }} animate={{ scaleX:1, opacity:1 }}
+        style={{ transformOrigin:'400px 450px' }}
+        transition={{ duration:1.8, delay:0.6 }}/>
+      <motion.line x1="40" y1="40" x2="760" y2="860" stroke={faint} strokeWidth="0.35"
+        initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+        transition={{ duration:3, delay:0.8 }}/>
+      <motion.line x1="760" y1="40" x2="40" y2="860" stroke={faint} strokeWidth="0.35"
+        initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+        transition={{ duration:3, delay:1 }}/>
+      <motion.circle cx="400" cy="450" r="200" fill="none" stroke={faint} strokeWidth="0.5"
+        strokeDasharray="5 10"
+        initial={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }}
+        style={{ transformOrigin:'400px 450px' }}
+        transition={{ duration:2, delay:1.2 }}/>
+      <motion.circle cx="400" cy="450" r="320" fill="none" stroke={faint} strokeWidth="0.4"
+        strokeDasharray="3 14"
+        initial={{ opacity:0, scale:0.85 }} animate={{ opacity:1, scale:1 }}
+        style={{ transformOrigin:'400px 450px' }}
+        transition={{ duration:2.2, delay:1.4 }}/>
+      {corners.map(([cx, cy], i) => (
+        <g key={i} filter="url(#glow2)">
+          <motion.line x1={cx} y1={cy} x2={cx+(cx<400?28:-28)} y2={cy}
+            stroke={accent} strokeWidth="1.5"
+            initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+            transition={{ duration:0.5, delay:1.6+i*0.1 }}/>
+          <motion.line x1={cx} y1={cy} x2={cx} y2={cy+(cy<450?28:-28)}
+            stroke={accent} strokeWidth="1.5"
+            initial={{ pathLength:0, opacity:0 }} animate={{ pathLength:1, opacity:1 }}
+            transition={{ duration:0.5, delay:1.7+i*0.1 }}/>
+          <motion.circle cx={cx} cy={cy} r="3.5" fill={accent}
+            initial={{ scale:0, opacity:0 }} animate={{ scale:1, opacity:1 }}
+            style={{ transformOrigin:`${cx}px ${cy}px` }}
+            transition={{ duration:0.3, delay:2+i*0.08 }}/>
+        </g>
+      ))}
+      {hLines.map((y, i) => (
+        <motion.line key={i} x1="40" y1={y} x2="760" y2={y}
+          stroke={i%2===0?accent:faint}
+          strokeWidth={i%2===0?0.55:0.3}
+          strokeDasharray={i%2===0?'2 6':'1 12'}
+          initial={{ scaleX:0, opacity:0 }} animate={{ scaleX:1, opacity:1 }}
+          style={{ transformOrigin:`400px ${y}px` }}
+          transition={{ duration:1.4, delay:2.2+i*0.15 }}/>
+      ))}
+      {Array.from({ length:12 }, (_, i) => (
+        <motion.line key={i} x1={40+i*60} y1={40} x2={40+i*60} y2={56}
+          stroke={accent} strokeWidth="0.9"
+          initial={{ opacity:0 }} animate={{ opacity:1 }}
+          transition={{ delay:2.5+i*0.06, duration:0.4 }}/>
+      ))}
+      <motion.circle cx="400" cy="450" r="12" fill="none" stroke={accent} strokeWidth="1"
+        animate={{ r:[12,18,12], opacity:[0.7,0.15,0.7] }}
+        transition={{ duration:3.5, repeat:Infinity, ease:'easeInOut' }}/>
+      <motion.circle cx="400" cy="450" r="4" fill={accent}
+        animate={{ opacity:[0.9,0.3,0.9] }}
+        transition={{ duration:3.5, repeat:Infinity, ease:'easeInOut' }}/>
+    </svg>
+  );
+}
+
+
+/* ── LeftPanel REDISEÑADO — vende los beneficios del portal ── */
+function LeftPanel({ dark }) {
+  const ref = useRef(null);
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const sx = useSpring(mx, { stiffness:55, damping:20 });
+  const sy = useSpring(my, { stiffness:55, damping:20 });
+  const bpX = useTransform(sx, [-1,1], [-10,10]);
+  const bpY = useTransform(sy, [-1,1], [-10,10]);
+  const gX  = useTransform(sx, [-1,1], [-24,24]);
+  const gY  = useTransform(sy, [-1,1], [-24,24]);
+
+  function onMove(e) {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    mx.set(((e.clientX - r.left) / r.width  - 0.5) * 2);
+    my.set(((e.clientY - r.top)  / r.height - 0.5) * 2);
+  }
+
+  const bg = dark
+    ? 'bg-[radial-gradient(ellipse_at_25%_15%,_#1c1000_0%,_#040a18_50%,_#030712_100%)]'
+    : 'bg-[radial-gradient(ellipse_at_25%_15%,_#fef3c7_0%,_#ede8df_50%,_#ddd8cf_100%)]';
+
+  /* Cada beneficio = lo que el cliente hace dentro del portal */
+  const benefits = [
+    {
+      icon: FaHeart,
+      title: 'Guarda tus favoritos',
+      desc: 'Marca las propiedades que más te gustan y accede a ellas en cualquier momento sin perder nada.',
+    },
+    {
+      icon: FaCalendarCheck,
+      title: 'Agenda y sigue tus visitas',
+      desc: 'Solicita visitas desde el portal y consulta su estado en tiempo real — sin llamadas ni mensajes de WhatsApp.',
+    },
+    {
+      icon: FaFileAlt,
+      title: 'Documentos en un solo lugar',
+      desc: 'Tus contratos, fichas técnicas y archivos siempre disponibles, organizados y listos para descargar.',
+    },
+    {
+      icon: FaBell,
+      title: 'Novedades de tu proceso',
+      desc: 'Recibe actualizaciones sobre las propiedades que te interesan y el avance de cada gestión.',
+    },
+  ];
+
+  const featureCard = dark
+    ? 'bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.07] hover:border-white/[0.12]'
+    : 'bg-white/50 border border-white/70 shadow-sm hover:bg-white/75 hover:border-white/90';
+
+  const iconWrap = dark
+    ? 'bg-amber-400/10 text-amber-400'
+    : 'bg-amber-600/10 text-amber-700';
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={() => { mx.set(0); my.set(0); }}
+      className={`relative hidden lg:flex flex-col overflow-hidden ${bg}`}
+    >
+      {/* Blueprint parallax */}
+      <motion.div className="absolute inset-0" style={{ x: bpX, y: bpY }}>
+        <Blueprint dark={dark} />
+      </motion.div>
+
+      {/* Glows parallax */}
+      <motion.div className="absolute inset-0 pointer-events-none" style={{ x: gX, y: gY }}>
+        <div className={`absolute top-[-8%] left-[8%] w-[440px] h-[440px] rounded-full blur-[120px] ${dark ? 'bg-amber-500/11' : 'bg-amber-300/28'}`}/>
+        <div className={`absolute bottom-[-6%] right-[-4%] w-[380px] h-[380px] rounded-full blur-[100px] ${dark ? 'bg-blue-700/9' : 'bg-slate-400/20'}`}/>
+        <div className={`absolute top-[42%] left-[38%] w-[200px] h-[200px] rounded-full blur-[70px] ${dark ? 'bg-amber-400/5' : 'bg-amber-200/40'}`}/>
+      </motion.div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col justify-between h-full px-12 py-10 xl:px-16 xl:py-12">
+
+        {/* ── Header: logo + ubicación ── */}
+        <motion.div
+          initial={{ opacity:0, y:-16 }} animate={{ opacity:1, y:0 }}
+          transition={{ duration:0.55, ease:[0.22,1,0.36,1] }}
+          className="flex items-start justify-between"
+        >
+          <img
+            src={dark ? '/logo.jpg.png' : '/logo-ryb.png'}
+            alt="Rincón Bedoya & Asociados"
+            className="h-12 xl:h-14 w-auto object-contain"
+            onError={e => { e.currentTarget.style.display='none'; }}
+          />
+          <div className={`flex items-center gap-2 rounded-full px-3.5 py-2 text-[11px] font-medium
+            ${dark ? 'bg-white/6 text-white/45 border border-white/8' : 'bg-black/5 text-slate-500 border border-black/8'}`}>
+            <FaMapMarkerAlt className={`text-[10px] ${dark ? 'text-amber-400/70' : 'text-amber-700/70'}`}/>
+            Anserma, Caldas
+          </div>
+        </motion.div>
+
+        {/* ── Hero copy ── */}
+        <div className="flex flex-col gap-6">
+
+          <motion.div
+            initial={{ opacity:0, y:32 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:0.7, delay:0.15, ease:[0.22,1,0.36,1] }}
+          >
+            <p className={`text-[10px] font-bold uppercase tracking-[0.45em] mb-4
+              ${dark ? 'text-amber-400/55' : 'text-amber-800/55'}`}>
+              Tu portal privado de clientes
+            </p>
+            <h2
+              className={`font-serif leading-[0.93] tracking-tight
+                ${dark ? 'text-white' : 'text-slate-900'}`}
+              style={{ fontSize: 'clamp(2.4rem, 3.2vw, 4rem)' }}
+            >
+              Todo tu proceso<br/>
+              inmobiliario,<br/>
+              <span className={dark ? 'text-amber-400' : 'text-amber-600'}>en un solo lugar.</span>
+            </h2>
+
+            <p className={`mt-5 text-sm xl:text-[15px] leading-[1.8] max-w-sm
+              ${dark ? 'text-white/42' : 'text-slate-500'}`}>
+              Accede a tus propiedades guardadas, el estado de tus visitas, tus documentos y el seguimiento de tu proceso — todo desde aquí, sin intermediarios.
+            </p>
+          </motion.div>
+
+          {/* ── Grilla de beneficios ── */}
+          <motion.div
+            initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:0.65, delay:0.35 }}
+            className="grid grid-cols-2 gap-3"
+          >
+            {benefits.map((b, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity:0, y:16 }}
+                animate={{ opacity:1, y:0 }}
+                transition={{ duration:0.45, delay:0.45 + i * 0.08, ease:[0.22,1,0.36,1] }}
+                whileHover={{ y:-3 }}
+                className={`rounded-2xl p-4 xl:p-5 transition-all duration-200 cursor-default backdrop-blur-sm ${featureCard}`}
+              >
+                {/* Icono */}
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-3 ${iconWrap}`}>
+                  <b.icon className="text-sm" />
+                </div>
+                {/* Título */}
+                <p className={`text-[13px] font-bold leading-snug mb-1.5
+                  ${dark ? 'text-white/88' : 'text-slate-800'}`}>
+                  {b.title}
+                </p>
+                {/* Descripción */}
+                <p className={`text-[11px] leading-[1.6]
+                  ${dark ? 'text-white/35' : 'text-slate-500'}`}>
+                  {b.desc}
+                </p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* ── Sello de confianza ── */}
+          <motion.div
+            initial={{ opacity:0, x:-16 }} animate={{ opacity:1, x:0 }}
+            transition={{ duration:0.5, delay:0.8 }}
+            className={`flex items-center gap-3 rounded-2xl px-4 py-3.5
+              ${dark
+                ? 'bg-amber-400/6 border border-amber-400/12'
+                : 'bg-amber-600/5 border border-amber-600/12'}`}
+          >
+            <FaShieldAlt className={`flex-shrink-0 text-base ${dark ? 'text-amber-400/70' : 'text-amber-700/70'}`} />
+            <p className={`text-[11.5px] leading-[1.55]
+              ${dark ? 'text-white/45' : 'text-slate-500'}`}>
+              <span className={`font-semibold ${dark ? 'text-white/70' : 'text-slate-700'}`}>
+                +15 años de experiencia.
+              </span>{' '}
+              Respaldo jurídico especializado en cada proceso de compra, venta y arriendo en Caldas.
+            </p>
+          </motion.div>
+
+        </div>
+
+        {/* ── Footer ── */}
+        <motion.div
+          initial={{ opacity:0 }} animate={{ opacity:1 }}
+          transition={{ delay:0.9, duration:0.6 }}
+          className={`flex items-center justify-between text-[11px]
+            ${dark ? 'text-white/22' : 'text-slate-400'}`}
+        >
+          <span>© {new Date().getFullYear()} Rincón Bedoya & Asociados</span>
+          <Link to="/politica-privacidad"
+            className="underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity">
+            Privacidad
+          </Link>
+        </motion.div>
+
+      </div>
     </div>
   );
 }
 
-// ── Features list ─────────────────────────────────────────────────────────────
 
-const FEATURES = [
-  { icon: FaHeart,        text: 'Guarda propiedades favoritas y compáralas' },
-  { icon: FaCalendarAlt,  text: 'Agenda visitas directamente desde el catálogo' },
-  { icon: FaFileContract, text: 'Consulta y descarga tus contratos en PDF' },
-  { icon: FaHome,         text: 'Recibe alertas de nuevas propiedades' },
-];
+/* Input field — sin cambios */
+function Field({ icon: Icon, type='text', placeholder, value, onChange, error, rightEl, autoComplete, dark }) {
+  return (
+    <div>
+      <div className="relative group">
+        <Icon className={`absolute left-4 top-1/2 -translate-y-1/2 text-xs pointer-events-none transition-colors duration-200
+          ${dark ? 'text-amber-400/40 group-focus-within:text-amber-400' : 'text-amber-700/40 group-focus-within:text-amber-700'}`}/>
+        <input type={type} placeholder={placeholder} value={value}
+          onChange={onChange} autoComplete={autoComplete}
+          className={`w-full rounded-2xl pl-11 ${rightEl?'pr-11':'pr-4'} py-3.5 text-sm
+            border-0 outline-none ring-1 transition-all duration-200 backdrop-blur-sm
+            ${dark
+              ? `bg-white/5 text-white placeholder-white/20 ring-white/8 focus:ring-amber-400/40 focus:bg-white/8`
+              : `bg-black/4 text-slate-900 placeholder-slate-400/60 ring-slate-900/10 focus:ring-amber-600/40 focus:bg-black/6`}
+            ${error ? (dark?'!ring-red-400/50':'!ring-red-400/60') : ''}`}/>
+        {rightEl && <div className="absolute right-4 top-1/2 -translate-y-1/2">{rightEl}</div>}
+      </div>
+      <AnimatePresence>
+        {error && (
+          <motion.p initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }}
+            className="mt-1.5 pl-1 text-xs text-red-400">{error}</motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
-// ── Componente principal ──────────────────────────────────────────────────────
 
+/* ── Main — sin cambios ── */
 export default function ClientAuthPage() {
   const { currentUser, userData, loading } = useAuth();
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const from      = location.state?.from?.pathname ?? PRIVATE_ROUTES.CLIENT_PORTAL;
+  const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname ?? PRIVATE_ROUTES.CLIENT_PORTAL;
+  const dark = theme === 'dark';
 
-  const [mode,        setMode]        = useState('login');
-  const [dir,         setDir]         = useState(1);
-  const [busy,        setBusy]        = useState(false);
-  const [showPass,    setShowPass]    = useState(false);
+  const [mode, setMode] = useState('login');
+  const [dir, setDir] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [name,        setName]        = useState('');
-  const [email,       setEmail]       = useState('');
-  const [phone,       setPhone]       = useState('');
-  const [password,    setPassword]    = useState('');
-  const [confirm,     setConfirm]     = useState('');
-  const [errors,      setErrors]      = useState({});
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [errors, setErrors] = useState({});
 
-  // ★ FIX: Redirect según rol cuando ya está autenticado
   useEffect(() => {
     if (loading || !currentUser || !userData) return;
-
     const role = userData.role;
-
-    // Si es admin o member → redirigir al dashboard (NO crear docs de cliente)
     if (role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER) {
-      navigate(PRIVATE_ROUTES.DASHBOARD, { replace: true });
-      return;
+      navigate(PRIVATE_ROUTES.DASHBOARD, { replace:true }); return;
     }
-
-    // Si es viewer → ir al portal
     if (role === USER_ROLES.VIEWER) {
       const dest = from && !from.startsWith('/acceso-clientes') ? from : PRIVATE_ROUTES.CLIENT_PORTAL;
-      navigate(dest, { replace: true });
+      navigate(dest, { replace:true });
     }
   }, [currentUser, userData, loading, navigate, from]);
 
   function switchMode(next) {
     setDir(next === 'register' ? 1 : -1);
-    setMode(next);
-    setErrors({});
-    setPassword('');
-    setConfirm('');
+    setMode(next); setErrors({});
+    setPassword(''); setConfirm('');
   }
 
   function validate() {
     const e = {};
-    if (!email.trim())                    e.email    = 'El email es obligatorio';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email    = 'Email inválido';
-    if (!password)                        e.password = 'La contraseña es obligatoria';
-    else if (password.length < 6)         e.password = 'Mínimo 6 caracteres';
+    if (!email.trim()) e.email = 'Email obligatorio';
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Email inválido';
+    if (!password) e.password = 'Contraseña obligatoria';
+    else if (password.length < 6) e.password = 'Mínimo 6 caracteres';
     if (mode === 'register') {
-      if (!name.trim())                   e.name    = 'El nombre es obligatorio';
-      if (confirm !== password)           e.confirm = 'Las contraseñas no coinciden';
+      if (!name.trim()) e.name = 'Nombre obligatorio';
+      if (confirm !== password) e.confirm = 'Las contraseñas no coinciden';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -243,21 +446,18 @@ export default function ClientAuthPage() {
     try {
       if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email.trim(), password);
-        const user = auth.currentUser;
-        if (user) await ensureClientDocs(user);
+        await ensureClientDocs(auth.currentUser);
         toast.success('¡Bienvenido de nuevo!');
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await updateProfile(cred.user, { displayName: name.trim() });
-        await ensureClientDocs(cred.user, { displayName: name.trim(), phone: phone.trim() });
-        toast.success('¡Cuenta creada! Configura tu perfil para continuar.');
-        navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace: true });
+        await ensureClientDocs(cred.user, { displayName:name.trim(), phone:phone.trim() });
+        toast.success('¡Cuenta creada con éxito!');
+        navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace:true });
       }
     } catch (err) {
-      toast.error(FIREBASE_ERRORS[err.code] ?? 'Error al procesar. Intenta de nuevo.');
-    } finally {
-      setBusy(false);
-    }
+      toast.error(ERR[err.code] ?? 'Error inesperado. Intenta de nuevo.');
+    } finally { setBusy(false); }
   }
 
   async function handleGoogle() {
@@ -266,236 +466,218 @@ export default function ClientAuthPage() {
       const cred = await signInWithPopup(auth, googleProvider);
       await ensureClientDocs(cred.user);
       toast.success('¡Bienvenido!');
-      // El useEffect se encarga del redirect según el rol
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error(FIREBASE_ERRORS[err.code] ?? 'Error al iniciar con Google. Intenta de nuevo.');
-      }
-    } finally {
-      setBusy(false);
-    }
+      if (err.code !== 'auth/popup-closed-by-user')
+        toast.error(ERR[err.code] ?? 'Error al continuar con Google.');
+    } finally { setBusy(false); }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <FaSpinner className="text-amber-500 text-3xl animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className={`min-h-screen flex items-center justify-center ${dark?'bg-slate-950':'bg-stone-50'}`}>
+      <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}>
+        <FaSpinner className="text-amber-500 text-2xl"/>
+      </motion.div>
+    </div>
+  );
+
+  const rightBg = dark
+    ? 'bg-[radial-gradient(ellipse_at_50%_0%,_#0d1b2a_0%,_#030712_60%)]'
+    : 'bg-[radial-gradient(ellipse_at_50%_0%,_#fffdf7_0%,_#f5f0e8_60%)]';
+
+  const cardBg = dark
+    ? 'bg-slate-900/70 ring-1 ring-white/8 shadow-[0_40px_100px_rgba(0,0,0,0.65)]'
+    : 'bg-white/80 ring-1 ring-black/6 shadow-[0_40px_100px_rgba(15,23,42,0.15)]';
+
+  const mutedColor = dark ? 'text-white/30' : 'text-slate-400';
+  const dividerColor = dark ? 'bg-white/8' : 'bg-slate-200/80';
+  const tabActiveCls = dark
+    ? 'bg-amber-400 text-slate-950 shadow-[0_6px_20px_rgba(251,191,36,0.28)]'
+    : 'bg-amber-500 text-white shadow-[0_6px_20px_rgba(245,158,11,0.26)]';
+  const tabInactiveCls = dark ? 'text-white/35 hover:text-white/70' : 'text-slate-400 hover:text-slate-700';
+  const ctaBtn = dark
+    ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 shadow-[0_16px_48px_rgba(251,191,36,0.26)]'
+    : 'bg-amber-500 text-white hover:bg-amber-600 shadow-[0_16px_48px_rgba(245,158,11,0.26)]';
+  const googleBtn = dark
+    ? 'bg-white/5 ring-1 ring-white/10 text-white hover:bg-white/10'
+    : 'bg-white ring-1 ring-slate-200 text-slate-800 hover:bg-slate-50';
+  const themeBtnCls = dark
+    ? 'bg-white/5 ring-1 ring-white/10 text-white/50 hover:text-white hover:bg-white/10'
+    : 'bg-black/4 ring-1 ring-black/8 text-slate-500 hover:text-slate-900 hover:bg-black/7';
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen transition-colors duration-500">
+      <div className="grid min-h-screen lg:grid-cols-[1.15fr_0.85fr]">
 
-      {/* Panel izquierdo — solo desktop */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30" />
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 rounded-full bg-amber-600/8 blur-3xl" />
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: 'linear-gradient(#f59e0b 1px,transparent 1px),linear-gradient(90deg,#f59e0b 1px,transparent 1px)',
-            backgroundSize: '48px 48px',
-          }}
-        />
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <img src="/logo-ryb.png" alt="RB" className="h-10 object-contain" onError={(e) => { e.target.style.display = 'none'; }} />
-            <div>
-              <p className="text-amber-400 font-bold tracking-wide text-sm">RINCÓN BEDOYA</p>
-              <p className="text-slate-500 text-xs tracking-widest">ASOCIADOS</p>
-            </div>
-          </div>
-        </div>
-        <div className="relative z-10 max-w-sm">
-          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }}>
-            <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-              Tu portal<br /><span className="text-amber-400">inmobiliario</span><br />personal
-            </h1>
-            <p className="text-slate-400 text-base mb-10 leading-relaxed">
-              Gestiona tus propiedades favoritas, visitas agendadas y contratos desde un solo lugar.
-            </p>
-            <div className="space-y-4">
-              {FEATURES.map(({ icon: Icon, text }, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + i * 0.1 }}
-                  className="flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <Icon className="text-amber-400 text-xs" />
-                  </div>
-                  <span className="text-slate-300 text-sm">{text}</span>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-        <div className="relative z-10">
-          <p className="text-slate-600 text-xs">© 2025 Rincón Bedoya Asociados · Anserma, Caldas</p>
-        </div>
-      </div>
+        {/* LEFT */}
+        <LeftPanel dark={dark} />
 
-      {/* Panel derecho — formulario */}
-      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 lg:bg-slate-950" />
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl lg:hidden" />
-
-        <div className="relative z-10 w-full max-w-md">
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <img src="/logo-ryb.png" alt="RB" className="h-8 object-contain" onError={(e) => { e.target.style.display = 'none'; }} />
-            <span className="text-amber-400 font-bold text-sm tracking-wide">RINCÓN BEDOYA ASOCIADOS</span>
+        {/* RIGHT — sin cambios */}
+        <div className={`relative flex items-center justify-center overflow-hidden px-5 py-16 sm:px-8 lg:py-10 ${rightBg}`}>
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className={`absolute top-[-5%] right-[-10%] w-[320px] h-[320px] rounded-full blur-[90px] ${dark?'bg-amber-500/8':'bg-amber-200/40'}`}/>
+            <div className={`absolute bottom-[-8%] left-[-5%] w-[280px] h-[280px] rounded-full blur-[80px] ${dark?'bg-blue-600/8':'bg-slate-300/30'}`}/>
           </div>
 
-          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-2xl shadow-black/40">
-
-            {/* Tab switcher */}
-            <div className="flex bg-slate-800/60 rounded-xl p-1 mb-7">
-              {['login', 'register'].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => switchMode(m)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                    mode === m
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {m === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
-                </button>
-              ))}
+          <div className="relative z-10 w-full max-w-[400px]">
+            {/* Mobile header */}
+            <div className="flex items-center justify-between mb-7 lg:hidden">
+              <Link to="/">
+                <img src={dark?'/logo.jpg.png':'/logo-ryb.png'} alt="Rincón Bedoya & Asociados"
+                  className="h-10 w-auto object-contain"
+                  onError={e => { e.currentTarget.style.display='none'; }}/>
+              </Link>
+              <button type="button" onClick={toggleTheme} aria-label="Cambiar tema"
+                className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-200 ${themeBtnCls}`}>
+                {dark ? <FaSun size={13}/> : <FaMoon size={13}/>}
+              </button>
             </div>
 
-            {/* Google */}
-            <button
-              onClick={handleGoogle}
-              disabled={busy}
-              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold py-3 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-60 mb-5"
-            >
-              {busy ? (
-                <FaSpinner className="animate-spin text-slate-600" />
-              ) : (
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-              )}
-              Continuar con Google
-            </button>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-slate-700/60" />
-              <span className="text-slate-500 text-xs">o continúa con email</span>
-              <div className="flex-1 h-px bg-slate-700/60" />
+            {/* Desktop theme toggle */}
+            <div className="hidden lg:flex justify-end mb-6">
+              <button type="button" onClick={toggleTheme} aria-label="Cambiar tema"
+                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200 ${themeBtnCls}`}>
+                {dark ? <FaSun size={12}/> : <FaMoon size={12}/>}
+                {dark ? 'Modo oscuro' : 'Modo claro'}
+              </button>
             </div>
 
-            {/* Formulario animado */}
-            <AnimatePresence mode="wait" custom={dir}>
-              <motion.form
-                key={mode}
-                custom={dir}
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                onSubmit={handleSubmit}
-                className="space-y-3.5"
-              >
-                {mode === 'register' && (
-                  <Field
-                    icon={FaUser}
-                    placeholder="Nombre completo"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    error={errors.name}
-                    autoComplete="name"
-                  />
-                )}
-
-                <Field
-                  icon={FaEnvelope}
-                  type="email"
-                  placeholder="Correo electrónico"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  error={errors.email}
-                  autoComplete="email"
-                />
-
-                {mode === 'register' && (
-                  <Field
-                    icon={FaPhone}
-                    type="tel"
-                    placeholder="Teléfono (opcional)"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    autoComplete="tel"
-                  />
-                )}
-
-                <Field
-                  icon={FaLock}
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  error={errors.password}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  rightEl={
-                    <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-500 hover:text-slate-300 transition">
-                      {showPass ? <FaEyeSlash /> : <FaEye />}
-                    </button>
-                  }
-                />
-
-                {mode === 'register' && (
-                  <Field
-                    icon={FaLock}
-                    type={showConfirm ? 'text' : 'password'}
-                    placeholder="Confirmar contraseña"
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    error={errors.confirm}
-                    autoComplete="new-password"
-                    rightEl={
-                      <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="text-slate-500 hover:text-slate-300 transition">
-                        {showConfirm ? <FaEyeSlash /> : <FaEye />}
-                      </button>
-                    }
-                  />
-                )}
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-2 mt-1"
-                >
-                  {busy && <FaSpinner className="animate-spin" />}
-                  {mode === 'login' ? 'Ingresar al portal' : 'Crear mi cuenta'}
-                </button>
-              </motion.form>
-            </AnimatePresence>
-
-            {mode === 'register' && (
-              <p className="text-slate-500 text-xs text-center mt-4 leading-relaxed">
-                Al crear una cuenta aceptas nuestros{' '}
-                <a href="/politica-privacidad" className="text-amber-400 hover:underline">
-                  términos y política de privacidad
-                </a>.
+            {/* Mobile eyebrow */}
+            <div className="mb-6 lg:hidden text-center">
+              <p className={`text-[10px] font-bold uppercase tracking-[0.4em] mb-2 ${dark?'text-amber-400/60':'text-amber-800/60'}`}>
+                Portal privado
               </p>
-            )}
-          </div>
+              <h1 className={`font-serif text-3xl leading-tight ${dark?'text-white':'text-slate-900'}`}>
+                Tu espacio <span className={dark?'text-amber-400':'text-amber-600'}>inmobiliario</span> personal.
+              </h1>
+            </div>
 
-          <div className="text-center mt-6">
-            <a href="/catalogo" className="text-slate-500 hover:text-amber-400 text-sm transition flex items-center justify-center gap-1.5">
-              <FaHome className="text-xs" /> Ver catálogo de propiedades
-            </a>
+            {/* Desktop heading */}
+            <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
+              transition={{ duration:0.5, delay:0.2 }}
+              className="hidden lg:block mb-6">
+              <p className={`text-[10px] font-bold uppercase tracking-[0.4em] mb-2 ${dark?'text-amber-400/60':'text-amber-800/60'}`}>
+                Acceso privado
+              </p>
+              <h2 className={`font-serif text-3xl xl:text-4xl leading-tight ${dark?'text-white':'text-slate-900'}`}>
+                {mode === 'login' ? 'Bienvenido de nuevo.' : 'Crea tu acceso privado.'}
+              </h2>
+            </motion.div>
+
+            {/* Card */}
+            <motion.div
+              initial={{ opacity:0, y:28, scale:0.97 }}
+              animate={{ opacity:1, y:0, scale:1 }}
+              transition={{ duration:0.55, delay:0.25, ease:[0.22,1,0.36,1] }}
+              className={`rounded-[28px] p-5 sm:p-6 backdrop-blur-2xl transition-colors duration-300 ${cardBg}`}>
+
+              {/* Tabs */}
+              <div className={`relative grid grid-cols-2 rounded-[16px] p-1 mb-5 ${dark?'bg-white/5':'bg-slate-100/90'}`}>
+                <motion.div layout transition={{ type:'spring', stiffness:340, damping:28 }}
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl ${tabActiveCls}
+                    ${mode==='login'?'left-1':'left-[calc(50%+2px)]'}`}/>
+                {[['login','Iniciar sesión'],['register','Crear cuenta']].map(([m, label]) => (
+                  <button key={m} type="button" onClick={() => switchMode(m)}
+                    className={`relative z-10 py-3 rounded-xl text-sm font-semibold transition-colors duration-200
+                      ${mode===m ? (dark?'text-slate-950':'text-white') : tabInactiveCls}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Google */}
+              <button type="button" onClick={handleGoogle} disabled={busy}
+                className={`w-full flex items-center justify-center gap-3 rounded-2xl py-3.5 text-sm font-semibold transition-all duration-200 mb-5 disabled:opacity-50 ${googleBtn}`}>
+                {busy ? <FaSpinner className="animate-spin text-amber-500"/> : (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                )}
+                Continuar con Google
+              </button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className={`h-px flex-1 ${dividerColor}`}/>
+                <span className={`text-[11px] font-medium ${mutedColor}`}>o con email</span>
+                <div className={`h-px flex-1 ${dividerColor}`}/>
+              </div>
+
+              {/* Form */}
+              <AnimatePresence mode="wait" custom={dir}>
+                <motion.form key={mode} custom={dir}
+                  initial={{ opacity:0, x: dir>0?20:-20 }}
+                  animate={{ opacity:1, x:0, transition:{ duration:0.3, ease:[0.22,1,0.36,1] } }}
+                  exit={{ opacity:0, x: dir>0?-20:20, transition:{ duration:0.18 } }}
+                  onSubmit={handleSubmit} className="space-y-3">
+                  {mode==='register' && (
+                    <Field icon={FaUser} placeholder="Nombre completo"
+                      value={name} onChange={e=>setName(e.target.value)}
+                      error={errors.name} autoComplete="name" dark={dark}/>
+                  )}
+                  <Field icon={FaEnvelope} type="email" placeholder="Correo electrónico"
+                    value={email} onChange={e=>setEmail(e.target.value)}
+                    error={errors.email} autoComplete="email" dark={dark}/>
+                  {mode==='register' && (
+                    <Field icon={FaPhone} type="tel" placeholder="Teléfono (opcional)"
+                      value={phone} onChange={e=>setPhone(e.target.value)}
+                      autoComplete="tel" dark={dark}/>
+                  )}
+                  <Field icon={FaLock} type={showPass?'text':'password'} placeholder="Contraseña"
+                    value={password} onChange={e=>setPassword(e.target.value)}
+                    error={errors.password}
+                    autoComplete={mode==='login'?'current-password':'new-password'}
+                    dark={dark}
+                    rightEl={
+                      <button type="button" onClick={()=>setShowPass(v=>!v)}
+                        className={`transition-colors ${mutedColor} hover:text-current`}>
+                        {showPass?<FaEyeSlash size={13}/>:<FaEye size={13}/>}
+                      </button>
+                    }/>
+                  {mode==='register' && (
+                    <Field icon={FaLock} type={showConfirm?'text':'password'} placeholder="Confirmar contraseña"
+                      value={confirm} onChange={e=>setConfirm(e.target.value)}
+                      error={errors.confirm} autoComplete="new-password" dark={dark}
+                      rightEl={
+                        <button type="button" onClick={()=>setShowConfirm(v=>!v)}
+                          className={`transition-colors ${mutedColor}`}>
+                          {showConfirm?<FaEyeSlash size={13}/>:<FaEye size={13}/>}
+                        </button>
+                      }/>
+                  )}
+                  <motion.button type="submit" disabled={busy}
+                    whileHover={{ scale: busy?1:1.015 }} whileTap={{ scale: busy?1:0.985 }}
+                    className={`w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 text-sm font-bold transition-all duration-200 mt-2 disabled:opacity-50 ${ctaBtn}`}>
+                    {busy ? <FaSpinner className="animate-spin"/> : <FaArrowRight className="text-xs"/>}
+                    {mode==='login' ? 'Ingresar al portal' : 'Crear mi acceso privado'}
+                  </motion.button>
+                </motion.form>
+              </AnimatePresence>
+
+              {mode==='register' && (
+                <p className={`mt-4 text-center text-[11px] leading-relaxed ${mutedColor}`}>
+                  Al registrarte aceptas nuestra{' '}
+                  <Link to="/politica-privacidad"
+                    className={`font-semibold underline underline-offset-2 ${dark?'text-amber-400/80 hover:text-amber-300':'text-amber-700/80 hover:text-amber-800'}`}>
+                    política de privacidad
+                  </Link>.
+                </p>
+              )}
+            </motion.div>
+
+            {/* Bottom links */}
+            <div className="mt-5 flex items-center justify-between">
+              <Link to="/catalogo"
+                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-all duration-200 ${dark?'text-white/28 hover:text-white/55':'text-slate-400 hover:text-slate-600'}`}>
+                Ver catálogo
+                <FaArrowRight className="text-[9px]"/>
+              </Link>
+              <p className={`text-[11px] lg:hidden ${mutedColor}`}>
+                © {new Date().getFullYear()} RB & Asociados
+              </p>
+            </div>
           </div>
         </div>
       </div>

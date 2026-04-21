@@ -23,6 +23,10 @@
 //
 // Adicionalmente: si ya existe un doc con email coincidente, SIEMPRE usa ese,
 // sin importar el orden de llegada.
+//
+// CAMBIO v2: toggleFavorite acepta onUnauthenticated como segundo argumento.
+// Cuando no hay sesión activa, llama esa función en lugar del toast.error,
+// permitiendo que PropertyCard muestre un modal de acceso.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -130,9 +134,21 @@ export function useFavorites() {
     [favorites]
   );
 
-  const toggleFavorite = useCallback(async (propertyId) => {
+  /**
+   * toggleFavorite(propertyId, onUnauthenticated?)
+   *
+   * - Si no hay sesión: llama onUnauthenticated() si se proporcionó,
+   *   de lo contrario muestra un toast genérico.
+   * - Si hay sesión pero no clientId: muestra toast de error.
+   * - Si todo está bien: hace el toggle optimista en Firestore.
+   */
+  const toggleFavorite = useCallback(async (propertyId, onUnauthenticated) => {
     if (!currentUser?.email) {
-      toast.error('Debes iniciar sesión para guardar favoritos');
+      if (typeof onUnauthenticated === 'function') {
+        onUnauthenticated();
+      } else {
+        toast.error('Inicia sesión para guardar favoritos');
+      }
       return;
     }
 

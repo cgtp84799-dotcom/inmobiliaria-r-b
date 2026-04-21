@@ -17,6 +17,7 @@ import { ThemeProvider } from "./core/contexts/ThemeContext";
 import { AuthProvider } from "./core/contexts/AuthContext";
 import { HelmetProvider } from "react-helmet-async";
 
+
 // ⚠️ React.StrictMode eliminado intencionalmente:
 // En desarrollo, StrictMode monta/desmonta cada componente DOS VECES para
 // detectar side-effects. Esto duplica los listeners onSnapshot de Firestore

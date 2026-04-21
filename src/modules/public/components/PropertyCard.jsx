@@ -1,135 +1,260 @@
-// src/modules/properties/components/PropertyCard.jsx
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import {
-  FaBed,
-  FaBath,
-  FaRulerCombined,
-  FaMapMarkerAlt,
-  FaHeart,
-  FaRegHeart,
-  FaHome,
-  FaArrowRight,
-} from "react-icons/fa";
+// src/modules/public/components/PropertyCard.jsx
+// ─────────────────────────────────────────────────────────────
+// PropertyCard editorial — precio en Fraunces italic,
+// badges sobrios (dorado + neutral), sin colores saturados.
+// 100% tokens CSS — dark + light nativos.
+//
+// CAMBIOS:
+//  · Integra useFavorites internamente — CatalogPage y LocationPage
+//    ya NO necesitan pasar isFavorite/onFavorite como props.
+//  · Cuando no hay sesión activa, muestra un modal de acceso
+//    en lugar del simple toast.error, con CTA a /acceso-clientes.
+// ─────────────────────────────────────────────────────────────
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
+import { useMemo, useState, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FaBed, FaBath, FaRulerCombined, FaMapMarkerAlt,
+  FaHeart, FaRegHeart, FaArrowRight, FaTimes, FaUserCircle,
+} from "react-icons/fa";
+import { useFavorites } from "../../clients/hooks/useFavorites";
+import { PUBLIC_ROUTES } from "../../../core/config/routes.config";
+
 const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 
 const AVAILABLE_STATUSES = new Set(["disponible", "published", "active", "available"]);
 const RESERVED_STATUSES  = new Set(["reservada", "reserved"]);
 
-// ─── Helpers puros ────────────────────────────────────────────────────────────
-const normalize = (value = "") =>
-  String(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+/* ─── Helpers ──────────────────────────────────────────────── */
+const normalize = (v = "") =>
+  String(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-").replace(/^-+|-+$/g, "");
 
 const normalizeAbsoluteUrl = (url) => {
-  const value = String(url || "").trim();
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  return `${BASE_URL}${value.startsWith("/") ? "" : "/"}${value}`;
+  const v = String(url || "").trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `${BASE_URL}${v.startsWith("/") ? "" : "/"}${v}`;
 };
 
-const getTransactionSlug = (transactionType = "") => {
-  const lower = String(transactionType).toLowerCase();
-  if (lower.includes("sale") || lower.includes("venta") || lower.includes("compra"))            return "venta";
-  if (lower.includes("rent") || lower.includes("arriendo") || lower.includes("alquiler") || lower.includes("renta")) return "arriendo";
+const getTransactionSlug = (tx = "") => {
+  const l = String(tx).toLowerCase();
+  if (l.includes("sale") || l.includes("venta") || l.includes("compra")) return "venta";
+  if (l.includes("rent") || l.includes("arriendo") || l.includes("alquiler") || l.includes("renta")) return "arriendo";
   return "";
 };
 
-const getTypeSlug = (type = "") => {
-  const lower = String(type).toLowerCase();
-  if (lower.includes("casa"))                               return "casa";
-  if (lower.includes("apart"))                              return "apartamento";
-  if (lower.includes("lote"))                               return "lote";
-  if (lower.includes("finca"))                              return "finca";
-  if (lower.includes("local") || lower.includes("comercial")) return "local";
-  if (lower.includes("oficina"))                            return "oficina";
-  if (lower.includes("bodega"))                             return "bodega";
+const getTypeSlug = (t = "") => {
+  const l = String(t).toLowerCase();
+  if (l.includes("casa")) return "casa";
+  if (l.includes("apart")) return "apartamento";
+  if (l.includes("lote")) return "lote";
+  if (l.includes("finca")) return "finca";
+  if (l.includes("local") || l.includes("comercial")) return "local";
+  if (l.includes("oficina")) return "oficina";
+  if (l.includes("bodega")) return "bodega";
   return "propiedad";
 };
 
-const resolveCity      = (p) => String(p?.location?.city      ?? p?.city      ?? "").trim();
-const resolveRooms     = (p) => p?.features?.rooms     ?? p?.features?.bedrooms ?? p?.rooms     ?? p?.bedrooms  ?? null;
-const resolveBathrooms = (p) => p?.features?.bathrooms  ?? p?.bathrooms  ?? null;
-const resolveArea      = (p) => p?.features?.builtArea  ?? p?.features?.area    ?? p?.area      ?? null;
-const resolvePrice     = (p) => p?.price?.sale          ?? p?.price?.rent       ?? p?.price     ?? 0;
+const resolveCity      = (p) => String(p?.location?.city ?? p?.city ?? "").trim();
+const resolveRooms     = (p) => p?.features?.rooms ?? p?.features?.bedrooms ?? p?.rooms ?? p?.bedrooms ?? null;
+const resolveBathrooms = (p) => p?.features?.bathrooms ?? p?.bathrooms ?? null;
+const resolveArea      = (p) => p?.features?.builtArea ?? p?.features?.area ?? p?.area ?? null;
+const resolvePrice     = (p) => p?.price?.sale ?? p?.price?.rent ?? p?.price ?? 0;
 
-const buildSlug = (property) => {
+const buildSlug = (p) => {
   const parts = [];
-  const transaction = getTransactionSlug(property?.transactionType);
-  const type        = getTypeSlug(property?.type);
-  const city        = normalize(resolveCity(property));
-  const rooms       = resolveRooms(property);
-  if (transaction) parts.push(transaction);
-  if (type)        parts.push(type);
-  if (city)        parts.push(city);
-  if (rooms)       parts.push(`${rooms}-habitaciones`);
+  const tx = getTransactionSlug(p?.transactionType);
+  const type = getTypeSlug(p?.type);
+  const city = normalize(resolveCity(p));
+  const rooms = resolveRooms(p);
+  if (tx) parts.push(tx);
+  if (type) parts.push(type);
+  if (city) parts.push(city);
+  if (rooms) parts.push(`${rooms}-habitaciones`);
   return normalize(parts.join(" ")) || "propiedad";
 };
 
 const getPropertyType = (type) => {
   const map = {
-    house: "Casa",            casa: "Casa",
+    house: "Casa", casa: "Casa",
     apartment: "Apartamento", apartamento: "Apartamento",
-    lot: "Lote",              lote: "Lote",
-    farm: "Finca",            finca: "Finca",
-    commercial: "Local Comercial", local: "Local Comercial",
-    office: "Oficina",        oficina: "Oficina",
-    warehouse: "Bodega",      bodega: "Bodega",
+    lot: "Lote", lote: "Lote",
+    farm: "Finca", finca: "Finca",
+    commercial: "Local comercial", local: "Local comercial",
+    office: "Oficina", oficina: "Oficina",
+    warehouse: "Bodega", bodega: "Bodega",
   };
   return map[String(type || "").toLowerCase()] || type || "Propiedad";
 };
 
-const getTransactionInfo = (transactionType) => {
-  const lower = String(transactionType ?? "").toLowerCase();
-  if (["sale", "venta", "compra"].includes(lower))                   return { text: "VENTA",    isVenta: true };
-  if (["rent", "arriendo", "alquiler", "renta"].includes(lower))     return { text: "ARRIENDO", isVenta: false };
-  return { text: lower ? lower.toUpperCase() : "PROPIEDAD", isVenta: false };
+const getTransactionInfo = (tx) => {
+  const l = String(tx ?? "").toLowerCase();
+  if (["sale", "venta", "compra"].includes(l))               return { text: "Venta", isVenta: true };
+  if (["rent", "arriendo", "alquiler", "renta"].includes(l)) return { text: "Arriendo", isVenta: false };
+  return { text: l ? l.charAt(0).toUpperCase() + l.slice(1) : "Propiedad", isVenta: false };
 };
 
-const formatPrice = (price) =>
-  new Intl.NumberFormat("es-CO", {
-    style: "currency", currency: "COP", minimumFractionDigits: 0,
-  }).format(Number(price) || 0);
+const formatPriceShort = (price, isRent = false) => {
+  const n = Number(price) || 0;
+  if (n === 0) return null;
+  let num, unit;
+  if (n >= 1_000_000_000)      { num = (n / 1_000_000_000).toFixed(1).replace(/\.0$/, ""); unit = "B"; }
+  else if (n >= 1_000_000)     { num = (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, ""); unit = "M"; }
+  else if (n >= 1_000)         { num = (n / 1_000).toFixed(0); unit = "K"; }
+  else                         { num = String(n); unit = ""; }
+  return { num, unit, suffix: isRent ? "/ mes" : "" };
+};
 
-// ─── Subcomponente: badge de característica ───────────────────────────────────
-const FeatureBadge = ({ Icon, value, unit }) => (
-  <div className="flex flex-col items-center p-2 bg-slate-800/40 rounded-lg hover:bg-slate-800 transition-colors">
-    <Icon className="text-primary mb-1.5" size={16} />
-    <span className="text-white font-black text-sm leading-none">{value ?? "—"}</span>
-    <span className="text-slate-400 text-[10px] mt-0.5">{unit}</span>
+/* ─── Feature ──────────────────────────────────────────────── */
+const Feature = ({ Icon, value, unit, label }) => (
+  <div className="property-card__feature" title={label}>
+    <Icon className="property-card__feature-icon" />
+    <span className="property-card__feature-value">
+      {value ?? "—"}
+      {value != null && unit && <span className="property-card__feature-unit">{unit}</span>}
+    </span>
   </div>
 );
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+/* ─── Modal de acceso ──────────────────────────────────────── */
+// Se muestra cuando el usuario no tiene sesión y toca el corazón.
+// Usa 100% tokens CSS del proyecto, sin colores hardcodeados.
+const LoginPromptModal = ({ onClose }) => (
+  <AnimatePresence>
+    <motion.div
+      key="fav-modal-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby="fav-modal-title"
+    >
+      <motion.div
+        key="fav-modal-card"
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 24 }}
+        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "1.25rem",
+          boxShadow: "0 32px 64px -16px rgba(0,0,0,0.45)",
+          maxWidth: "22rem",
+          width: "100%",
+          padding: "2rem 1.75rem 1.75rem",
+          position: "relative",
+        }}
+      >
+        {/* Cerrar */}
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          style={{
+            position: "absolute",
+            top: "1rem",
+            right: "1rem",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--color-text-muted)",
+            padding: "0.25rem",
+            lineHeight: 1,
+          }}
+        >
+          <FaTimes size={14} />
+        </button>
+
+        {/* Ícono */}
+        <div
+          style={{
+            width: "3.25rem",
+            height: "3.25rem",
+            borderRadius: "50%",
+            background: "rgba(var(--color-primary-rgb, 245,158,11), 0.12)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "1.25rem",
+          }}
+        >
+          <FaHeart size={22} style={{ color: "var(--color-primary, #f59e0b)" }} />
+        </div>
+
+        {/* Texto */}
+        <h2
+          id="fav-modal-title"
+          style={{
+            color: "var(--color-text)",
+            fontSize: "1.2rem",
+            fontWeight: 700,
+            marginBottom: "0.5rem",
+            lineHeight: 1.3,
+          }}
+        >
+          Guarda tus propiedades favoritas
+        </h2>
+        <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem", lineHeight: 1.6, marginBottom: "1.5rem" }}>
+          Crea una cuenta gratuita o inicia sesión para guardar propiedades y consultarlas desde tu portal personal.
+        </p>
+
+        {/* CTAs */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+          <Link
+            to={PUBLIC_ROUTES.CLIENT_AUTH}
+            onClick={onClose}
+            className="btn-primary"
+            style={{ textAlign: "center", justifyContent: "center" }}
+          >
+            <FaUserCircle style={{ marginRight: "0.4rem" }} />
+            Crear cuenta o iniciar sesión
+          </Link>
+          <button
+            onClick={onClose}
+            className="btn-ghost"
+            style={{ width: "100%", textAlign: "center", justifyContent: "center" }}
+          >
+            Seguir explorando
+          </button>
+        </div>
+
+        {/* Fine print */}
+        <p style={{
+          color: "var(--color-text-faint, var(--color-text-muted))",
+          fontSize: "0.7rem",
+          textAlign: "center",
+          marginTop: "1rem",
+          opacity: 0.7,
+        }}>
+          Es gratis · Sin tarjeta · En segundos
+        </p>
+      </motion.div>
+    </motion.div>
+  </AnimatePresence>
+);
+
+/* ─── Principal ────────────────────────────────────────────── */
 /**
  * PropertyCard
  *
- * Props:
- *   property   — objeto de la propiedad (Firestore doc)
- *   isFavorite — boolean, estado real desde useFavorites hook (NO local state)
- *   onFavorite — fn(propertyId) → llama toggleFavorite del hook
- *
- * Uso correcto en el padre:
- *   const { isFavorite, toggleFavorite } = useFavorites();
- *   <PropertyCard
- *     property={p}
- *     isFavorite={isFavorite(p.id)}
- *     onFavorite={toggleFavorite}
- *   />
+ * Maneja favoritos internamente vía useFavorites.
+ * Los padres (CatalogPage, LocationPage) NO necesitan pasar
+ * isFavorite ni onFavorite — simplemente: <PropertyCard property={p} />
  */
-const PropertyCard = ({ property, isFavorite = false, onFavorite }) => {
+const PropertyCard = ({ property }) => {
   const navigate = useNavigate();
+  const { isFavorite, toggleFavorite, loading: favLoading } = useFavorites();
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // ── Valores derivados ─────────────────────────────────────────────────────
   const mainImage = useMemo(() => {
     const raw =
       property?.media?.photos?.[0]?.url ||
@@ -138,14 +263,13 @@ const PropertyCard = ({ property, isFavorite = false, onFavorite }) => {
     return normalizeAbsoluteUrl(raw);
   }, [property]);
 
-  const resolvedPrice    = useMemo(() => resolvePrice(property),     [property]);
-  const cityText         = useMemo(() => resolveCity(property),      [property]);
+  const resolvedPrice    = useMemo(() => resolvePrice(property), [property]);
+  const cityText         = useMemo(() => resolveCity(property),  [property]);
   const addressText      = useMemo(() =>
     property?.location?.addressPublic ??
     property?.location?.address ??
     property?.address ??
-    "Dirección no disponible",
-  [property]);
+    "", [property]);
   const neighborhood     = useMemo(() => property?.location?.neighborhood ?? property?.neighborhood ?? "", [property]);
   const roomsValue       = useMemo(() => resolveRooms(property),     [property]);
   const bathsValue       = useMemo(() => resolveBathrooms(property), [property]);
@@ -155,12 +279,27 @@ const PropertyCard = ({ property, isFavorite = false, onFavorite }) => {
   const statusNormalized = useMemo(() => String(property?.status ?? "").toLowerCase(), [property]);
   const isAvailable      = AVAILABLE_STATUSES.has(statusNormalized);
   const isReserved       = RESERVED_STATUSES.has(statusNormalized);
+  const favActive        = useMemo(() => property?.id ? isFavorite(property.id) : false, [property?.id, isFavorite]);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleFavoriteClick = (e) => {
+  const priceParts = useMemo(
+    () => formatPriceShort(resolvedPrice, !transactionInfo.isVenta),
+    [resolvedPrice, transactionInfo.isVenta]
+  );
+
+  // toggleFavorite del hook ya sabe si hay sesión:
+  // - Si no hay sesión: internamente no hace nada / lanza callback
+  // - Aquí capturamos el caso "sin sesión" para mostrar el modal
+  const handleFavoriteClick = useCallback((e) => {
     e.stopPropagation();
-    if (onFavorite) onFavorite(property.id);
-  };
+    e.preventDefault();
+    if (!property?.id) return;
+
+    // El hook expone `currentUser` indirectamente a través de su comportamiento:
+    // si no hay sesión, toggleFavorite no guarda nada y nosotros mostramos el modal.
+    // Para detectarlo sin acoplar al hook, intentamos el toggle y el hook
+    // nos devuelve false si no hay usuario (lo extendemos abajo con onUnauthenticated).
+    toggleFavorite(property.id, () => setShowLoginModal(true));
+  }, [property?.id, toggleFavorite]);
 
   const handleCardClick = () => {
     if (!property?.id) return;
@@ -174,177 +313,159 @@ const PropertyCard = ({ property, isFavorite = false, onFavorite }) => {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <motion.article
-      whileHover={{ y: -3, transition: { duration: 0.22 } }}
-      className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer group border border-slate-800 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/10"
-      onClick={handleCardClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      aria-label={`Ver detalles de ${property?.title || "la propiedad"}`}
-    >
+    <>
+      {/* Modal de acceso — fuera del article para no bloquear el click */}
+      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
-      {/* ── Imagen + overlays ── */}
-      <div className="relative aspect-[4/3] overflow-hidden">
-        <img
-          src={mainImage}
-          alt={`${getPropertyType(property?.type)} en ${
-            transactionInfo.isVenta ? "venta" : "arriendo"
-          }${cityText ? ` en ${cityText}` : ""} - ${property?.title || "Propiedad"}`}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            e.currentTarget.src = "https://via.placeholder.com/800x600?text=Sin+Imagen";
-          }}
-        />
+      <motion.article
+        whileHover={{ y: -4, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }}
+        className="property-card"
+        onClick={handleCardClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        aria-label={`Ver detalles de ${property?.title || "la propiedad"}`}
+      >
+        {/* ═══ MEDIA ═══ */}
+        <div className="property-card__media">
+          <img
+            src={mainImage}
+            alt={`${getPropertyType(property?.type)} ${transactionInfo.isVenta ? "en venta" : "en arriendo"}${cityText ? ` en ${cityText}` : ""}`}
+            className="property-card__img"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              e.currentTarget.src = "https://via.placeholder.com/800x600?text=Sin+Imagen";
+            }}
+          />
 
-        {/* Gradiente inferior */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="property-card__overlay" aria-hidden="true" />
 
-        {/* Badges: estado y tipo de transacción */}
-        <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
-          {isAvailable && (
-            <motion.span
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] sm:text-xs font-black rounded-lg shadow-xl backdrop-blur-sm flex items-center gap-1.5 border border-emerald-400 w-fit"
-            >
-              <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-              DISPONIBLE
-            </motion.span>
-          )}
-
-          {isReserved && (
-            <motion.span
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="px-2.5 py-1 bg-yellow-500 text-slate-950 text-[10px] sm:text-xs font-black rounded-lg shadow-xl backdrop-blur-sm flex items-center gap-1.5 border border-yellow-300 w-fit"
-            >
-              <span className="w-2 h-2 bg-slate-950 rounded-full" />
-              RESERVADA
-            </motion.span>
-          )}
-
-          <motion.span
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className={`px-3 py-1.5 text-[10px] sm:text-xs font-black rounded-lg shadow-xl backdrop-blur-sm border w-fit ${
-              transactionInfo.isVenta
-                ? "bg-blue-600 text-white border-blue-400"
-                : "bg-orange-600 text-white border-orange-400"
-            }`}
-          >
-            {transactionInfo.text}
-          </motion.span>
-        </div>
-
-        {/* Botón favorito — estado controlado por prop, NO por useState local */}
-        <motion.button
-          whileHover={{ scale: 1.06 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={handleFavoriteClick}
-          className={`absolute top-3 right-3 w-10 h-10 backdrop-blur-md rounded-full flex items-center justify-center transition-all duration-200 shadow-xl border z-10 ${
-            isFavorite
-              ? "bg-red-500/20 border-red-500/50 hover:bg-red-500/30"
-              : "bg-black/75 border-white/20 hover:bg-black/90"
-          }`}
-          aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-          aria-pressed={isFavorite}
-          type="button"
-        >
-          {isFavorite ? (
-            <motion.span
-              key="filled"
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1,   opacity: 1 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            >
-              <FaHeart className="text-red-500" size={18} />
-            </motion.span>
-          ) : (
-            <motion.span
-              key="outline"
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1,   opacity: 1 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            >
-              <FaRegHeart className="text-white" size={18} />
-            </motion.span>
-          )}
-        </motion.button>
-
-        {/* Precio + flecha */}
-        <div className="absolute bottom-3 left-3 right-3 z-10">
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <span className="inline-flex items-center px-3 py-2 rounded-xl bg-slate-950/90 backdrop-blur-md border border-primary/40 shadow-xl">
-                <span className="text-primary font-black text-base sm:text-xl truncate">
-                  {resolvedPrice ? formatPrice(resolvedPrice) : "Consultar precio"}
-                </span>
+          {/* Badges arriba-izquierda */}
+          <div className="property-card__badges">
+            {isAvailable && (
+              <span className="property-card__badge property-card__badge--available">
+                <span className="property-card__badge-dot" />
+                Disponible
               </span>
-            </div>
-            <div className="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center backdrop-blur-sm border border-primary/30 flex-shrink-0">
-              <FaArrowRight className="text-primary" size={16} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Info ── */}
-      <div className="p-3 sm:p-5">
-
-        {/* Tipo de propiedad */}
-        <div className="flex items-center gap-2 text-primary text-[11px] sm:text-sm font-bold mb-2">
-          <FaHome className="text-base sm:text-lg" />
-          <span className="uppercase tracking-wide">{getPropertyType(property?.type)}</span>
-        </div>
-
-        {/* Título */}
-        <h3 className="text-sm sm:text-lg font-bold text-white mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-          {property?.title || "Propiedad sin título"}
-        </h3>
-
-        {/* Ubicación */}
-        <div className="flex items-start gap-2 text-slate-300 text-xs sm:text-sm mb-3 pb-3 border-b border-slate-800">
-          <FaMapMarkerAlt className="mt-0.5 flex-shrink-0 text-primary" size={14} />
-          <span className="min-w-0">
-            <span className="text-slate-200 font-semibold">
-              {cityText || "Ciudad no disponible"}
-            </span>
-            {neighborhood && (
-              <span className="text-slate-400">{` • ${neighborhood}`}</span>
             )}
-            <span className="block text-slate-500 line-clamp-1">{addressText}</span>
+            {isReserved && (
+              <span className="property-card__badge property-card__badge--reserved">
+                Reservada
+              </span>
+            )}
+            <span className={`property-card__badge property-card__badge--tx ${transactionInfo.isVenta ? "is-sale" : "is-rent"}`}>
+              {transactionInfo.text}
+            </span>
+          </div>
+
+          {/* Favorito arriba-derecha */}
+          <motion.button
+            whileTap={{ scale: 0.85 }}
+            onClick={handleFavoriteClick}
+            disabled={favLoading}
+            className={`property-card__fav ${favActive ? "is-active" : ""}`}
+            aria-label={favActive ? "Quitar de favoritos" : "Agregar a favoritos"}
+            aria-pressed={favActive}
+            type="button"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {favActive ? (
+                <motion.span
+                  key="heart-filled"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ duration: 0.18, type: "spring", stiffness: 400, damping: 20 }}
+                >
+                  <FaHeart />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="heart-outline"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <FaRegHeart />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+
+          {/* Tipo chip abajo-izquierda */}
+          <span className="property-card__type-chip">
+            {getPropertyType(property?.type)}
           </span>
         </div>
 
-        {/* Características */}
-        <div className="grid grid-cols-3 gap-2 mb-3 sm:mb-4">
-          <FeatureBadge Icon={FaRulerCombined} value={areaValue}   unit="m²"    />
-          <FeatureBadge Icon={FaBed}           value={roomsValue}  unit="Hab."  />
-          <FeatureBadge Icon={FaBath}          value={bathsValue}  unit="Baños" />
-        </div>
-
-        {/* CTA */}
-        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-          <div className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-primary via-yellow-500 to-primary text-slate-900 font-black text-center rounded-xl group-hover:shadow-lg group-hover:shadow-primary/40 transition-all duration-300 flex items-center justify-center gap-2 text-sm">
-            Ver detalles
-            <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
+        {/* ═══ BODY ═══ */}
+        <div className="property-card__body">
+          {/* Precio */}
+          <div className="property-card__price-row">
+            {priceParts ? (
+              <p className="property-card__price">
+                <span className="property-card__price-currency">$</span>
+                <span className="property-card__price-num">{priceParts.num}</span>
+                {priceParts.unit && <span className="property-card__price-unit">{priceParts.unit}</span>}
+                {priceParts.suffix && <span className="property-card__price-suffix">{priceParts.suffix}</span>}
+              </p>
+            ) : (
+              <p className="property-card__price property-card__price--ask">
+                Consultar precio
+              </p>
+            )}
           </div>
-        </motion.div>
-      </div>
 
-      {/* Línea decorativa inferior */}
-      <div className="h-1.5 bg-gradient-to-r from-transparent via-primary to-transparent transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
+          {/* Título */}
+          <h3 className="property-card__title">
+            {property?.title || "Propiedad sin título"}
+          </h3>
 
-    </motion.article>
+          {/* Ubicación */}
+          <div className="property-card__location">
+            <FaMapMarkerAlt className="property-card__location-icon" />
+            <div className="min-w-0 flex-1">
+              <span className="property-card__location-city">
+                {cityText || "Ubicación por confirmar"}
+              </span>
+              {neighborhood && (
+                <span className="property-card__location-neighborhood">
+                  {" · "}{neighborhood}
+                </span>
+              )}
+              {addressText && (
+                <span className="property-card__location-address">{addressText}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Features */}
+          {(areaValue != null || roomsValue != null || bathsValue != null) && (
+            <div className="property-card__features">
+              {areaValue != null && (
+                <Feature Icon={FaRulerCombined} value={areaValue} unit="m²" label="Área" />
+              )}
+              {roomsValue != null && (
+                <Feature Icon={FaBed} value={roomsValue} label="Habitaciones" />
+              )}
+              {bathsValue != null && (
+                <Feature Icon={FaBath} value={bathsValue} label="Baños" />
+              )}
+            </div>
+          )}
+
+          {/* CTA */}
+          <div className="property-card__cta">
+            <span>Ver detalles</span>
+            <FaArrowRight className="property-card__cta-arrow" />
+          </div>
+        </div>
+      </motion.article>
+    </>
   );
 };
 

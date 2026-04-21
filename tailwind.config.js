@@ -6,10 +6,9 @@ export default {
     extend: {
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          COLORES — mapeados a variables CSS semánticas
-         Uso: bg-surface, text-muted, border-themed, etc.
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       colors: {
-        /* ── Primario (amber/dorado) ── */
+        /* ── Primario (dorado cálido) ── */
         primary: {
           DEFAULT: "#f59e0b",
           50:  "#fffbeb",
@@ -27,6 +26,21 @@ export default {
         /* ── Aliases heredados ── */
         dark:  "#020617",
         light: "#e5e7eb",
+
+        /* ── Azul noche (institucional) ── */
+        ink: {
+          DEFAULT: "#020617",
+          50:  "#f1f5f9",
+          100: "#e2e8f0",
+          200: "#cbd5e1",
+          300: "#94a3b8",
+          400: "#64748b",
+          500: "#475569",
+          600: "#334155",
+          700: "#1e293b",
+          800: "#0f172a",
+          900: "#020617",
+        },
 
         /* ── Superficies semánticas → variables CSS ── */
         bg:          "var(--color-bg)",
@@ -94,44 +108,44 @@ export default {
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         SOMBRAS — mapeadas a variables CSS
+         SOMBRAS
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       boxShadow: {
         sm:        "var(--shadow-sm)",
         card:      "var(--shadow-card)",
         lg:        "var(--shadow-lg)",
         "glow-gold": "var(--shadow-glow-gold)",
-        /* Sombras extra para propiedades destacadas */
         "card-hover": "0 8px 28px rgba(60,40,10,0.10), 0 2px 6px rgba(60,40,10,0.07)",
         "gold-strong": "0 4px 24px rgba(245,158,11,0.35), 0 1px 4px rgba(0,0,0,0.12)",
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         BORDES RADIUS — escala consistente
+         BORDES RADIUS
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       borderRadius: {
-        "2xs": "0.25rem",   /*  4px */
-        xs:    "0.375rem",  /*  6px */
-        sm:    "0.5rem",    /*  8px */
-        md:    "0.625rem",  /* 10px */
-        lg:    "0.75rem",   /* 12px */
-        xl:    "0.875rem",  /* 14px */
-        "2xl": "1rem",      /* 16px */
-        "3xl": "1.25rem",   /* 20px */
-        "4xl": "1.5rem",    /* 24px */
+        "2xs": "0.25rem",
+        xs:    "0.375rem",
+        sm:    "0.5rem",
+        md:    "0.625rem",
+        lg:    "0.75rem",
+        xl:    "0.875rem",
+        "2xl": "1rem",
+        "3xl": "1.25rem",
+        "4xl": "1.5rem",
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         FUENTES
+         FUENTES — Fraunces como display, Inter como body
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       fontFamily: {
         sans:    ["Inter", "system-ui", "-apple-system", "sans-serif"],
-        display: ["Inter", "system-ui", "sans-serif"],
+        display: ["Fraunces", "Georgia", "ui-serif", "serif"],
+        serif:   ["Fraunces", "Georgia", "ui-serif", "serif"],
         mono:    ["JetBrains Mono", "Fira Code", "monospace"],
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         TIPOGRAFÍA — escala con clamp() fluid
+         TIPOGRAFÍA — escala fluid
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       fontSize: {
         "11px": ["0.6875rem", { lineHeight: "1.4" }],
@@ -144,10 +158,17 @@ export default {
         "2xl":  ["1.5rem",    { lineHeight: "1.3" }],
         "3xl":  ["1.875rem",  { lineHeight: "1.2" }],
         "4xl":  ["2.25rem",   { lineHeight: "1.1" }],
+        "5xl":  ["3rem",      { lineHeight: "1.05" }],
+        "6xl":  ["3.75rem",   { lineHeight: "1.02" }],
+        "7xl":  ["4.5rem",    { lineHeight: "1" }],
+        /* Display fluid — escala con el viewport */
+        "display-sm":  ["clamp(2rem, 4vw + 1rem, 3rem)",        { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        "display":     ["clamp(2.5rem, 5vw + 1rem, 4.25rem)",   { lineHeight: "1.02", letterSpacing: "-0.025em" }],
+        "display-lg":  ["clamp(3rem, 6vw + 1rem, 5.5rem)",      { lineHeight: "1",    letterSpacing: "-0.03em" }],
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         ESPACIADO ADICIONAL
+         ESPACIADO
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       spacing: {
         "13": "3.25rem",
@@ -156,10 +177,10 @@ export default {
         "22": "5.5rem",
         "26": "6.5rem",
         "30": "7.5rem",
-        "sidebar": "15rem",      /* ancho sidebar expandido */
-        "sidebar-collapsed": "4rem", /* ancho sidebar colapsado */
-        "topbar": "3.75rem",     /* alto topbar admin */
-        "navbar": "4rem",        /* alto navbar público */
+        "sidebar": "15rem",
+        "sidebar-collapsed": "4rem",
+        "topbar": "3.75rem",
+        "navbar": "4rem",
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -187,6 +208,10 @@ export default {
         },
         "fade-up": {
           from: { opacity: "0", transform: "translateY(16px)" },
+          to:   { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-up-lg": {
+          from: { opacity: "0", transform: "translateY(32px)" },
           to:   { opacity: "1", transform: "translateY(0)" },
         },
         "scale-in": {
@@ -217,16 +242,27 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%":      { transform: "translateY(-4px)" },
         },
+        "ticker": {
+          "0%":   { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        "gold-glow": {
+          "0%, 100%": { opacity: "0.4" },
+          "50%":      { opacity: "0.7" },
+        },
       },
       animation: {
         "fade-in":        "fade-in 0.3s cubic-bezier(0.16,1,0.3,1) forwards",
         "fade-up":        "fade-up 0.4s cubic-bezier(0.16,1,0.3,1) forwards",
+        "fade-up-lg":     "fade-up-lg 0.7s cubic-bezier(0.16,1,0.3,1) forwards",
         "scale-in":       "scale-in 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards",
         "slide-in-left":  "slide-in-left 0.3s cubic-bezier(0.16,1,0.3,1) forwards",
         "slide-in-right": "slide-in-right 0.3s cubic-bezier(0.16,1,0.3,1) forwards",
         "spin-slow":      "spin-slow 8s linear infinite",
         "pulse-gold":     "pulse-gold 2.4s ease-in-out infinite",
         "bounce-soft":    "bounce-soft 2s ease-in-out infinite",
+        "ticker":         "ticker 40s linear infinite",
+        "gold-glow":      "gold-glow 4s ease-in-out infinite",
         shimmer:          "shimmer 1.6s ease-in-out infinite",
       },
 
@@ -242,11 +278,12 @@ export default {
       },
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         Z-INDEX — escala explícita
+         Z-INDEX
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       zIndex: {
         sidebar:  "40",
         topbar:   "50",
+        nav:      "50",
         dropdown: "60",
         modal:    "70",
         toast:    "80",
@@ -257,10 +294,12 @@ export default {
          ASPECT RATIOS
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       aspectRatio: {
-        property: "4 / 3",   /* fotos de inmuebles */
+        property: "4 / 3",
         card:     "16 / 9",
         portrait: "3 / 4",
         square:   "1 / 1",
+        hero:     "5 / 4",
+        tall:     "2 / 3",
       },
     },
   },

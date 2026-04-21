@@ -1,5 +1,11 @@
+// src/modules/public/pages/LocationPage.jsx
+// ─────────────────────────────────────────────────────────────
+// Página de zona/ciudad editorial — misma lógica de SEO y slugs,
+// UI reescrita con tokens semánticos y lenguaje Fraunces.
+// ─────────────────────────────────────────────────────────────
+
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 import {
@@ -8,7 +14,8 @@ import {
   FaMapMarkerAlt,
   FaChevronLeft,
   FaChevronRight,
-  FaFilter,
+  FaArrowRight,
+  FaWhatsapp,
 } from "react-icons/fa";
 import propertyService from "../../properties/services/property.service";
 import PropertyCard from "../components/PropertyCard";
@@ -68,6 +75,8 @@ const FILTER_KEYWORDS = [
   "oficina",
 ];
 
+// ─── Helpers de normalización ────────────────────────────────────────────────
+
 function normalize(str = "") {
   return String(str)
     .normalize("NFD")
@@ -83,97 +92,142 @@ function humanizeSlug(slug = "") {
   return String(slug)
     .split("-")
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
-function isTypeCitySlug(slug = "") {
-  const lower = normalize(slug);
-  return FILTER_KEYWORDS.some((kw) => lower.includes(kw));
-}
+const isTypeCitySlug = (slug = "") =>
+  FILTER_KEYWORDS.some((k) => normalize(slug).includes(k));
 
-function inferTransactionFromPath(segment = "") {
-  const lower = normalize(segment);
-  if (lower.includes("venta") || lower.includes("compra")) return "venta";
-  if (
-    lower.includes("arriendo") ||
-    lower.includes("alquiler") ||
-    lower.includes("renta")
-  ) {
-    return "arriendo";
+// ─── Parser de slugs de zona ────────────────────────────────────────────────
+
+const TYPE_PLURALS_TO_KEY = {
+  casas: "casa",
+  apartamentos: "apartamento",
+  lotes: "lote",
+  fincas: "finca",
+  locales: "local",
+  "locales-comerciales": "local",
+  oficinas: "oficina",
+  bodegas: "bodega",
+};
+
+function parseZoneSlug(slug = "") {
+  const normalized = normalize(slug);
+
+  if (CITY_LABELS[normalized]) {
+    return {
+      city: normalized,
+      type: null,
+      transaction: null,
+    };
   }
-  return null;
-}
 
-function inferTypeFromSegment(segment = "") {
-  const lower = normalize(segment);
-  if (lower.includes("casa")) return "casa";
-  if (lower.includes("apart")) return "apartamento";
-  if (lower.includes("lote")) return "lote";
-  if (lower.includes("finca")) return "finca";
-  if (lower.includes("local") || lower.includes("comercial")) return "local";
-  if (lower.includes("oficina")) return "oficina";
-  if (lower.includes("bodega")) return "bodega";
-  return null;
-}
+  const cityKeys = Object.keys(CITY_LABELS).sort((a, b) => b.length - a.length);
 
-function inferCityFromSegment(segment = "") {
-  const lower = normalize(segment);
-  const keys = Object.keys(CITY_LABELS).sort((a, b) => b.length - a.length);
-  return keys.find((key) => lower.includes(key)) || null;
-}
+  const matchedCity =
+    cityKeys.find(
+      (key) => normalized === key || normalized.endsWith(`-${key}`)
+    ) || null;
 
-function getTransactionSlug(transactionType = "") {
-  const lower = String(transactionType).toLowerCase();
-  if (
-    lower.includes("sale") ||
-    lower.includes("venta") ||
-    lower.includes("compra")
+  if (!matchedCity) {
+    return {
+      city: null,
+      type: null,
+      transaction: null,
+    };
+  }
+
+  const withoutCity = normalized
+    .replace(new RegExp(`-?${matchedCity}$`), "")
+    .replace(/^-+|-+$/g, "");
+
+  const parts = withoutCity.split("-").filter(Boolean);
+
+  let transaction = null;
+  if (parts.includes("venta") || parts.includes("compra")) {
+    transaction = "venta";
+  } else if (
+    parts.includes("arriendo") ||
+    parts.includes("alquiler") ||
+    parts.includes("renta")
   ) {
+    transaction = "arriendo";
+  }
+
+  let type = null;
+
+  const pluralMatch = Object.keys(TYPE_PLURALS_TO_KEY).find((plural) =>
+    withoutCity.includes(plural)
+  );
+
+  if (pluralMatch) {
+    type = TYPE_PLURALS_TO_KEY[pluralMatch];
+  } else {
+    if (withoutCity.includes("casa")) type = "casa";
+    else if (withoutCity.includes("apart")) type = "apartamento";
+    else if (withoutCity.includes("lote")) type = "lote";
+    else if (withoutCity.includes("finca")) type = "finca";
+    else if (
+      withoutCity.includes("local") ||
+      withoutCity.includes("comercial")
+    ) {
+      type = "local";
+    } else if (withoutCity.includes("oficina")) type = "oficina";
+    else if (withoutCity.includes("bodega")) type = "bodega";
+  }
+
+  return {
+    city: matchedCity,
+    type,
+    transaction,
+  };
+}
+
+// ─── Helpers de propiedades ─────────────────────────────────────────────────
+
+const resolveCity = (p) => String(p?.location?.city ?? p?.city ?? "").trim();
+
+const resolveRooms = (p) =>
+  p?.features?.rooms ??
+  p?.features?.bedrooms ??
+  p?.rooms ??
+  p?.bedrooms ??
+  null;
+
+function getTransactionSlug(tx = "") {
+  const l = String(tx).toLowerCase();
+  if (l.includes("sale") || l.includes("venta") || l.includes("compra")) {
     return "venta";
   }
   if (
-    lower.includes("rent") ||
-    lower.includes("arriendo") ||
-    lower.includes("alquiler") ||
-    lower.includes("renta")
+    l.includes("rent") ||
+    l.includes("arriendo") ||
+    l.includes("alquiler") ||
+    l.includes("renta")
   ) {
     return "arriendo";
   }
   return "";
 }
 
-function getTypeSlug(type = "") {
-  const lower = String(type).toLowerCase();
-  if (lower.includes("casa")) return "casa";
-  if (lower.includes("apart")) return "apartamento";
-  if (lower.includes("lote")) return "lote";
-  if (lower.includes("finca")) return "finca";
-  if (lower.includes("local") || lower.includes("comercial")) return "local";
-  if (lower.includes("oficina")) return "oficina";
-  if (lower.includes("bodega")) return "bodega";
+function getTypeSlug(t = "") {
+  const l = String(t).toLowerCase();
+  if (l.includes("casa")) return "casa";
+  if (l.includes("apart")) return "apartamento";
+  if (l.includes("lote")) return "lote";
+  if (l.includes("finca")) return "finca";
+  if (l.includes("local") || l.includes("comercial")) return "local";
+  if (l.includes("oficina")) return "oficina";
+  if (l.includes("bodega")) return "bodega";
   return "propiedad";
 }
 
-function resolveCity(property) {
-  return String(property?.location?.city ?? property?.city ?? "").trim();
-}
-
-function resolveRooms(property) {
-  return (
-    property?.features?.rooms ??
-    property?.features?.bedrooms ??
-    property?.rooms ??
-    property?.bedrooms ??
-    null
-  );
-}
-
-function buildPropertyUrl(property) {
-  const tx = getTransactionSlug(property?.transactionType);
-  const type = getTypeSlug(property?.type);
-  const city = normalize(resolveCity(property));
-  const rooms = resolveRooms(property);
+function buildPropertyUrl(p) {
+  const tx = getTransactionSlug(p?.transactionType);
+  const type = getTypeSlug(p?.type);
+  const city = normalize(resolveCity(p));
+  const rooms = resolveRooms(p);
 
   const parts = [];
   if (tx) parts.push(tx);
@@ -182,47 +236,42 @@ function buildPropertyUrl(property) {
   if (rooms) parts.push(`${rooms}-habitaciones`);
 
   const slug = normalize(parts.join(" ")) || "propiedad";
-  return `${BASE_URL}/propiedades/${slug}-${property.id}`;
+  return `${BASE_URL}/propiedades/${slug}-${p.id}`;
 }
 
-function matchesType(propertyType = "", inferredType = "") {
-  const type = String(propertyType ?? "").toLowerCase();
-
-  if (inferredType === "casa") return type.includes("casa");
-  if (inferredType === "apartamento") return type.includes("apart");
-  if (inferredType === "lote") return type.includes("lote");
-  if (inferredType === "finca") return type.includes("finca");
-  if (inferredType === "local") {
+function matchesType(t = "", inf = "") {
+  const type = String(t ?? "").toLowerCase();
+  if (inf === "casa") return type.includes("casa");
+  if (inf === "apartamento") return type.includes("apart");
+  if (inf === "lote") return type.includes("lote");
+  if (inf === "finca") return type.includes("finca");
+  if (inf === "local") {
     return type.includes("local") || type.includes("comercial");
   }
-  if (inferredType === "oficina") return type.includes("oficina");
-  if (inferredType === "bodega") {
+  if (inf === "oficina") return type.includes("oficina");
+  if (inf === "bodega") {
     return type.includes("bodega") || type.includes("warehouse");
   }
-
   return true;
 }
 
-function matchesTransaction(transactionType = "", inferredTransaction = "") {
-  const tr = String(transactionType ?? "").toLowerCase();
-
-  if (inferredTransaction === "venta") {
+function matchesTransaction(tx = "", inf = "") {
+  const tr = String(tx ?? "").toLowerCase();
+  if (inf === "venta") {
     return ["sale", "venta", "compra"].some((v) => tr.includes(v));
   }
-
-  if (inferredTransaction === "arriendo") {
+  if (inf === "arriendo") {
     return ["rent", "arriendo", "alquiler", "renta"].some((v) =>
       tr.includes(v)
     );
   }
-
   return true;
 }
 
+// ─── Componente principal ───────────────────────────────────────────────────
+
 const LocationPage = () => {
-  const { citySlug, typeCitySlug } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { city: citySlug, typeCity: typeCitySlug } = useParams()
 
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -240,28 +289,40 @@ const LocationPage = () => {
     return isTypeCitySlug(rawSegment);
   }, [typeCitySlug, rawSegment]);
 
+  const parsedZone = useMemo(
+    () =>
+      rawSegment
+        ? parseZoneSlug(rawSegment)
+        : { city: null, type: null, transaction: null },
+    [rawSegment]
+  );
+
   const normalizedCity = useMemo(() => {
     if (!rawSegment) return "";
-    if (isZoneRoute) return inferCityFromSegment(rawSegment) || "";
+    if (isZoneRoute) return parsedZone.city || "";
     return normalize(rawSegment);
-  }, [rawSegment, isZoneRoute]);
+  }, [rawSegment, isZoneRoute, parsedZone]);
 
   const cityLabel = useMemo(() => {
-    if (!normalizedCity) return "Caldas";
+    if (!normalizedCity) return "Ubicación";
     return CITY_LABELS[normalizedCity] || humanizeSlug(normalizedCity);
   }, [normalizedCity]);
 
-  const inferredTransaction = useMemo(() => {
-    return isZoneRoute ? inferTransactionFromPath(rawSegment) : null;
-  }, [isZoneRoute, rawSegment]);
+  const inferredTransaction = useMemo(
+    () => (isZoneRoute ? parsedZone.transaction : null),
+    [isZoneRoute, parsedZone]
+  );
 
-  const inferredType = useMemo(() => {
-    return isZoneRoute ? inferTypeFromSegment(rawSegment) : null;
-  }, [isZoneRoute, rawSegment]);
+  const inferredType = useMemo(
+    () => (isZoneRoute ? parsedZone.type : null),
+    [isZoneRoute, parsedZone]
+  );
 
-  const typeLabel = useMemo(() => {
-    return inferredType ? TYPE_LABELS[inferredType] || inferredType : "propiedades";
-  }, [inferredType]);
+  const typeLabel = useMemo(
+    () =>
+      inferredType ? TYPE_LABELS[inferredType] || inferredType : "propiedades",
+    [inferredType]
+  );
 
   const h1Label = useMemo(() => {
     if (inferredType && inferredTransaction) {
@@ -269,13 +330,9 @@ const LocationPage = () => {
         typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)
       } en ${inferredTransaction} en ${cityLabel}`;
     }
-
     if (inferredType) {
-      return `${
-        typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)
-      } en ${cityLabel}`;
+      return `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} en ${cityLabel}`;
     }
-
     return `Propiedades en ${cityLabel}`;
   }, [typeLabel, inferredTransaction, inferredType, cityLabel]);
 
@@ -285,12 +342,10 @@ const LocationPage = () => {
     if (inferredType && inferredTransaction) {
       return `Encuentra ${typeLabel} en ${inferredTransaction} en ${cityLabel}. Publicaciones actualizadas con respaldo jurídico de ${COMPANY_NAME}.`;
     }
-
     if (inferredType) {
-      return `Explora ${typeLabel} disponibles en ${cityLabel}. Propiedades publicadas con respaldo jurídico por ${COMPANY_NAME}.`;
+      return `Explora ${typeLabel} disponibles en ${cityLabel}. Propiedades con respaldo jurídico por ${COMPANY_NAME}.`;
     }
-
-    return `Explora propiedades disponibles en ${cityLabel}. Casas, apartamentos, lotes, fincas y locales con respaldo jurídico de ${COMPANY_NAME}.`;
+    return `Explora propiedades disponibles en ${cityLabel}. Casas, apartamentos, lotes y fincas con respaldo jurídico de ${COMPANY_NAME}.`;
   }, [inferredType, inferredTransaction, typeLabel, cityLabel]);
 
   const canonicalSegment = useMemo(() => normalize(rawSegment), [rawSegment]);
@@ -302,44 +357,34 @@ const LocationPage = () => {
     return `${BASE_URL}/propiedades/ciudad/${normalizedCity || canonicalSegment}`;
   }, [isZoneRoute, canonicalSegment, normalizedCity]);
 
-  const canonicalPath = useMemo(() => {
-    try {
-      return new URL(seoUrl).pathname;
-    } catch {
-      return isZoneRoute
-        ? `/propiedades/zona/${canonicalSegment}`
-        : `/propiedades/ciudad/${normalizedCity || canonicalSegment}`;
-    }
-  }, [seoUrl, isZoneRoute, canonicalSegment, normalizedCity]);
-
-  useEffect(() => {
-    if (!rawSegment) return;
-    if (location.pathname !== canonicalPath) {
-      navigate(canonicalPath, { replace: true });
-    }
-  }, [rawSegment, location.pathname, canonicalPath, navigate]);
-
   useEffect(() => {
     const load = async () => {
       setLoading(true);
 
       try {
         const all = await propertyService.getPublicProperties();
+        const list = Array.isArray(all) ? all : [];
 
-        const filtered = all.filter((p) => {
-          const status = String(p.status ?? "").toLowerCase();
+        const filtered = list.filter((p) => {
+          const status = String(p?.status ?? "").toLowerCase();
+
           if (status && !PUBLIC_STATUSES.has(status)) return false;
 
           if (normalizedCity) {
             const pCity = normalize(resolveCity(p));
-            if (!pCity.includes(normalizedCity)) return false;
+            if (pCity !== normalizedCity && !pCity.includes(normalizedCity)) {
+              return false;
+            }
           }
 
-          if (inferredType && !matchesType(p.type, inferredType)) {
+          if (inferredType && !matchesType(p?.type, inferredType)) {
             return false;
           }
 
-          if (inferredTransaction && !matchesTransaction(p.transactionType, inferredTransaction)) {
+          if (
+            inferredTransaction &&
+            !matchesTransaction(p?.transactionType, inferredTransaction)
+          ) {
             return false;
           }
 
@@ -348,8 +393,8 @@ const LocationPage = () => {
 
         setProperties(filtered);
         setCurrentPage(1);
-      } catch (error) {
-        console.error("LocationPage: error cargando propiedades:", error);
+      } catch (err) {
+        console.error("LocationPage: error cargando propiedades:", err);
         setProperties([]);
       } finally {
         setLoading(false);
@@ -366,8 +411,7 @@ const LocationPage = () => {
   const paginated = properties.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const breadcrumbItems = [
-    { label: "Inicio", href: "/" },
-    { label: "Propiedades", href: "/propiedades" },
+    { label: "Propiedades", href: "/catalogo" },
     { label: h1Label },
   ];
 
@@ -385,7 +429,7 @@ const LocationPage = () => {
         "@type": "ListItem",
         position: 2,
         name: "Propiedades",
-        item: `${BASE_URL}/propiedades`,
+        item: `${BASE_URL}/catalogo`,
       },
       {
         "@type": "ListItem",
@@ -406,17 +450,17 @@ const LocationPage = () => {
           url: seoUrl,
           numberOfItems: paginated.length,
           itemListOrder: "https://schema.org/ItemListOrderAscending",
-          itemListElement: paginated.map((property, index) => ({
+          itemListElement: paginated.map((p, idx) => ({
             "@type": "ListItem",
-            position: startIndex + index + 1,
-            url: buildPropertyUrl(property),
-            name: property.title || `Propiedad en ${cityLabel}`,
+            position: startIndex + idx + 1,
+            url: buildPropertyUrl(p),
+            name: p?.title || `Propiedad en ${cityLabel}`,
           })),
         }
       : null;
 
   return (
-    <div className="min-h-screen bg-dark">
+    <div>
       <Helmet>
         <html lang="es" />
         <title>{seoTitle}</title>
@@ -426,25 +470,20 @@ const LocationPage = () => {
           content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
         />
         <link rel="canonical" href={seoUrl} />
-
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDescription} />
         <meta property="og:image" content={`${BASE_URL}/logo.jpg.png`} />
-        <meta property="og:image:secure_url" content={`${BASE_URL}/logo.jpg.png`} />
         <meta property="og:url" content={seoUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content={COMPANY_NAME} />
         <meta property="og:locale" content="es_CO" />
-
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={seoTitle} />
         <meta name="twitter:description" content={seoDescription} />
         <meta name="twitter:image" content={`${BASE_URL}/logo.jpg.png`} />
-
         <script type="application/ld+json">
           {JSON.stringify(breadcrumbSchema)}
         </script>
-
         {itemListSchema && (
           <script type="application/ld+json">
             {JSON.stringify(itemListSchema)}
@@ -452,128 +491,258 @@ const LocationPage = () => {
         )}
       </Helmet>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mb-5">
+      <section className="catalog-hero">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
           <Breadcrumbs items={breadcrumbItems} />
-        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"
-        >
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary flex items-center gap-2 mb-1">
-              <FaMapMarkerAlt /> Zona destacada
-            </p>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-light mb-1">
-              {h1Label}
-            </h1>
-            <p className="text-slate-400 text-sm sm:text-base">
-              {inferredTransaction
-                ? `Propiedades en ${inferredTransaction} con respaldo jurídico en ${cityLabel}.`
-                : `Propiedades disponibles con respaldo jurídico en ${cityLabel}.`}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to="/propiedades"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700 text-slate-200 text-sm hover:border-primary hover:bg-slate-900 transition"
-            >
-              <FaSearch />
-              <span>Ver todo el catálogo</span>
-            </Link>
-          </div>
-        </motion.div>
-
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <p className="text-xs sm:text-sm text-slate-400 flex items-center gap-2">
-            <FaHome className="text-primary" />
-            <span>
-              {totalItems} propiedad{totalItems === 1 ? "" : "es"} encontrada
-              {totalItems === 1 ? "" : "s"} en {cityLabel}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-6 max-w-3xl"
+          >
+            <span className="eyebrow">
+              <FaMapMarkerAlt
+                className="text-[10px] mr-1"
+                aria-hidden="true"
+              />
+              Zona destacada · {cityLabel}
             </span>
-          </p>
+
+            <h1 className="heading-display mt-6 text-[clamp(2rem,4.5vw+0.5rem,4rem)]">
+              {inferredType && inferredTransaction ? (
+                <>
+                  {typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}{" "}
+                  <em>en {inferredTransaction}</em>
+                  <br />
+                  en {cityLabel}
+                </>
+              ) : inferredType ? (
+                <>
+                  {typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}{" "}
+                  <em>en {cityLabel}</em>
+                </>
+              ) : (
+                <>
+                  Propiedades <em>en {cityLabel}</em>
+                </>
+              )}
+            </h1>
+
+            <p
+              className="mt-5 text-base sm:text-lg leading-relaxed max-w-2xl"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              {inferredTransaction
+                ? `Publicaciones ${
+                    inferredTransaction === "venta" ? "en venta" : "en arriendo"
+                  } con respaldo jurídico verificado en ${cityLabel}.`
+                : `Propiedades disponibles con respaldo jurídico integral en ${cityLabel}.`}
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+            className="mt-7 flex flex-wrap items-center gap-3"
+          >
+            <Link to="/catalogo" className="btn-secondary">
+              <FaSearch className="text-xs" /> Ver todo el catálogo
+            </Link>
+
+            <span
+              className="text-sm"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              <strong style={{ color: "var(--color-text)" }}>{totalItems}</strong>{" "}
+              {totalItems === 1
+                ? "propiedad encontrada"
+                : "propiedades encontradas"}
+            </span>
+          </motion.div>
         </div>
+      </section>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <FaSearch className="animate-spin text-primary text-4xl mr-3" />
-            <p className="text-slate-400 text-sm">
-              Cargando propiedades en {cityLabel}...
-            </p>
-          </div>
-        ) : totalItems === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center">
-            <FaHome className="text-slate-600 text-4xl mx-auto mb-3" />
-            <h2 className="text-light font-bold text-lg sm:text-xl mb-2">
-              No encontramos propiedades en esta categoría
-            </h2>
-            <p className="text-slate-400 text-sm sm:text-base mb-4">
-              Puedes revisar el catálogo completo o contactarnos directamente.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                to="/propiedades"
-                className="button-gold inline-flex items-center justify-center gap-2"
-              >
-                <FaSearch />
-                <span>Ver todas las propiedades</span>
-              </Link>
-
-              <Link
-                to="/contacto"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-700 text-slate-200 text-sm hover:border-primary hover:bg-slate-900 transition"
-              >
-                <FaFilter />
-                <span>Solicitar búsqueda personalizada</span>
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              {paginated.map((property) => (
-                <PropertyCard key={property.id} property={property} />
+      <section className="pb-16 sm:pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="catalog-skeleton">
+                  <div className="catalog-skeleton__img skeleton" />
+                  <div className="p-4 space-y-3">
+                    <div className="skeleton h-4 w-3/4" />
+                    <div className="skeleton h-3 w-1/2" />
+                    <div className="skeleton h-5 w-1/3" />
+                  </div>
+                </div>
               ))}
             </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 mt-6">
-                <button
-                  onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                  disabled={safePage === 1}
-                  className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/60 transition inline-flex items-center gap-2 text-sm"
-                >
-                  <FaChevronLeft />
-                  <span>Anterior</span>
-                </button>
-
-                <span className="text-xs text-slate-400">
-                  Página{" "}
-                  <span className="text-slate-200 font-semibold">{safePage}</span>{" "}
-                  de{" "}
-                  <span className="text-slate-200 font-semibold">
-                    {totalPages}
-                  </span>
-                </span>
-
-                <button
-                  onClick={() =>
-                    setCurrentPage((page) => Math.min(page + 1, totalPages))
-                  }
-                  disabled={safePage === totalPages}
-                  className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/60 transition inline-flex items-center gap-2 text-sm"
-                >
-                  <span>Siguiente</span>
-                  <FaChevronRight />
-                </button>
+          ) : totalItems === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="catalog-empty"
+            >
+              <div className="catalog-empty__icon">
+                <FaHome />
               </div>
-            )}
-          </>
-        )}
-      </div>
+
+              <h2
+                className="font-display text-2xl sm:text-3xl mt-6"
+                style={{ color: "var(--color-text)" }}
+              >
+                Todavía no hay propiedades{" "}
+                <em
+                  style={{
+                    color: "#d97706",
+                    fontStyle: "italic",
+                    fontWeight: 400,
+                  }}
+                >
+                  publicadas en {cityLabel}.
+                </em>
+              </h2>
+
+              <p
+                className="mt-3 max-w-md text-base"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Nuestra cartera cambia semanalmente. Déjanos tus preferencias y
+                te avisamos apenas llegue algo en {cityLabel}.
+              </p>
+
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                <Link to="/catalogo" className="btn-secondary">
+                  <FaSearch /> Ver todo el catálogo
+                </Link>
+
+                <a
+                  href={`https://wa.me/573105968202?text=${encodeURIComponent(
+                    `Hola, busco ${typeLabel} en ${cityLabel}. ¿Tienen algo disponible?`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary"
+                >
+                  <FaWhatsapp /> Solicitar búsqueda personalizada
+                </a>
+              </div>
+            </motion.div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {paginated.map((property) => (
+                  <motion.div
+                    key={property.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <PropertyCard property={property} />
+                  </motion.div>
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <nav
+                  className="catalog-pagination mt-10"
+                  aria-label="Paginación"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={safePage === 1}
+                    className="catalog-pagination__btn"
+                    aria-label="Anterior"
+                  >
+                    <FaChevronLeft />
+                  </button>
+
+                  <span
+                    className="px-4 text-sm"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Página{" "}
+                    <strong style={{ color: "var(--color-text)" }}>
+                      {safePage}
+                    </strong>{" "}
+                    de{" "}
+                    <strong style={{ color: "var(--color-text)" }}>
+                      {totalPages}
+                    </strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(p + 1, totalPages))
+                    }
+                    disabled={safePage === totalPages}
+                    className="catalog-pagination__btn"
+                    aria-label="Siguiente"
+                  >
+                    <FaChevronRight />
+                  </button>
+                </nav>
+              )}
+
+              <div className="mt-12 catalog-help-banner">
+                <div>
+                  <span
+                    className="text-xs font-bold uppercase tracking-[0.15em] mb-2 block"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    ¿Buscas algo específico en {cityLabel}?
+                  </span>
+
+                  <h3
+                    className="font-display text-2xl sm:text-3xl"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    Tenemos propiedades{" "}
+                    <em
+                      style={{
+                        color: "#d97706",
+                        fontStyle: "italic",
+                        fontWeight: 400,
+                      }}
+                    >
+                      que no publicamos.
+                    </em>
+                  </h3>
+
+                  <p
+                    className="mt-3 text-sm max-w-xl"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Si no encuentras lo ideal aquí, escríbenos — parte de nuestra
+                    cartera llega primero a clientes registrados.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <a
+                    href={`https://wa.me/573105968202?text=${encodeURIComponent(
+                      `Hola, busco ${typeLabel} en ${cityLabel}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary"
+                  >
+                    <FaWhatsapp /> WhatsApp
+                  </a>
+
+                  <Link to="/contacto" className="btn-secondary">
+                    Dejar consulta <FaArrowRight className="text-xs" />
+                  </Link>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
     </div>
   );
 };

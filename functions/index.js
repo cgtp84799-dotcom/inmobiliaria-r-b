@@ -716,23 +716,44 @@ exports.onVisitStatusChanged = onDocumentWritten(
       return;
     }
 
-if (nextStatus === "approved") {
-      // Email manejado por visit.service.js → extensión /mail
-      console.log(`[onVisitStatusChanged] approved — email delegado a extensión /mail`);
+    if (nextStatus === "approved") {
+      const emails = [];
+      emails.push(
+        sendMail(transporter, gmailUser, {
+          to: clientEmail,
+          subject: `🎉 ¡Visita confirmada! — ${d.propertyName}`,
+          html: approvedHtml(d),
+        })
+      );
+      if (agentEmail) {
+        emails.push(
+          sendMail(transporter, gmailUser, {
+            to: agentEmail,
+            subject: `🏡 Nueva visita asignada — ${d.propertyName} (${d.requestedDate} ${d.requestedTime})`,
+            html: agentHtml(d),
+          })
+        );
+      }
+      await Promise.all(emails);
       return;
     }
 
     if (nextStatus === "rejected") {
-      // Email manejado por visit.service.js → extensión /mail
-      console.log(`[onVisitStatusChanged] rejected — email delegado a extensión /mail`);
+      await sendMail(transporter, gmailUser, {
+        to: clientEmail,
+        subject: `😔 Actualización sobre tu visita — ${d.propertyName}`,
+        html: rejectedHtml(d),
+      });
       return;
     }
 
     if (nextStatus === "rescheduled") {
-      // Email manejado por visit.service.js → extensión /mail
-      console.log(`[onVisitStatusChanged] rescheduled — email delegado a extensión /mail`);
+      await sendMail(transporter, gmailUser, {
+        to: clientEmail,
+        subject: `📅 Nueva propuesta de fecha — ${d.propertyName}`,
+        html: rescheduledHtml(d),
+      });
       return;
-    }
     }
 
     console.log(`[onVisitStatusChanged] Estado "${nextStatus}" no genera email. Ignorado.`);
