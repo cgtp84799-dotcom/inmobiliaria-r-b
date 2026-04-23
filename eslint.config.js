@@ -5,10 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // ── Carpetas excluidas del lint del frontend ──────────────────
-  // functions/ usa CommonJS (require) — tiene su propio entorno Node.
-  // dist/ es el build compilado — nunca se lintea.
-  globalIgnores(['dist', 'functions']),
+  globalIgnores(['dist', 'functions', 'public']),
 
   {
     files: ['**/*.{js,jsx}'],
@@ -27,12 +24,9 @@ export default defineConfig([
       },
     },
     rules: {
-      // Variables sin usar → error (excepto constantes UPPER_CASE)
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
-
-      // Dependencias faltantes en hooks → advertencia (no bloquea el build)
-      // Los casos reales de bug se detectan en runtime con StrictMode activo.
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^[A-Z_]' }],
       'react-hooks/exhaustive-deps': 'warn',
+      'react-refresh/only-export-components': 'warn',
     },
   },
 ])
