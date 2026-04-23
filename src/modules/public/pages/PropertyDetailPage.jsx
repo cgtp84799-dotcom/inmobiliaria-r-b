@@ -10,7 +10,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import {
+  SeoHead,
+  buildBreadcrumbSchema,
+  buildRealEstateListingSchema,
+} from "../../../shared/components/SEO";
 import {
   FaBed, FaBath, FaRulerCombined, FaCar, FaMapMarkerAlt,
   FaArrowLeft, FaCheckCircle, FaWhatsapp, FaShare,
@@ -444,10 +448,13 @@ const PropertyDetailPage = () => {
   if (!property) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <Helmet>
-          <title>Propiedad no encontrada | {COMPANY_NAME}</title>
-          <meta name="robots" content="noindex,nofollow" />
-        </Helmet>
+        <SeoHead
+          title={`Propiedad no encontrada | ${COMPANY_NAME}`}
+          description="Esta propiedad ya no está disponible o la URL es incorrecta. Explora el catálogo completo de propiedades verificadas."
+          path="/catalogo"
+          noindex
+          nofollow={false}
+        />
         <div className="text-center max-w-md">
           <FaHome
             className="mx-auto mb-4"
@@ -489,50 +496,64 @@ const PropertyDetailPage = () => {
 
   return (
     <div>
-      <Helmet>
-        <html lang="es" />
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-        <link rel="canonical" href={canonicalUrl} />
-
-        {/* Open Graph — imagen real de la propiedad */}
-        <meta property="og:title"             content={seoTitle} />
-        <meta property="og:description"       content={seoDescription} />
-        <meta property="og:image"             content={seoImage} />
-        <meta property="og:image:secure_url"  content={seoImage} />
-        <meta property="og:image:width"       content="1200" />
-        <meta property="og:image:height"      content="630" />
-        <meta property="og:image:alt"         content={property?.title || `${typeLabelSeo} en ${city}`} />
-        <meta property="og:image:type"        content="image/jpeg" />
-        <meta property="og:url"               content={canonicalUrl} />
-        <meta property="og:type"              content="website" />
-        <meta property="og:site_name"         content={COMPANY_NAME} />
-        <meta property="og:locale"            content="es_CO" />
-
-        {/* OG Price (Facebook product) */}
-        {price && <meta property="product:price:amount"   content={String(price)} />}
-        {price && <meta property="product:price:currency" content="COP" />}
-        {price && <meta property="og:price:amount"        content={String(price)} />}
-        {price && <meta property="og:price:currency"      content="COP" />}
-
-        {/* Twitter — large image */}
-        <meta name="twitter:card"        content="summary_large_image" />
-        <meta name="twitter:site"        content="@inmobiliaria_ryb" />
-        <meta name="twitter:title"       content={seoTitle} />
-        <meta name="twitter:description" content={seoDescription} />
-        <meta name="twitter:image"       content={seoImage} />
-        <meta name="twitter:image:alt"   content={property?.title || `${typeLabelSeo} en ${city}`} />
-
-        {/* WhatsApp refuerzo */}
-        <meta name="image" content={seoImage} />
-
-        {fullSchemaList && (
-          <script type="application/ld+json">
-            {JSON.stringify(fullSchemaList)}
-          </script>
-        )}
-      </Helmet>
+      <SeoHead
+        title={seoTitle}
+        description={seoDescription}
+        path={canonicalUrl.replace(BASE_URL, "")}
+        image={seoImage}
+        imageAlt={property?.title || `${typeLabelSeo} en ${city}`}
+        type="website"
+        price={price || undefined}
+        priceCurrency="COP"
+        availability={
+          ["vendida", "sold"].includes(String(property?.status || "").toLowerCase())
+            ? "out of stock"
+            : "in stock"
+        }
+        publishedTime={toIsoDate(property?.createdAt || property?.created_at)}
+        modifiedTime={toIsoDate(property?.updatedAt || property?.updated_at)}
+        structuredData={[
+          buildRealEstateListingSchema(
+            {
+              ...property,
+              title: property.title,
+              description: seoDescription,
+              price,
+              status: property.status,
+              type: property.type,
+              transactionType: property.transactionType,
+              rooms,
+              bathrooms,
+              area,
+              images: allImages,
+              city,
+              department,
+              address: addressPublic,
+              lat,
+              lng,
+              createdAt: property.createdAt,
+              updatedAt: property.updatedAt,
+              amenities: property.amenities,
+              customAmenities: property.customAmenities,
+              features: property.features,
+            },
+            canonicalUrl,
+          ),
+          buildBreadcrumbSchema([
+            { name: "Inicio",       url: "/" },
+            { name: "Propiedades",  url: "/catalogo" },
+            ...(cityLandingUrl ? [{
+              name: `Propiedades en ${city}`,
+              url: cityLandingUrl,
+            }] : []),
+            ...(typeCityLandingUrl ? [{
+              name: `${getTypeCollectionSlug(property?.type)} en ${String(transactionLabel).toLowerCase()} ${city}`.trim(),
+              url: typeCityLandingUrl,
+            }] : []),
+            { name: property?.title || seoTitle },
+          ]),
+        ].filter(Boolean)}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div className="mb-5">

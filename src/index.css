@@ -2504,9 +2504,11 @@ h3, h4, h5, h6 { font-family: 'Inter', system-ui, sans-serif; font-weight: 600; 
   }
   .property-card__img {
     width: 100%;
-    height: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
     object-fit: cover;
-    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    content-visibility: auto;      /* Chrome optimiza render de imágenes fuera de viewport */
+    contain-intrinsic-size: 400px 300px;
   }
   .property-card:hover .property-card__img {
     transform: scale(1.06);
@@ -3362,4 +3364,626 @@ h3, h4, h5, h6 { font-family: 'Inter', system-ui, sans-serif; font-weight: 600; 
 }
 
 /* btn-ghost consistente */
-.btn-ghost:hover { color: var(--color-gold) !important; }
+.btn-ghost:hover { color: var(--color-gold) !important; }/* ═══════════════════════════════════════════════════════════
+   PORTAL DEL CLIENTE — rediseño editorial (v4)
+   Pegar al final de src/index.css
+   · Respeta el tema global (light/dark)
+   · Scope .portal-client para no afectar otros componentes
+   · Overrides inteligentes de clases slate/amber para que las
+     secciones existentes se vean bien sin reescribirlas
+═══════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────
+   CONTENEDOR BASE
+─────────────────────────────────────────────────────────── */
+.portal-client {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  color-scheme: light dark;
+}
+
+/* Loading state */
+.portal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.portal-loading__spinner {
+  color: var(--color-gold);
+  font-size: 2rem;
+  margin: 0 auto 0.75rem;
+  display: block;
+  animation: spin 1s linear infinite;
+}
+.portal-loading__text {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ───────────────────────────────────────────────────────────
+   NAVBAR
+─────────────────────────────────────────────────────────── */
+.portal-client .portal-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--color-nav-bg);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid var(--color-nav-border);
+}
+.portal-navbar__inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .portal-navbar__inner { padding: 0 1.5rem; }
+}
+
+.portal-navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--color-text-muted);
+  transition: color 0.2s ease, gap 0.25s ease;
+  flex-shrink: 0;
+}
+.portal-navbar__brand:hover {
+  color: var(--color-gold);
+  gap: 0.95rem;
+}
+.portal-navbar__brand-icon {
+  font-size: 0.75rem;
+}
+.portal-navbar__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  gap: 0.15rem;
+}
+.portal-navbar__brand-back {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-faint);
+}
+.portal-navbar__brand-name {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.portal-navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ─── User button / menu ─── */
+.portal-user-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.portal-user-btn:hover {
+  background: var(--color-surface-off);
+  border-color: var(--color-border);
+}
+.portal-user-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  object-fit: cover;
+  border: 2px solid rgba(180, 83, 9, 0.3);
+}
+.dark .portal-user-avatar {
+  border-color: rgba(251, 191, 36, 0.3);
+}
+.portal-user-avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(180, 83, 9, 0.15);
+  color: var(--color-gold);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.dark .portal-user-avatar--initials {
+  background: rgba(251, 191, 36, 0.15);
+}
+.portal-user-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  max-width: 8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: none;
+}
+@media (min-width: 640px) { .portal-user-name { display: block; } }
+.portal-user-chevron {
+  color: var(--color-text-faint);
+  font-size: 0.6rem;
+  transition: transform 0.2s ease;
+}
+.portal-user-chevron.is-open { transform: rotate(180deg); }
+
+.portal-user-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  width: 12rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  padding: 0.25rem;
+}
+.portal-user-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.portal-user-menu__item:hover {
+  background: var(--color-row-hover);
+  color: var(--color-gold);
+}
+.portal-user-menu__item--danger { color: #ef4444; }
+.portal-user-menu__item--danger:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+.portal-user-menu__icon {
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+}
+.portal-user-menu__item--danger .portal-user-menu__icon { color: inherit; }
+.portal-user-menu__divider {
+  height: 1px;
+  background: var(--color-divider);
+  margin: 0.25rem 0.5rem;
+}
+
+/* ───────────────────────────────────────────────────────────
+   TABS
+─────────────────────────────────────────────────────────── */
+.portal-client .portal-tabs {
+  position: sticky;
+  top: 4rem;
+  z-index: 20;
+  background: var(--color-nav-bg);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.portal-tabs__inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+@media (min-width: 640px) { .portal-tabs__inner { padding: 0 1.5rem; } }
+.portal-tabs__scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  gap: 0.15rem;
+}
+.portal-tabs__scroll::-webkit-scrollbar { display: none; }
+
+.portal-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.95rem 0.75rem;
+  background: transparent;
+  border: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.portal-tab:hover { color: var(--color-text); }
+.portal-tab::after {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: -1px;
+  height: 2px;
+  background: var(--color-gold);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.portal-tab.is-active {
+  color: var(--color-gold);
+}
+.portal-tab.is-active::after { transform: scaleX(1); }
+.portal-tab__icon { font-size: 0.8rem; }
+
+/* ───────────────────────────────────────────────────────────
+   MAIN
+─────────────────────────────────────────────────────────── */
+.portal-client .portal-main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+@media (min-width: 640px) { .portal-client .portal-main { padding: 2rem 1.5rem; } }
+
+/* ═══════════════════════════════════════════════════════════
+   OVERRIDES — interpreta las clases Tailwind usadas por las
+   Section*.jsx como tokens editoriales.
+   Esto permite mantener el código de las secciones sin
+   reescribirlas, pero visualmente se adaptan a light/dark.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Fondos sólidos ────────────────────────────────────── */
+.portal-client .bg-slate-950,
+.portal-client .bg-slate-900,
+.portal-client .bg-slate-800 {
+  background-color: var(--color-surface) !important;
+}
+.portal-client .bg-slate-900\/60,
+.portal-client .bg-slate-900\/40,
+.portal-client .bg-slate-800\/60,
+.portal-client .bg-slate-800\/40,
+.portal-client .bg-slate-800\/50,
+.portal-client .bg-slate-700\/50 {
+  background-color: var(--color-surface) !important;
+}
+
+/* ── Textos base ───────────────────────────────────────── */
+.portal-client .text-white {
+  color: var(--color-text) !important;
+}
+.portal-client .text-slate-100,
+.portal-client .text-slate-200 {
+  color: var(--color-text) !important;
+}
+.portal-client .text-slate-300 {
+  color: var(--color-text) !important;
+}
+.portal-client .text-slate-400 {
+  color: var(--color-text-muted) !important;
+}
+.portal-client .text-slate-500,
+.portal-client .text-slate-600,
+.portal-client .text-slate-700 {
+  color: var(--color-text-faint) !important;
+}
+
+/* ── Bordes ────────────────────────────────────────────── */
+.portal-client .border-slate-700,
+.portal-client .border-slate-800,
+.portal-client .border-slate-700\/60,
+.portal-client .border-slate-800\/60,
+.portal-client .border-slate-800\/40 {
+  border-color: var(--color-border) !important;
+}
+
+/* ── Divisores inner ──────────────────────────────────── */
+.portal-client .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+.portal-client .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-divider) !important;
+}
+
+/* ── AMBER → GOLD editorial ────────────────────────────── */
+.portal-client .text-amber-400,
+.portal-client .text-amber-500,
+.portal-client .text-amber-600 {
+  color: var(--color-gold) !important;
+}
+.portal-client .bg-amber-500 {
+  background: var(--gradient-gold) !important;
+  color: #18130a !important;
+}
+.portal-client .bg-amber-500\/5,
+.portal-client .bg-amber-500\/10,
+.portal-client .bg-amber-500\/15,
+.portal-client .bg-amber-500\/20 {
+  background-color: rgba(180, 83, 9, 0.08) !important;
+}
+.dark .portal-client .bg-amber-500\/5,
+.dark .portal-client .bg-amber-500\/10,
+.dark .portal-client .bg-amber-500\/15,
+.dark .portal-client .bg-amber-500\/20 {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+.portal-client .border-amber-500,
+.portal-client .border-amber-500\/20,
+.portal-client .border-amber-500\/30,
+.portal-client .border-amber-500\/40,
+.portal-client .border-amber-500\/50 {
+  border-color: rgba(180, 83, 9, 0.25) !important;
+}
+.dark .portal-client .border-amber-500,
+.dark .portal-client .border-amber-500\/20,
+.dark .portal-client .border-amber-500\/30,
+.dark .portal-client .border-amber-500\/40,
+.dark .portal-client .border-amber-500\/50 {
+  border-color: rgba(251, 191, 36, 0.25) !important;
+}
+.portal-client .hover\:bg-amber-500\/10:hover {
+  background-color: rgba(180, 83, 9, 0.1) !important;
+}
+.dark .portal-client .hover\:bg-amber-500\/10:hover {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+
+/* ── EMERALD/GREEN → verde discreto para "confirmado/vigente" ─ */
+.portal-client .text-emerald-400,
+.portal-client .text-emerald-500,
+.portal-client .text-green-400,
+.portal-client .text-green-500 {
+  color: #16a34a !important;
+}
+.dark .portal-client .text-emerald-400,
+.dark .portal-client .text-emerald-500,
+.dark .portal-client .text-green-400,
+.dark .portal-client .text-green-500 {
+  color: #4ade80 !important;
+}
+.portal-client .bg-emerald-500\/5,
+.portal-client .bg-emerald-500\/10,
+.portal-client .bg-emerald-500\/15,
+.portal-client .bg-emerald-500\/20,
+.portal-client .bg-green-500\/10 {
+  background-color: rgba(22, 163, 74, 0.08) !important;
+}
+.dark .portal-client .bg-emerald-500\/5,
+.dark .portal-client .bg-emerald-500\/10,
+.dark .portal-client .bg-emerald-500\/15,
+.dark .portal-client .bg-emerald-500\/20,
+.dark .portal-client .bg-green-500\/10 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+.portal-client .border-emerald-500\/20,
+.portal-client .border-emerald-500\/30,
+.portal-client .border-emerald-500\/40,
+.portal-client .border-emerald-500\/50,
+.portal-client .border-green-500\/20,
+.portal-client .border-green-500\/30 {
+  border-color: rgba(22, 163, 74, 0.22) !important;
+}
+.dark .portal-client .border-emerald-500\/20,
+.dark .portal-client .border-emerald-500\/30,
+.dark .portal-client .border-emerald-500\/40,
+.dark .portal-client .border-emerald-500\/50,
+.dark .portal-client .border-green-500\/20,
+.dark .portal-client .border-green-500\/30 {
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+
+/* ── ROSE / FAVORITOS — rojo elegante ──────────────────── */
+.portal-client .text-rose-400,
+.portal-client .text-rose-500 { color: #e11d48 !important; }
+.dark .portal-client .text-rose-400,
+.dark .portal-client .text-rose-500 { color: #fb7185 !important; }
+.portal-client .bg-rose-500\/10,
+.portal-client .bg-rose-500\/20 {
+  background-color: rgba(225, 29, 72, 0.08) !important;
+}
+.dark .portal-client .bg-rose-500\/10,
+.dark .portal-client .bg-rose-500\/20 {
+  background-color: rgba(251, 113, 133, 0.12) !important;
+}
+.portal-client .border-rose-500\/20,
+.portal-client .border-rose-500\/30 {
+  border-color: rgba(225, 29, 72, 0.2) !important;
+}
+.dark .portal-client .border-rose-500\/20,
+.dark .portal-client .border-rose-500\/30 {
+  border-color: rgba(251, 113, 133, 0.22) !important;
+}
+
+/* ── BLUE → neutral oscuro editorial (venta, info) ────── */
+.portal-client .text-blue-400,
+.portal-client .text-blue-500 {
+  color: var(--color-text) !important;
+}
+.portal-client .bg-blue-500\/10,
+.portal-client .bg-blue-500\/15,
+.portal-client .bg-blue-500\/20 {
+  background-color: rgba(10, 16, 32, 0.05) !important;
+}
+.dark .portal-client .bg-blue-500\/10,
+.dark .portal-client .bg-blue-500\/15,
+.dark .portal-client .bg-blue-500\/20 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+.portal-client .border-blue-500\/20,
+.portal-client .border-blue-500\/30,
+.portal-client .border-blue-500\/40,
+.portal-client .border-blue-500\/50 {
+  border-color: var(--color-border) !important;
+}
+
+/* ── PURPLE → dorado (CTA contratos) ───────────────────── */
+.portal-client .text-purple-400,
+.portal-client .text-purple-500 {
+  color: var(--color-gold) !important;
+}
+.portal-client .bg-purple-500\/10,
+.portal-client .bg-purple-500\/15 {
+  background-color: rgba(180, 83, 9, 0.08) !important;
+}
+.dark .portal-client .bg-purple-500\/10,
+.dark .portal-client .bg-purple-500\/15 {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+.portal-client .border-purple-500\/20,
+.portal-client .border-purple-500\/30,
+.portal-client .border-purple-500\/40,
+.portal-client .border-purple-500\/50 {
+  border-color: rgba(180, 83, 9, 0.25) !important;
+}
+.dark .portal-client .border-purple-500\/20,
+.dark .portal-client .border-purple-500\/30,
+.dark .portal-client .border-purple-500\/40,
+.dark .portal-client .border-purple-500\/50 {
+  border-color: rgba(251, 191, 36, 0.25) !important;
+}
+
+/* ── YELLOW → ámbar discreto (pendiente) ───────────────── */
+.portal-client .text-yellow-400,
+.portal-client .text-yellow-500 { color: var(--color-gold-soft) !important; }
+.portal-client .bg-yellow-500\/10,
+.portal-client .bg-yellow-500\/15,
+.portal-client .bg-yellow-500\/20 {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+}
+.portal-client .border-yellow-500\/20,
+.portal-client .border-yellow-500\/30 {
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+/* ── RED — mantener para alertas/cancelaciones ─────────── */
+.portal-client .text-red-400,
+.portal-client .text-red-500 { color: #ef4444 !important; }
+.portal-client .bg-red-500\/5,
+.portal-client .bg-red-500\/10,
+.portal-client .bg-red-500\/15,
+.portal-client .bg-red-500\/20 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+.portal-client .border-red-500\/20,
+.portal-client .border-red-500\/30,
+.portal-client .border-red-500\/40,
+.portal-client .border-red-500\/50 {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+/* ─── Gradientes personalizados ─────────────────────────── */
+.portal-client .bg-gradient-to-br.from-amber-500\/10,
+.portal-client .bg-gradient-to-br.from-amber-600\/5 {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.08) 0%, var(--color-surface) 60%) !important;
+}
+.dark .portal-client .bg-gradient-to-br.from-amber-500\/10,
+.dark .portal-client .bg-gradient-to-br.from-amber-600\/5 {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, var(--color-surface) 60%) !important;
+}
+
+/* ─── Headings dentro del portal → Fraunces ────────────── */
+.portal-client h1,
+.portal-client h2 {
+  font-family: 'Fraunces', Georgia, ui-serif, serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+.portal-client h3 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ─── Inputs/selects dentro del portal ─────────────────── */
+.portal-client input:not([type="checkbox"]):not([type="radio"]),
+.portal-client select,
+.portal-client textarea {
+  background: var(--color-input-bg);
+  border-color: var(--color-input-border);
+  color: var(--color-input-text);
+}
+.portal-client input:focus,
+.portal-client select:focus,
+.portal-client textarea:focus {
+  border-color: var(--color-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.15);
+}
+.dark .portal-client input:focus,
+.dark .portal-client select:focus,
+.dark .portal-client textarea:focus {
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+.portal-client input::placeholder,
+.portal-client textarea::placeholder {
+  color: var(--color-text-faint);
+}
+
+/* ─── Hover states adaptados ───────────────────────────── */
+.portal-client .hover\:bg-slate-800:hover,
+.portal-client .hover\:bg-slate-800\/60:hover,
+.portal-client .hover\:bg-slate-900:hover {
+  background-color: var(--color-row-hover) !important;
+}
+
+/* ─── Shadows adaptados ────────────────────────────────── */
+.portal-client .shadow-xl,
+.portal-client .shadow-2xl { box-shadow: var(--shadow-card); }
+
+/* ─── Scrollbar customs ────────────────────────────────── */
+.portal-client .scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.portal-client .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   MEJORAS DE TIPOGRAFÍA Y TAMAÑOS dentro del portal
+═══════════════════════════════════════════════════════════ */
+
+/* Saludo "¡Buenos días, Juan!" — hacerlo más editorial */
+.portal-client h2.text-2xl,
+.portal-client h2.text-3xl {
+  font-size: clamp(1.75rem, 3vw + 0.5rem, 2.25rem) !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.025em !important;
+}
+
+/* Bordes redondeados más consistentes */
+.portal-client .rounded-2xl { border-radius: 1rem !important; }
+.portal-client .rounded-xl  { border-radius: 0.75rem !important; }
+
+/* Mejor contraste para items secundarios */
+.portal-client .text-\[11px\],
+.portal-client .text-\[10px\] {
+  font-weight: 500;
+}
+
+/* Imágenes con fondo cuando no hay foto */
+.portal-client .bg-slate-800 img[src=""],
+.portal-client .bg-slate-800:empty {
+  background: var(--color-surface-off) !important;
+}
+
+/* Opacity disminuida en modo light para no sangrar */
+:root:not(.dark) .portal-client .opacity-60 { opacity: 0.75; }
+:root:not(.dark) .portal-client .opacity-50 { opacity: 0.65; }

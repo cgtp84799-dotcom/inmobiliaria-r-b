@@ -11,7 +11,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import {
+  SeoHead,
+  SeoTextBlock,
+  buildBreadcrumbSchema,
+  buildCollectionPageSchema,
+  buildFaqSchema,
+  buildItemListSchema,
+  buildZoneFaqs,
+  buildZoneSeoParagraphs,
+  buildZoneSeoTitle,
+  buildZoneSeoDescription,
+  CATALOG_FAQS,
+} from "../../../shared/components/SEO";
+import { useCanonical, useRelatedLinks } from "../../../shared/hooks/useSeo";
 import {
   FaSearch, FaFilter, FaMapMarkerAlt, FaTimes, FaTimesCircle,
   FaChevronLeft, FaChevronRight, FaChevronDown, FaSlidersH,
@@ -311,38 +324,106 @@ const CatalogPage = () => {
     }, 50);
   };
 
-  /* ─── SEO dinámico ────────────────────────────────────── */
-  const cityLabel = filters.city.trim();
-  const typeLabel = (() => {
-    const t = PROPERTY_TYPES.find((pt) => pt.value === filters.type);
-    return t?.label?.toLowerCase() || "";
-  })();
-  const opLabel = filters.transactionType === "sale" ? "en venta"
-                : filters.transactionType === "rent" ? "en arriendo" : "";
+// ─── SEO derivado de filtros activos ──────────────────────────────
+const cityLabel = filters.city || "";
+const typeLabel = (() => {
+  const p = PROPERTY_TYPES.find((t) => t.value === filters.type);
+  return p ? p.label.toLowerCase() : "";
+})();
+const typeLabelPlural = (() => {
+  const map = { casa: "casas", apartamento: "apartamentos", lote: "lotes",
+                finca: "fincas", local: "locales comerciales" };
+  return map[filters.type] || "";
+})();
+const transactionLabel = filters.transactionType === "sale" ? "venta"
+  : filters.transactionType === "rent" ? "arriendo" : "";
 
-  const seoTitle = cityLabel || typeLabel || opLabel
-    ? `${typeLabel ? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1) : "Propiedades"} ${opLabel} ${cityLabel ? `en ${cityLabel}` : "en Caldas, Risaralda"} | Rincón Bedoya`
-    : "Propiedades en venta y arriendo | Inmobiliaria Rincón Bedoya & Asociados";
+const seoTitle = buildZoneSeoTitle({
+  cityLabel,
+  typeLabelPlural,
+  transactionLabel,
+  count: filteredProperties.length,
+});
 
-  const seoDesc = "Explora propiedades verificadas jurídicamente. Casas, apartamentos, lotes y fincas con respaldo legal integral en Caldas, Risaralda y la región cafetera.";
+const seoDesc = buildZoneSeoDescription({
+  cityLabel,
+  typeLabelPlural,
+  transactionLabel,
+  count: filteredProperties.length,
+});
 
-  const canonicalUrl = "https://inmobiliaria-ryb-y-asociados.com/catalogo";
-  const breadcrumbItems = [{ label: "Propiedades", href: PUBLIC_ROUTES.CATALOG }];
+const canonicalUrl = useCanonical();
+
+const schemaItems = useMemo(() => {
+  const start = (currentPage - 1) * itemsPerPage;
+  const visible = filteredProperties.slice(start, start + itemsPerPage);
+
+  return visible.slice(0, 20).map((p) => ({
+    name: p.title || "Propiedad",
+    url: `/propiedades/${p.id}`,
+    image: p?.media?.photos?.[0]?.url || p?.images?.[0] || undefined,
+  }));
+}, [filteredProperties, currentPage, itemsPerPage]);
+
+const breadcrumbItemsSeo = [
+  { name: "Inicio", url: "/" },
+  { name: "Propiedades" },
+];
+
+const faqs = (cityLabel || typeLabelPlural || transactionLabel)
+  ? buildZoneFaqs({
+      cityLabel,
+      typeLabel: typeLabelPlural,
+      transactionLabel,
+      count: filteredProperties.length,
+    })
+  : CATALOG_FAQS;
+
+const relatedLinks = useRelatedLinks({
+  citySlug: cityLabel ? cityLabel.toLowerCase() : null,
+  typeSlug: filters.type,
+  transactionSlug: transactionLabel,
+});
+
+const seoParagraphs = (cityLabel || typeLabelPlural || transactionLabel)
+  ? buildZoneSeoParagraphs({
+      cityLabel: cityLabel || "Colombia",
+      typeLabel: typeLabelPlural || "propiedades",
+      typeLabelPlural: typeLabelPlural || "propiedades",
+      transactionLabel,
+      transactionVerb: transactionLabel ? `en ${transactionLabel}` : "en venta y arriendo",
+      count: filteredProperties.length,
+    })
+  : [];
+
+const breadcrumbItems = [{ label: "Propiedades", href: PUBLIC_ROUTES.CATALOG }];
 
   /* ═══════════════════════════════════════════════════════ */
   /*  RENDER                                                 */
   /* ═══════════════════════════════════════════════════════ */
 
-  return (
-    <div>
-      <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDesc} />
-        <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDesc} />
-        <meta property="og:url" content={canonicalUrl} />
-      </Helmet>
+return (
+  <div>
+    <SeoHead
+      title={seoTitle}
+      description={seoDesc}
+      path={canonicalUrl.replace("https://inmobiliaria-ryb-y-asociados.com", "")}
+      structuredData={[
+        buildBreadcrumbSchema(breadcrumbItemsSeo),
+        buildCollectionPageSchema({
+          name: seoTitle,
+          description: seoDesc,
+          url: canonicalUrl,
+          numberOfItems: filteredProperties.length,
+        }),
+        buildItemListSchema({
+          name: seoTitle,
+          description: seoDesc,
+          items: schemaItems,
+        }),
+        buildFaqSchema(faqs),
+      ].filter(Boolean)}
+    />
 
       {/* ═══════════════════════════════════════════════════ */}
       {/*  HERO editorial con buscador integrado              */}
@@ -650,6 +731,20 @@ const CatalogPage = () => {
           </>
         )}
       </AnimatePresence>
+
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        <SeoTextBlock
+          title={
+            cityLabel
+              ? `Más sobre ${typeLabelPlural || "propiedades"} en ${cityLabel}`
+              : "Encuentra tu propiedad ideal en Colombia"
+          }
+          paragraphs={seoParagraphs}
+          faqs={faqs}
+          relatedLinks={relatedLinks}
+          relatedTitle="Búsquedas relacionadas"
+        />
+      </section>
     </div>
   );
 };

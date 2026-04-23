@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../../core/contexts/AuthContext';
-import { getHomeRoute } from '../../../core/components/ProtectedRoute';
+// ✅ FIX: ruta corregida — ProtectedRoute vive en shared, no en core/components
+import { getHomeRoute } from '../../../shared/components/ProtectedRoute';
 
 const LoginPage = () => {
   const { signIn, userData } = useAuth();

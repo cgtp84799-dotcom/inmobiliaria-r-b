@@ -75,67 +75,99 @@ service cloud.firestore {
 
     function clientAllowedUpdateFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'nombre',
-        'telefono',
-        'ubicacionInteres',
-        'presupuesto',
-        'tipoPropiedad',
-        'favorites',
-        'updatedAt',
-        'onboardingDone',
-        'photoURL'
+        'nombre', 'telefono', 'ubicacionInteres', 'presupuesto',
+        'tipoPropiedad', 'favorites', 'updatedAt', 'onboardingDone', 'photoURL'
       ]);
     }
 
     function userSelfAllowedFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'displayName',
-        'phone',
-        'photoURL',
-        'updatedAt',
-        'lastSeen',
-        'online',
-        'fcmToken',
-        'lastTokenUpdate',
-        'notificationsEnabled'
+        'displayName', 'phone', 'photoURL', 'updatedAt', 'lastSeen',
+        'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled'
       ]);
     }
 
     function notifAllowedUpdateFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'read',
-        'readAt'
+        'read', 'readAt'
       ]);
     }
 
     function clientVisitAllowedUpdateFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'status',
-        'updatedAt',
-        'cancelledByClient',
-        'cancelReason'
+        'status', 'updatedAt', 'cancelledByClient', 'cancelReason'
       ]);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VALIDADORES ANTI-SPAM (colecciones públicas)
+    // Reemplazan los "allow create: if true" para prevenir spam/DoS en Firestore
+    // ════════════════════════════════════════════════════════════════════════
+
+    function validContact() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+                'name', 'email', 'phone', 'message',
+                'propertyId', 'propertyTitle', 'createdAt', 'status'
+             ])
+          && d.name is string && d.name.size() > 0 && d.name.size() < 200
+          && d.email is string && d.email.matches('.*@.*\\..*')
+          && d.message is string && d.message.size() > 0 && d.message.size() < 3000
+          && d.createdAt == request.time;
+    }
+
+    function validVisit() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+                'clientName', 'clientEmail', 'clientPhone',
+                'propertyId', 'propertyName', 'propertyAddress',
+                'requestedDate', 'requestedTime', 'notes',
+                'status', 'createdAt', 'source'
+             ])
+          && d.clientName is string && d.clientName.size() > 0 && d.clientName.size() < 200
+          && d.clientEmail is string && d.clientEmail.matches('.*@.*\\..*')
+          && d.status == 'pending'
+          && d.createdAt == request.time;
+    }
+
+    function validAccessRequest() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+                'name', 'email', 'phone', 'message',
+                'role', 'createdAt', 'status'
+             ])
+          && d.email is string && d.email.matches('.*@.*\\..*')
+          && d.name is string && d.name.size() > 0 && d.name.size() < 200
+          && d.status == 'pending'
+          && d.createdAt == request.time;
+    }
+
+    function validConsent() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+                'userId', 'accepted', 'timestamp', 'version', 'userAgent'
+             ])
+          && d.accepted == true
+          && d.timestamp == request.time;
     }
 
     // ════════════════════════════════════════════════════════════════════════
     // USUARIOS
     // ════════════════════════════════════════════════════════════════════════
+
     match /users/{userId} {
-      allow read: if canRead() || isOwner(userId);
-
+      allow read:   if canRead() || isOwner(userId);
       allow create: if isSignedIn() && userId == authEmail();
-
-      allow update: if isAdmin()
-                    || (isOwner(userId) && userSelfAllowedFields());
-
+      allow update: if isAdmin() || (isOwner(userId) && userSelfAllowedFields());
       allow delete: if isAdmin();
     }
 
     // ════════════════════════════════════════════════════════════════════════
     // SOLICITUDES DE ACCESO
     // ════════════════════════════════════════════════════════════════════════
+
     match /accessRequests/{requestId} {
-      allow create:         if true;
+      allow create:         if validAccessRequest();  // ← era: if true
       allow read:           if isAdmin();
       allow update, delete: if isAdmin();
     }
@@ -143,6 +175,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // PRESENCIA (solo panel interno)
     // ════════════════════════════════════════════════════════════════════════
+
     match /presence/{userId} {
       allow read:  if canOperate();
       allow write: if canOperate() && request.auth.uid == userId;
@@ -151,6 +184,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // PROPIEDADES
     // ════════════════════════════════════════════════════════════════════════
+
     match /properties/{propertyId} {
       allow read:           if true;
       allow create, update: if canOperate();
@@ -160,14 +194,12 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CLIENTES
     // ════════════════════════════════════════════════════════════════════════
+
     match /clients/{clientId} {
-      allow read: if canRead() || isClientOwnerByResource();
-
+      allow read:   if canRead() || isClientOwnerByResource();
       allow create: if canOperate() || isClientOwnerByRequest();
-
       allow update: if canOperate()
                     || (isClientOwnerByResource() && clientAllowedUpdateFields());
-
       allow delete: if isAdmin();
 
       match /history/{historyId} {
@@ -181,18 +213,11 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CONTRATOS
     // ════════════════════════════════════════════════════════════════════════
-    match /contracts/{contractId} {
-      allow read: if canRead() || isContractOwner();
-      allow create, update: if canOperate();
-      allow delete: if isAdmin();
 
-      // ── Subcolecciones de contratos ──────────────────────────────────────
-      // Estas subcolecciones son escritas por contract.service.js (milestones,
-      // payments) y por ContractDetail.jsx (documents, history).
-      // El cliente puede LEER sus propias subcolecciones a través del portal.
-      // Solo operadores (admin/member) pueden escribir.
-      // La Cloud Function processContractAlerts escribe en alerts_sent
-      // usando el Admin SDK, así que no necesita reglas aquí.
+    match /contracts/{contractId} {
+      allow read:           if canRead() || isContractOwner();
+      allow create, update: if canOperate();
+      allow delete:         if isAdmin();
 
       match /milestones/{milestoneId} {
         allow read:           if canRead() || isContractOwner();
@@ -219,8 +244,6 @@ service cloud.firestore {
       }
 
       match /alerts_sent/{alertId} {
-        // Solo lectura para operadores (las alertas las escribe la Cloud Function
-        // con Admin SDK, que bypasea las rules). Lectura útil para debugging.
         allow read:  if canOperate();
         allow write: if false; // Solo Admin SDK (Cloud Functions)
       }
@@ -229,17 +252,19 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // DOCUMENTOS
     // ════════════════════════════════════════════════════════════════════════
+
     match /documents/{documentId} {
-      allow read: if canRead() || isDocumentOwner();
+      allow read:           if canRead() || isDocumentOwner();
       allow create, update: if canOperate();
-      allow delete: if isAdmin();
+      allow delete:         if isAdmin();
     }
 
     // ════════════════════════════════════════════════════════════════════════
     // CONTACTOS
     // ════════════════════════════════════════════════════════════════════════
+
     match /contacts/{contactId} {
-      allow create:         if true;
+      allow create:         if validContact();    // ← era: if true
       allow read:           if canRead();
       allow update, delete: if canOperate();
     }
@@ -247,8 +272,9 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // VISITAS
     // ════════════════════════════════════════════════════════════════════════
+
     match /visits/{visitId} {
-      allow create: if true;
+      allow create: if validVisit();              // ← era: if true
 
       allow read: if canRead() || isVisitOwner();
 
@@ -267,6 +293,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // NOTIFICACIONES
     // ════════════════════════════════════════════════════════════════════════
+
     match /notifications/{notificationId} {
       allow read: if canOperate() || isNotifOwner();
 
@@ -282,6 +309,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // EMAILS AUTOMÁTICOS
     // ════════════════════════════════════════════════════════════════════════
+
     match /mail/{mailId} {
       allow create: if canOperate()
                     || (isSignedIn()
@@ -295,8 +323,9 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CONSENTIMIENTO DE PRIVACIDAD
     // ════════════════════════════════════════════════════════════════════════
+
     match /privacyConsents/{consentId} {
-      allow create: if true;
+      allow create: if validConsent();            // ← era: if true
       allow read:   if isAdmin();
       allow delete: if isAdmin();
     }
@@ -304,6 +333,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CHAT
     // ════════════════════════════════════════════════════════════════════════
+
     match /conversations/{conversationId} {
       allow read:           if canOperate();
       allow create, update: if canOperate();
@@ -337,13 +367,14 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CALENDARIO / CITAS
     // ════════════════════════════════════════════════════════════════════════
+
     match /events/{eventId} {
       allow read:  if canRead();
       allow write: if canOperate();
     }
 
     match /appointments/{appointmentId} {
-      allow create:         if true;
+      allow create:         if validVisit();      // ← era: if true
       allow read:           if canRead();
       allow update, delete: if canOperate();
     }
@@ -351,6 +382,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // ANALYTICS / STATS
     // ════════════════════════════════════════════════════════════════════════
+
     match /analytics/{document=**} {
       allow read:  if canRead();
       allow write: if isAdmin();
@@ -374,6 +406,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
     // CONFIGURACIÓN
     // ════════════════════════════════════════════════════════════════════════
+
     match /settings/{document=**} {
       allow read:  if isAdmin();
       allow write: if isAdmin();

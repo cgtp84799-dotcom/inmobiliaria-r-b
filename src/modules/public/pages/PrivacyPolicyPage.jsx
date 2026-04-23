@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import { SeoHead, buildBreadcrumbSchema } from "../../../shared/components/SEO";
 import {
   FaShieldAlt, FaDatabase, FaUserShield, FaEnvelope,
   FaArrowLeft, FaLock, FaEye, FaTrash, FaPhone,
@@ -27,14 +27,17 @@ const Section = ({ icon: Icon, title, children }) => (
 export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen py-8 px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
-      <Helmet>
-        <title>Política de Privacidad | Inmobiliaria Rincón Bedoya y Asociados</title>
-        <meta
-          name="description"
-          content="Política de privacidad y tratamiento de datos personales de Inmobiliaria Rincón Bedoya y Asociados, Anserma, Caldas, Colombia."
-        />
-        <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/politica-privacidad" />
-      </Helmet>
+      <SeoHead
+        title="Política de privacidad y tratamiento de datos | Inmobiliaria Rincón Bedoya y Asociados"
+        description="Política de tratamiento de datos personales conforme a la Ley 1581 de 2012 de Colombia. Conoce cómo recolectamos, usamos y protegemos tu información."
+        path="/politica-privacidad"
+        structuredData={[
+          buildBreadcrumbSchema([
+            { name: "Inicio", url: "/" },
+            { name: "Política de privacidad" },
+          ]),
+        ]}
+      />
 
       <div className="max-w-2xl mx-auto">
         {/* Back */}

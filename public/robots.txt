@@ -1,9 +1,174 @@
+# ────────────────────────────────────────────────────────────────────────────
+#  Inmobiliaria Rincón Bedoya y Asociados — robots.txt
+#  https://inmobiliaria-ryb-y-asociados.com
+#
+#  Filosofía:
+#   • Permitir indexación completa de todo contenido público.
+#   • Bloquear rutas privadas (admin, portal cliente, auth) para no
+#     desperdiciar crawl budget ni exponer URLs no-SEO.
+#   • Referenciar el sitemap índice (que a su vez referencia sub-sitemaps).
+#   • Bloquear scrapers de IA que no aportan tráfico (GPTBot, ClaudeBot, etc.)
+#
+#  v2 — cambios:
+#   • Agregados User-agent de scrapers de IA (GPTBot, ClaudeBot, PerplexityBot, etc.)
+#   • Crawl-delay para Bingbot (protege crawl budget de Functions)
+#   • Comentario aclaratorio para /agentes
+# ────────────────────────────────────────────────────────────────────────────
+
 User-agent: *
 Allow: /
 
-Disallow: /dashboard/
-Disallow: /acceso
-Disallow: /solicitar-acceso
+# ── Rutas públicas SEO (explícitas para reforzar intención) ────────────────
+Allow: /catalogo
+Allow: /catalogo/
+Allow: /propiedades/
+Allow: /contacto
+Allow: /politica-privacidad
 
+# ── Bloqueo de rutas privadas / no-SEO ────────────────────────────────────
+Disallow: /login
+Disallow: /login/
+Disallow: /acceso-clientes
+Disallow: /acceso-clientes/
+Disallow: /solicitar-acceso
+Disallow: /solicitar-acceso/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /mi-panel
+Disallow: /mi-panel/
+Disallow: /portal
+Disallow: /portal/
+Disallow: /propiedades-admin
+Disallow: /propiedades-admin/
+Disallow: /clientes
+Disallow: /clientes/
+Disallow: /contratos
+Disallow: /contratos/
+Disallow: /consultas
+Disallow: /consultas/
+Disallow: /documentos
+Disallow: /documentos/
+Disallow: /calendario
+Disallow: /calendario/
+Disallow: /visitas
+Disallow: /visitas/
+Disallow: /usuarios
+Disallow: /usuarios/
+Disallow: /solicitudes
+Disallow: /solicitudes/
+Disallow: /perfil
+Disallow: /perfil/
+Disallow: /agentes
+Disallow: /agentes/
+Disallow: /chat
+Disallow: /chat/
+Disallow: /agendar-visita
+Disallow: /agendar-visita/
+
+# ── Bloquear URLs con parámetros inútiles para SEO ────────────────────────
+Disallow: /*?*utm_
+Disallow: /*?*fbclid=
+Disallow: /*?*gclid=
+Disallow: /*?*mc_cid=
+Disallow: /*?*mc_eid=
+Disallow: /*?*ref=
+Disallow: /*?*source=
+
+# ── Permitir assets críticos para renderizado ─────────────────────────────
+Allow: /*.js$
+Allow: /*.css$
+Allow: /*.woff2$
+Allow: /*.svg$
+Allow: /*.png$
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.webp$
+Allow: /*.avif$
+
+# ── Googlebot ─────────────────────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+Disallow: /login
+Disallow: /acceso-clientes
+Disallow: /solicitar-acceso
+Disallow: /dashboard/
+Disallow: /mi-panel/
+Disallow: /portal/
+Disallow: /propiedades-admin/
+Disallow: /agentes/
+Disallow: /perfil/
+
+User-agent: Googlebot-Image
+Allow: /
+Disallow: /dashboard/
+Disallow: /portal/
+Disallow: /mi-panel/
+
+User-agent: Googlebot-News
+Allow: /
+
+# ── Bingbot ───────────────────────────────────────────────────────────────
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+Disallow: /login
+Disallow: /acceso-clientes
+Disallow: /dashboard/
+Disallow: /mi-panel/
+Disallow: /portal/
+Disallow: /agentes/
+
+# ── Scrapers agresivos / bots de SEO ──────────────────────────────────────
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+# ── Scrapers de IA (no aportan tráfico — bloquear para proteger contenido) ─
+# Estos bots rastrean para entrenar modelos de IA, no generan visitas.
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: YouBot
+Crawl-delay: 10
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: FacebookBot
+Allow: /
+Disallow: /dashboard/
+Disallow: /portal/
+
+# ── Sitemaps ──────────────────────────────────────────────────────────────
 Sitemap: https://inmobiliaria-ryb-y-asociados.com/sitemap.xml
+Sitemap: https://inmobiliaria-ryb-y-asociados.com/sitemap-index.xml
+
+# ── Host canónico (Yandex; ignorado por Google pero inofensivo) ────────────
 Host: inmobiliaria-ryb-y-asociados.com

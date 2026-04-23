@@ -1,0 +1,132 @@
+/* src/styles/seo-performance.css
+ * ─────────────────────────────────────────────────────────────
+ * Utilidades CSS para Core Web Vitals.
+ * Importar desde src/main.jsx o src/index.css:
+ *
+ *   import './styles/seo-performance.css';
+ *
+ * Contiene:
+ *   • Reglas para prevenir CLS en imágenes
+ *   • content-visibility para secciones largas (catalog, lists)
+ *   • Ajustes de font-display y text-rendering
+ *   • Media queries para reducir animaciones en dispositivos lentos
+ * ─────────────────────────────────────────────────────────────
+ */
+
+/* ── Imágenes: aspect-ratio + object-fit previenen CLS ─────── */
+img,
+video,
+picture,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+img[width][height] {
+  height: auto; /* respeta aspect-ratio intrínseco */
+}
+
+/* Imágenes dentro de listados largos — se saltan el render si están
+   fuera del viewport. Chrome/Edge mejoran FPS significativamente. */
+.property-card__img,
+.list-item-img,
+.gallery-thumb {
+  content-visibility: auto;
+  contain-intrinsic-size: 400px 300px;
+}
+
+/* ── Listas largas: optimización de render ─────────────────── */
+.catalog-grid,
+.location-grid,
+.department-cities-grid {
+  /* Permite al navegador saltar el layout de secciones fuera de viewport */
+  contain: layout style;
+}
+
+.catalog-grid > *,
+.location-grid > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 400px 520px;
+}
+
+/* ── Tipografía: text-rendering optimizado ─────────────────── */
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Reducir animaciones en dispositivos de bajo rendimiento ─ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Skeleton genérico para estados de loading ─────────────── */
+.seo-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-2, #1e293b) 0%,
+    var(--color-surface-3, #334155) 50%,
+    var(--color-surface-2, #1e293b) 100%
+  );
+  background-size: 200% 100%;
+  animation: seo-skeleton-shimmer 1.5s infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes seo-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Enlaces: prefetch on hover (para internal linking rápido) ── */
+a[data-prefetch] {
+  /* hook para JS: al hover, se precarga la ruta vía <link rel="prefetch"> */
+}
+
+/* ── Evitar CLS de anuncios/embeds en el hero ──────────────── */
+.home-hero,
+.catalog-hero,
+.contact-hero {
+  min-height: 50vh; /* evita que el header colapse mientras carga la imagen */
+  contain: layout;
+}
+
+/* ── SeoTextBlock: legibilidad optimizada ──────────────────── */
+.seo-text-block-prose p {
+  max-width: 65ch;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
+/* ── Breadcrumbs: accesibilidad visual ─────────────────────── */
+[aria-label="Breadcrumb"] ol,
+nav[aria-label*="read"] ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Screen reader only ───────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

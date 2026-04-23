@@ -32,7 +32,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../../core/config/firebase.config';
 import { VISIT_STATUS } from '../types/visit.types';
-import { notificationService } from '../../notifications/services/notification.service';
 import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 
 const COLLECTION = 'visits';

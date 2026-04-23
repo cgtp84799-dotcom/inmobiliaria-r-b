@@ -6,7 +6,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
+import {
+  SeoHead,
+  SeoTextBlock,
+  buildBreadcrumbSchema,
+  buildItemListSchema,
+  buildFaqSchema,
+  buildCollectionPageSchema,
+  buildZoneFaqs,
+  buildZoneSeoParagraphs,
+} from "../../../shared/components/SEO";
+import { useRelatedLinks } from "../../../shared/hooks/useSeo";
+import { findCity, findDepartment } from "../../../core/config/geography.config";
 import { motion } from "framer-motion";
 import {
   FaHome,
@@ -458,38 +469,70 @@ const LocationPage = () => {
           })),
         }
       : null;
+// ─── SEO enriquecido ──────────────────────────────────────────────
+const cityInfo = findCity(normalizedCity);
+const deptInfo = cityInfo ? findDepartment(cityInfo.department) : null;
 
+const breadcrumbItemsSeo = [
+  { name: "Inicio",        url: "/" },
+  { name: "Propiedades",   url: "/catalogo" },
+  ...(deptInfo ? [{
+    name: deptInfo.name,
+    url: `/propiedades/departamento/${deptInfo.slug}`,
+  }] : []),
+  { name: cityLabel || humanizeSlug(rawSegment) },
+];
+
+const zoneFaqs = buildZoneFaqs({
+  cityLabel,
+  typeLabel: inferredType,
+  transactionLabel: inferredTransaction,
+  count: totalItems,
+});
+
+const zoneParagraphs = buildZoneSeoParagraphs({
+  cityLabel,
+  cityDepartment: deptInfo?.name,
+  typeLabel: inferredType,
+  typeLabelPlural: inferredType ? `${inferredType}s` : "propiedades",
+  transactionLabel: inferredTransaction,
+  transactionVerb: inferredTransaction ? `en ${inferredTransaction}` : "en venta y arriendo",
+  count: totalItems,
+});
+
+const relatedLinks = useRelatedLinks({
+  citySlug: normalizedCity,
+  typeSlug: inferredType,
+  transactionSlug: inferredTransaction,
+});
+
+const schemaItemsHydrated = paginated.slice(0, 20).map((p) => ({
+  name: p?.title || `Propiedad en ${cityLabel}`,
+  url: buildPropertyUrl(p),
+  image: p?.media?.photos?.[0]?.url || p?.images?.[0] || undefined,
+}));
   return (
     <div>
-      <Helmet>
-        <html lang="es" />
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <meta
-          name="robots"
-          content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
-        />
-        <link rel="canonical" href={seoUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:image" content={`${BASE_URL}/logo.jpg.png`} />
-        <meta property="og:url" content={seoUrl} />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content={COMPANY_NAME} />
-        <meta property="og:locale" content="es_CO" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:description" content={seoDescription} />
-        <meta name="twitter:image" content={`${BASE_URL}/logo.jpg.png`} />
-        <script type="application/ld+json">
-          {JSON.stringify(breadcrumbSchema)}
-        </script>
-        {itemListSchema && (
-          <script type="application/ld+json">
-            {JSON.stringify(itemListSchema)}
-          </script>
-        )}
-      </Helmet>
+<SeoHead
+  title={seoTitle}
+  description={seoDescription}
+  path={seoUrl.replace(BASE_URL, "")}
+  structuredData={[
+    buildBreadcrumbSchema(breadcrumbItemsSeo),
+    buildCollectionPageSchema({
+      name: seoTitle,
+      description: seoDescription,
+      url: seoUrl,
+      numberOfItems: totalItems,
+    }),
+    buildItemListSchema({
+      name: seoTitle,
+      description: seoDescription,
+      items: schemaItemsHydrated,
+    }),
+    buildFaqSchema(zoneFaqs),
+  ].filter(Boolean)}
+/>
 
       <section className="catalog-hero">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
@@ -743,6 +786,15 @@ const LocationPage = () => {
           )}
         </div>
       </section>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+  <SeoTextBlock
+    title={`Más sobre propiedades en ${cityLabel}`}
+    paragraphs={zoneParagraphs}
+    faqs={zoneFaqs}
+    relatedLinks={relatedLinks}
+    relatedTitle="Otras búsquedas en la zona"
+  />
+</section>
     </div>
   );
 };

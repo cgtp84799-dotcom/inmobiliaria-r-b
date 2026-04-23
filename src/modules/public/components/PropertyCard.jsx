@@ -259,7 +259,7 @@ const PropertyCard = ({ property }) => {
     const raw =
       property?.media?.photos?.[0]?.url ||
       property?.images?.[0] ||
-      "https://via.placeholder.com/800x600?text=Sin+Imagen";
+      "/og-default.jpg";
     return normalizeAbsoluteUrl(raw);
   }, [property]);
 
@@ -331,13 +331,17 @@ const PropertyCard = ({ property }) => {
         <div className="property-card__media">
           <img
             src={mainImage}
-            alt={`${getPropertyType(property?.type)} ${transactionInfo.isVenta ? "en venta" : "en arriendo"}${cityText ? ` en ${cityText}` : ""}`}
+            alt={`${getPropertyType(property?.type)} ${transactionInfo.isVenta ? "en venta" : "en arriendo"}${cityText ? ` en ${cityText}` : ""}${property?.features?.rooms ? ` · ${property.features.rooms} habitaciones` : ""}${cityText && property?.location?.department ? `, ${property.location.department}` : ""}`}
+            width={800}
+            height={600}
             className="property-card__img"
             loading="lazy"
             decoding="async"
+            fetchPriority="auto"
             referrerPolicy="no-referrer"
             onError={(e) => {
-              e.currentTarget.src = "https://via.placeholder.com/800x600?text=Sin+Imagen";
+              e.currentTarget.src = "/logo-ryb.png";
+              e.currentTarget.onerror = null;
             }}
           />
 

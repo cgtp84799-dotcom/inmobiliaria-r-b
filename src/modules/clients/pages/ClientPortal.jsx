@@ -1,13 +1,11 @@
 // src/modules/clients/pages/ClientPortal.jsx
-//
-// FIX: WelcomeModal volvía a aparecer porque:
-//   1. onDone() primero llamaba finishOnboarding() (escritura async a Firestore)
-//   2. Si la escritura fallaba por permisos → onboardingDone seguía false → modal re-aparecía
-//   3. Incluso si tenía éxito, había un flash de 1-2s mientras Firestore actualizaba
-//
-// SOLUCIÓN: dismissWelcome() se llama PRIMERO (ocultar localmente de inmediato),
-// y finishOnboarding() corre en background. El modal nunca vuelve a aparecer en
-// la misma sesión gracias al estado local `dismissed` en useWelcome.
+// ─────────────────────────────────────────────────────────────
+// Portal del cliente — rediseño editorial
+// · Respeta el tema global (light/dark) — NO fuerza dark
+// · Tokens CSS semánticos en todo el chrome
+// · Wrap en .portal-client para scope de overrides
+// · Tabs con pill indicator, navbar con Fraunces
+// ─────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,12 +13,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaHome, FaHeart, FaCalendarAlt, FaFileContract,
   FaUser, FaSignOutAlt, FaSpinner, FaChevronDown,
-  FaHistory, FaBalanceScale,
+  FaHistory, FaBalanceScale, FaArrowLeft,
 } from 'react-icons/fa';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
-import { useForceDark } from '../../../core/contexts/ThemeContext';
 import { useClientPortal } from '../hooks/useClientPortal';
 import { useWelcome }       from '../hooks/useWelcome';
 import toast from 'react-hot-toast';
@@ -45,50 +42,56 @@ const TAB_DEFS = [
   { id: 'perfil',    label: 'Mi perfil',   icon: FaUser,         always: true  },
 ];
 
+/* ─── User menu ──────────────────────────────────────────── */
 function UserMenu({ name, photo, onProfile, onSignOut }) {
   const [open, setOpen] = useState(false);
   const initials = name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-800/60 transition"
+        className="portal-user-btn"
+        aria-label="Menú de usuario"
+        aria-expanded={open}
       >
         {photo ? (
-          <img src={photo} alt={name} className="w-8 h-8 rounded-full object-cover border-2 border-amber-500/30" />
+          <img src={photo} alt={name} className="portal-user-avatar" />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-amber-500/20 border-2 border-amber-500/30 flex items-center justify-center text-amber-400 text-xs font-bold">
+          <span className="portal-user-avatar portal-user-avatar--initials">
             {initials}
-          </div>
+          </span>
         )}
-        <span className="hidden sm:block text-sm font-medium text-slate-300 max-w-[120px] truncate">
-          {name.split(' ')[0]}
-        </span>
-        <FaChevronDown className={`text-slate-500 text-xs transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="portal-user-name">{name.split(' ')[0]}</span>
+        <FaChevronDown className={`portal-user-chevron ${open ? 'is-open' : ''}`} />
       </button>
+
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-40 overflow-hidden py-1"
+              className="portal-user-menu"
+              role="menu"
             >
               <button
                 onClick={() => { setOpen(false); onProfile(); }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800/60 hover:text-white transition"
+                className="portal-user-menu__item"
+                role="menuitem"
               >
-                <FaUser className="text-xs text-slate-500" /> Mi perfil
+                <FaUser className="portal-user-menu__icon" /> Mi perfil
               </button>
-              <div className="mx-3 my-1 border-t border-slate-800" />
+              <div className="portal-user-menu__divider" />
               <button
                 onClick={() => { setOpen(false); onSignOut(); }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition"
+                className="portal-user-menu__item portal-user-menu__item--danger"
+                role="menuitem"
               >
-                <FaSignOutAlt className="text-xs" /> Cerrar sesión
+                <FaSignOutAlt className="portal-user-menu__icon" /> Cerrar sesión
               </button>
             </motion.div>
           </>
@@ -98,8 +101,8 @@ function UserMenu({ name, photo, onProfile, onSignOut }) {
   );
 }
 
+/* ─── Componente principal ───────────────────────────────── */
 export default function ClientPortal() {
-  useForceDark();
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('inicio');
@@ -129,12 +132,9 @@ export default function ClientPortal() {
     }
   }
 
-  // FIX: cerrar modal PRIMERO (local), luego escribir a Firestore en background
-  // Antes: await finishOnboarding() → si fallaba, el modal volvía
-  // Ahora: dismiss() local inmediato → finishOnboarding() async sin bloquear
   function handleModalDone() {
-    dismissWelcome();                    // ← ocultar AHORA, no esperar a Firestore
-    portal.finishOnboarding();          // ← escribir en background (no await)
+    dismissWelcome();
+    portal.finishOnboarding();
   }
 
   const displayName = portal.clientData?.nombre
@@ -146,19 +146,17 @@ export default function ClientPortal() {
 
   if (portal.loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="portal-client portal-loading">
         <div className="text-center">
-          <FaSpinner className="text-amber-500 text-3xl animate-spin mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Cargando tu portal...</p>
+          <FaSpinner className="portal-loading__spinner" />
+          <p className="portal-loading__text">Cargando tu portal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white" style={{ colorScheme: 'dark' }}>
-
-      {/* Welcome Modal — se oculta localmente de inmediato al cerrar */}
+    <div className="portal-client">
       <AnimatePresence>
         {showWelcome && (
           <WelcomeModal
@@ -169,19 +167,18 @@ export default function ClientPortal() {
         )}
       </AnimatePresence>
 
-      {/* Navbar */}
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/60">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <Link to="/catalogo" className="flex items-center gap-2.5 flex-shrink-0">
-            <img
-              src="/logo-ryb.png" alt="RyB" className="h-7 object-contain"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-            <span className="text-amber-400 font-bold text-sm tracking-wide hidden sm:block">
-              RINCÓN BEDOYA
-            </span>
+      {/* ═══ NAVBAR ═══ */}
+      <header className="portal-navbar">
+        <div className="portal-navbar__inner">
+          <Link to="/catalogo" className="portal-navbar__brand">
+            <FaArrowLeft className="portal-navbar__brand-icon" />
+            <div className="portal-navbar__brand-text">
+              <span className="portal-navbar__brand-back">Volver al sitio</span>
+              <span className="portal-navbar__brand-name">Mi portal</span>
+            </div>
           </Link>
-          <div className="flex items-center gap-2">
+
+          <div className="portal-navbar__actions">
             <PortalNotificationBell
               notifications={portal.notifications}
               unreadCount={portal.unreadCount}
@@ -199,28 +196,22 @@ export default function ClientPortal() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <nav className="sticky top-14 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/40">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex overflow-x-auto scrollbar-none">
+      {/* ═══ TABS ═══ */}
+      <nav className="portal-tabs" aria-label="Secciones del portal">
+        <div className="portal-tabs__inner">
+          <div className="portal-tabs__scroll">
             {visibleTabs.map((t) => {
-              const Icon   = t.icon;
+              const Icon = t.icon;
               const active = tab === t.id;
               return (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`
-                    flex items-center gap-2 px-4 py-3.5 text-xs font-semibold
-                    whitespace-nowrap border-b-2 transition-all
-                    ${active
-                      ? 'border-amber-500 text-amber-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
-                    }
-                  `}
+                  className={`portal-tab ${active ? 'is-active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
                 >
-                  <Icon className={active ? 'text-amber-400' : 'text-slate-600'} />
-                  {t.label}
+                  <Icon className="portal-tab__icon" />
+                  <span>{t.label}</span>
                 </button>
               );
             })}
@@ -228,15 +219,15 @@ export default function ClientPortal() {
         </div>
       </nav>
 
-      {/* Contenido */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      {/* ═══ CONTENIDO ═══ */}
+      <main className="portal-main">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           >
             {tab === 'inicio' && (
               <SectionInicio

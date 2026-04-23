@@ -1,3 +1,9 @@
+// src/modules/public/components/ImageGallery.jsx
+//
+// CAMBIO SEO: Primera imagen ahora usa loading="eager" + fetchPriority="high"
+// para mejorar el LCP (Largest Contentful Paint) en páginas de propiedad.
+// Las imágenes 2+ siguen siendo lazy.
+
 import { useEffect, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination, Thumbs, Zoom } from "swiper/modules";
@@ -10,14 +16,14 @@ import "swiper/css/pagination";
 import "swiper/css/thumbs";
 import "swiper/css/zoom";
 
-// ✅ Recibe propertyTitle para mejorar SEO en alt
+// Recibe propertyTitle para mejorar SEO en alt
 const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
   const [thumbsSwiper, setThumbsSwiper] = useState(null);
-  const [mainSwiper, setMainSwiper] = useState(null);
+  const [mainSwiper, setMainSwiper]     = useState(null);
   const [showLightbox, setShowLightbox] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex]   = useState(0);
 
-  // ✅ bloquear scroll del body cuando el lightbox está abierto
+  // Bloquear scroll del body cuando el lightbox está abierto
   useEffect(() => {
     if (!showLightbox) return;
     document.body.style.overflow = "hidden";
@@ -26,7 +32,7 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
     };
   }, [showLightbox]);
 
-  // ✅ reset índice si cambian imágenes
+  // Reset índice si cambian imágenes
   useEffect(() => {
     setActiveIndex(0);
     if (mainSwiper && !mainSwiper.destroyed) mainSwiper.slideTo(0, 0);
@@ -63,13 +69,36 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
               <SwiperSlide key={index}>
                 <img
                   src={img}
-                  // ✅ Alt descriptivo para Google Imágenes
-                  alt={`${propertyTitle} - foto ${index + 1} de ${images.length}`}
+                  alt={
+                    index === 0
+                      // Primera imagen: alt más descriptivo y completo para Google
+                      ? `${propertyTitle} — foto principal`
+                      : `${propertyTitle} — foto ${index + 1} de ${images.length}`
+                  }
                   className="w-full h-full object-cover cursor-pointer"
-                  loading="lazy"
+
+                  // ── CAMBIO CRÍTICO PARA SEO / CORE WEB VITALS ───────────
+                  // La primera imagen es el LCP candidate de la página.
+                  // Con loading="lazy" el browser la carga tarde → LCP alto
+                  // → Google penaliza el ranking.
+                  // Solución: primera imagen eager + alta prioridad,
+                  //           el resto lazy como estaba.
+                  loading={index === 0 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  decoding={index === 0 ? "sync" : "async"}
+                  // ────────────────────────────────────────────────────────
+
+                  width={1200}
+                  height={800}
+                  referrerPolicy="no-referrer"
                   onClick={() => {
                     setActiveIndex(index);
                     setShowLightbox(true);
+                  }}
+                  onError={(e) => {
+                    // Fallback al logo local — nunca a servicios externos
+                    e.currentTarget.src = "/og-default.jpg";
+                    e.currentTarget.onerror = null; // Evitar loop
                   }}
                 />
               </SwiperSlide>
@@ -107,14 +136,18 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
               >
                 <img
                   src={img}
-                  // ✅ Alt descriptivo en miniaturas
-                  alt={`${propertyTitle} - miniatura ${index + 1}`}
+                  alt={`${propertyTitle} — miniatura ${index + 1}`}
                   className={`w-full h-full object-cover rounded-lg cursor-pointer border-2 transition-all ${
                     index === activeIndex
                       ? "border-primary scale-[1.02]"
                       : "border-slate-700 hover:border-primary/50"
                   }`}
                   loading="lazy"
+                  decoding="async"
+                  onError={(e) => {
+                    e.currentTarget.src = "/og-default.jpg";
+                    e.currentTarget.onerror = null;
+                  }}
                 />
               </button>
             </SwiperSlide>
@@ -133,11 +166,12 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
             onClick={() => setShowLightbox(false)}
             role="dialog"
             aria-modal="true"
+            aria-label={`Galería de fotos: ${propertyTitle}`}
           >
             <button
               onClick={() => setShowLightbox(false)}
               className="absolute top-3 sm:top-4 right-3 sm:right-4 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition z-50"
-              aria-label="Cerrar"
+              aria-label="Cerrar galería"
             >
               <FaTimes size={22} />
             </button>
@@ -157,9 +191,14 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
                   <div className="swiper-zoom-container">
                     <img
                       src={img}
-                      alt={`${propertyTitle} - foto ${index + 1} de ${images.length}`}
+                      alt={`${propertyTitle} — foto ${index + 1} de ${images.length}`}
                       className="max-h-[90vh] max-w-[92vw] sm:max-w-[90vw] object-contain mx-auto"
                       loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        e.currentTarget.src = "/og-default.jpg";
+                        e.currentTarget.onerror = null;
+                      }}
                     />
                   </div>
                 </SwiperSlide>

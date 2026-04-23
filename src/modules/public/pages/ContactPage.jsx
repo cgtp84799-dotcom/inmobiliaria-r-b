@@ -9,7 +9,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import {
+  SeoHead,
+  buildBreadcrumbSchema,
+  buildLocalBusinessSchema,
+} from "../../../shared/components/SEO";
 import {
   FaWhatsapp, FaPhone, FaEnvelope, FaMapMarkerAlt, FaClock,
   FaPaperPlane, FaCheckCircle, FaChevronDown, FaUser,
@@ -161,14 +165,29 @@ const ContactPage = () => {
 
   return (
     <div>
-      <Helmet>
-        <title>Contáctanos | Inmobiliaria Rincón Bedoya & Asociados</title>
-        <meta name="description" content="Contáctanos por WhatsApp, teléfono, correo o formulario. Oficina en Cra 5 #9-28, Anserma, Caldas. Atención de lunes a sábado. Respaldo jurídico integral." />
-        <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/contacto" />
-        <meta property="og:title" content="Contáctanos | Inmobiliaria Rincón Bedoya & Asociados" />
-        <meta property="og:description" content="WhatsApp, teléfono, correo y oficina. Primera asesoría gratuita." />
-        <meta property="og:url" content="https://inmobiliaria-ryb-y-asociados.com/contacto" />
-      </Helmet>
+      <SeoHead
+        title="Contáctanos — Asesoría inmobiliaria con respaldo jurídico | Rincón Bedoya y Asociados"
+        description="Contáctanos por WhatsApp al +57 310 596 8202, teléfono, correo o formulario. Oficina en Cra 5 #9-28, Anserma, Caldas. Atención lunes a viernes 8:00-17:30, sábados 8:30-13:00. Respaldo jurídico integral en Colombia."
+        path="/contacto"
+        keywords="contactar inmobiliaria, inmobiliaria anserma teléfono, inmobiliaria caldas contacto, asesoría inmobiliaria colombia, whatsapp inmobiliaria"
+        structuredData={[
+          buildLocalBusinessSchema(),
+          buildBreadcrumbSchema([
+            { name: "Inicio", url: "/" },
+            { name: "Contacto" },
+          ]),
+          {
+            "@context": "https://schema.org",
+            "@type": "ContactPage",
+            name: "Contacto — Inmobiliaria Rincón Bedoya y Asociados",
+            description: "Canales de contacto oficiales",
+            url: "https://inmobiliaria-ryb-y-asociados.com/contacto",
+            inLanguage: "es-CO",
+            isPartOf: { "@id": "https://inmobiliaria-ryb-y-asociados.com/#website" },
+            mainEntity: { "@id": "https://inmobiliaria-ryb-y-asociados.com/#organization" },
+          },
+        ]}
+      />
 
       {/* ═══════════════════════════════════════════════════ */}
       {/*  HERO editorial                                      */}

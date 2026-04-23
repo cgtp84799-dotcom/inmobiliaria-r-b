@@ -1,4 +1,5 @@
 // src/core/services/notificationService.js
+
 import { getToken, onMessage } from 'firebase/messaging';
 import {
   doc, updateDoc, getDoc, collection, addDoc,
@@ -6,9 +7,12 @@ import {
 } from 'firebase/firestore';
 import { db, messagingReady } from '../config/firebase.config';
 
+
 // ── VAPID ─────────────────────────────────────────────────────────────────────
-const VAPID_KEY =
-  'BEjKiJLZDYvPsTIrx1zOiTpmjpczmmcQA9kpA1Ziyf3G2GzmCo2BdfTmBzCuryDGe1mnEeOC5pXn25qVItbqeoo';
+const VAPID_KEY = import.meta.env.VITE_VAPID_KEY;
+
+const BASE_URL = 'https://inmobiliaria-ryb-y-asociados.com';
+
 
 // ── Tipos de notificación exportados ─────────────────────────────────────────
 export const NOTIF_TYPES = {
@@ -33,8 +37,9 @@ export const NOTIF_TYPES = {
   SYSTEM:             'system',
 };
 
-// ── Legacy alias (mantiene compatibilidad con código que use NOTIFICATION_TYPES)
+// ── Legacy alias ──────────────────────────────────────────────────────────────
 export const NOTIFICATION_TYPES = NOTIF_TYPES;
+
 
 // ── Messaging ─────────────────────────────────────────────────────────────────
 export const initializeMessaging = () => messagingReady;
@@ -84,7 +89,84 @@ export const onMessageListener = async () => {
   });
 };
 
-// ── Core: crear notificación en Firestore ─────────────────────────────────────
+
+// ── Email vía extensión "Trigger Email from Firestore" ────────────────────────
+// Escribe en /mail → la extensión ext-firestore-send-email lo procesa y envía.
+const sendMailDoc = async (to, subject, html) => {
+  if (!to) return;
+  try {
+    await addDoc(collection(db, 'mail'), {
+      to,
+      message: { subject, html },
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('⚠️ sendMailDoc:', e.message);
+  }
+};
+
+// ── Template de email genérico para notificaciones al cliente ─────────────────
+function buildEmailHtml(title, message, type) {
+  const accentMap = {
+    [NOTIF_TYPES.VISIT_CONFIRMED]:   '#22c55e',
+    [NOTIF_TYPES.VISIT_REJECTED]:    '#ef4444',
+    [NOTIF_TYPES.VISIT_RESCHEDULED]: '#3b82f6',
+    [NOTIF_TYPES.CONTRACT_CREATED]:  '#3b82f6',
+    [NOTIF_TYPES.CONTRACT_ASSIGNED]: '#3b82f6',
+    [NOTIF_TYPES.CONTRACT_SIGNED]:   '#22c55e',
+    [NOTIF_TYPES.NEW_PROPERTY]:      '#f59e0b',
+    [NOTIF_TYPES.WELCOME]:           '#10b981',
+    [NOTIF_TYPES.MANUAL]:            '#a78bfa',
+  };
+  const accent = accentMap[type] || '#f59e0b';
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { margin:0; padding:0; background:#f4f4f0; font-family:Inter,Helvetica,Arial,sans-serif; }
+    .wrapper { background:#f4f4f0; padding:32px 16px; }
+    .card { background:#ffffff; border-radius:16px; overflow:hidden; max-width:560px; margin:0 auto; box-shadow:0 4px 24px rgba(0,0,0,.08); }
+    .header { background:#0d0d0b; padding:28px 40px 24px; text-align:center; }
+    .header img { display:block; margin:0 auto; max-width:160px; height:auto; }
+    .header span { font-size:9px; font-weight:500; letter-spacing:.22em; text-transform:uppercase; color:#8a7a5a; margin-top:8px; display:block; }
+    .body { padding:36px 40px 32px; }
+    .icon { font-size:36px; margin-bottom:12px; }
+    h1 { font-size:22px; font-weight:700; color:#1a1a18; margin:0 0 12px; line-height:1.3; }
+    p { font-size:15px; color:#3d3c38; line-height:1.7; margin:0 0 16px; }
+    .msg-box { background:#faf8f3; border-left:4px solid ${accent}; border-radius:0 10px 10px 0; padding:16px 20px; margin:20px 0; font-size:14px; color:#3d3c38; line-height:1.7; }
+    .btn { display:inline-block; margin-top:8px; background:${accent}; color:#fff; font-weight:700; padding:12px 28px; border-radius:10px; text-decoration:none; font-size:14px; }
+    .footer { background:#f9f8f6; border-top:1px solid #e8e5e0; padding:20px 40px; text-align:center; }
+    .footer p { font-size:12px; color:#a09a8e; line-height:1.7; margin:0; }
+    .footer a { color:#c8a44a; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <img src="${BASE_URL}/logo.jpg.png" alt="R&B Inmobiliaria">
+        <span>Inmobiliaria &middot; Real Estate</span>
+      </div>
+      <div class="body">
+        <h1>${title}</h1>
+        <div class="msg-box">${message}</div>
+        <a class="btn" href="${BASE_URL}/acceso-clientes">Ver en mi portal</a>
+      </div>
+      <div class="footer">
+        <p>&copy; ${new Date().getFullYear()} R&B Inmobiliaria &mdash; Anserma, Caldas<br>
+        <a href="mailto:inmojuridi09@gmail.com">inmojuridi09@gmail.com</a> &nbsp;&middot;&nbsp; 310 596 8202</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+
+// ── Core: crear notificación in-app en Firestore ──────────────────────────────
 export const createNotification = async (notification) => {
   try {
     const docRef = await addDoc(collection(db, 'notifications'), {
@@ -101,38 +183,63 @@ export const createNotification = async (notification) => {
   }
 };
 
-// ── NUEVO: sendClientNotification ─────────────────────────────────────────────
+
+// ── sendClientNotification ────────────────────────────────────────────────────
 /**
- * Envía una notificación a un cliente identificado por su email.
+ * Envía una notificación a un cliente:
+ *   1. Notificación in-app (colección /notifications, visible en la campana del portal)
+ *   2. Email vía extensión Trigger Email (/mail → ext-firestore-send-email)
  *
- * @param {string} clientEmail  - Email del cliente (userId en la colección notifications)
- * @param {object} payload
- * @param {string} payload.title     - Título de la notificación
- * @param {string} payload.message   - Cuerpo del mensaje
- * @param {string} payload.type      - Uno de los valores en NOTIF_TYPES
- * @param {string} [payload.relatedId] - ID del recurso relacionado (visita, contrato, propiedad)
+ * Acepta DOS formas de llamada para compatibilidad con todo el código existente:
  *
- * @returns {Promise<string>} ID del documento creado
+ *   Forma A — parámetros separados (visit.service.js, property.service.js):
+ *     sendClientNotification(email, title, message, type, relatedId)
+ *
+ *   Forma B — payload como objeto (otros servicios):
+ *     sendClientNotification(email, { title, message, type, relatedId })
+ *
+ * @returns {Promise<string>} ID del documento de notificación creado
  */
-export const sendClientNotification = async (clientEmail, { title, message, type, relatedId = null }) => {
+export const sendClientNotification = async (
+  clientEmail,
+  titleOrPayload,
+  msgArg,
+  typeArg,
+  relatedIdArg = null,
+) => {
   if (!clientEmail) throw new Error('sendClientNotification: clientEmail es requerido');
-  return createNotification({
-    userId:    clientEmail,
+
+  // Normalizar ambas formas de llamada
+  const isObject = typeof titleOrPayload === 'object' && titleOrPayload !== null;
+  const title     = isObject ? titleOrPayload.title     : titleOrPayload;
+  const message   = isObject ? titleOrPayload.message   : msgArg;
+  const type      = isObject ? titleOrPayload.type      : typeArg;
+  const relatedId = isObject ? (titleOrPayload.relatedId ?? null) : relatedIdArg;
+
+  // 1. Notificación in-app
+  const notifId = await createNotification({
+    userId: clientEmail,
     title,
     message,
     type:      type || NOTIF_TYPES.MANUAL,
     relatedId,
   });
+
+  // 2. Email (no bloquea el flujo si falla)
+  sendMailDoc(clientEmail, title, buildEmailHtml(title, message, type)).catch(() => {});
+
+  return notifId;
 };
 
-// ── Queries de notificaciones ──────────────────────────────────────────────────
+
+// ── Queries de notificaciones ─────────────────────────────────────────────────
 export const getUserNotifications = async (userId, limitCount = 50) => {
   try {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
       orderBy('createdAt', 'desc'),
-      limit(limitCount)
+      limit(limitCount),
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map((d) => ({
@@ -161,12 +268,12 @@ export const markAllAsRead = async (userId) => {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
-      where('read', '==', false)
+      where('read', '==', false),
     );
     const snap = await getDocs(q);
-    await Promise.all(snap.docs.map((d) =>
-      updateDoc(d.ref, { read: true, readAt: serverTimestamp() })
-    ));
+    await Promise.all(
+      snap.docs.map((d) => updateDoc(d.ref, { read: true, readAt: serverTimestamp() })),
+    );
   } catch (error) {
     console.error('❌ markAllAsRead:', error);
   }
@@ -184,12 +291,32 @@ export const disableNotifications = async (userEmail) => {
   }
 };
 
-// ── Helpers de plantillas (usados internamente y desde servicios) ──────────────
-export const createChatNotification       = (userId, senderId, senderName, message) =>
-  createNotification({ userId, type: NOTIF_TYPES.CHAT_MESSAGE, title: `💬 Nuevo mensaje de ${senderName}`, body: message.substring(0, 100), data: { url: '/dashboard/chat', senderId } });
 
-export const createPropertyNotification  = (userId, propertyId, propertyTitle, action) =>
-  createNotification({ userId, type: NOTIF_TYPES.PROPERTY_CREATED, title: `🏠 Propiedad ${action}`, body: propertyTitle, data: { url: '/dashboard/properties', propertyId } });
+// ── Helpers de notificaciones internas (agentes/admin) ───────────────────────
+export const createChatNotification = (userId, senderId, senderName, message) =>
+  createNotification({
+    userId,
+    type:    NOTIF_TYPES.CHAT_MESSAGE,
+    title:   `💬 Nuevo mensaje de ${senderName}`,
+    message: message.substring(0, 100),
+    data:    { url: '/dashboard/chat', senderId },
+  });
+
+export const createPropertyNotification = (userId, propertyId, propertyTitle, action) =>
+  createNotification({
+    userId,
+    type:    NOTIF_TYPES.PROPERTY_CREATED,
+    title:   `🏠 Propiedad ${action}`,
+    message: propertyTitle,
+    data:    { url: '/dashboard/properties', propertyId },
+  });
 
 export const createVideoCallNotification = (userId, callerId, callerName) =>
-  createNotification({ userId, type: NOTIF_TYPES.VIDEO_CALL, title: '📞 Llamada entrante', body: `${callerName} te está llamando`, requireInteraction: true, data: { url: '/dashboard/chat', callerId } });
+  createNotification({
+    userId,
+    type:             NOTIF_TYPES.VIDEO_CALL,
+    title:            '📞 Llamada entrante',
+    message:          `${callerName} te está llamando`,
+    requireInteraction: true,
+    data:             { url: '/dashboard/chat', callerId },
+  });

@@ -10,7 +10,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import {
+  SeoHead,
+  SeoTextBlock,
+  buildFaqSchema,
+  buildLocalBusinessSchema,
+  HOMEPAGE_FAQS,
+} from "../../../shared/components/SEO";
 import {
   FaSearch, FaMapMarkerAlt, FaArrowRight, FaWhatsapp,
   FaBalanceScale, FaBuilding, FaKey, FaGavel,
@@ -163,14 +169,16 @@ const HomePage = () => {
 
   return (
     <div className="overflow-hidden">
-      <Helmet>
-        <title>Inmobiliaria Rincón Bedoya y Asociados | Gestión inmobiliaria integral</title>
-        <meta
-          name="description"
-          content="Gestión inmobiliaria integral con respaldo jurídico especializado. Compra, venta, arriendo, saneamiento, sucesiones y avalúos en Caldas, Risaralda y la región cafetera."
-        />
-        <link rel="canonical" href="https://inmobiliaria-ryb-y-asociados.com/" />
-      </Helmet>
+      <SeoHead
+        title="Inmobiliaria en Colombia con respaldo jurídico | Rincón Bedoya y Asociados"
+        description="Casas, apartamentos, fincas y locales en venta y arriendo en Colombia. Gestión inmobiliaria con verificación jurídica: saneamiento predial, pertenencia, sucesiones y avalúos certificados en Caldas, Risaralda, Quindío, Valle, Antioquia y Bogotá."
+        path="/"
+        keywords="inmobiliaria colombia, casas en venta colombia, apartamentos en arriendo, fincas en venta, inmobiliaria con abogados, saneamiento predial, avalúos certificados, inmobiliaria caldas, inmobiliaria región cafetera"
+        structuredData={[
+          buildLocalBusinessSchema(),
+          buildFaqSchema(HOMEPAGE_FAQS),
+        ]}
+      />
 
       <section className="home-hero section-pad relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1019,6 +1027,32 @@ const HomePage = () => {
           </p>
         </div>
       </section>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <SeoTextBlock
+    title="Todo sobre bienes raíces en Colombia"
+    paragraphs={[
+      "En Inmobiliaria Rincón Bedoya y Asociados integramos la experiencia inmobiliaria con el respaldo jurídico que exige cada operación. Somos un equipo de asesores y abogados especializados en compraventa, arriendo, saneamiento predial, sucesiones y avalúos certificados en Colombia.",
+      "Nuestra sede principal está en Anserma, Caldas, y atendemos activamente en Manizales, Pereira, Armenia, Dosquebradas, Riosucio, Supía, Belalcázar y toda la región cafetera. En expansión nacional cubrimos Bogotá, Medellín, Cali, Bucaramanga, Barranquilla, Cartagena, Santa Marta, Cúcuta, Ibagué y Villavicencio.",
+      "Cada propiedad que publicamos pasa por una revisión jurídica inicial: certificado de tradición y libertad, paz y salvos de predial y valorización, estado de la matrícula inmobiliaria, servidumbres y afectaciones. Esto reduce el riesgo para compradores, arrendatarios y propietarios.",
+    ]}
+    faqs={HOMEPAGE_FAQS}
+    relatedLinks={[
+      { label: "Casas en venta en Colombia", url: "/propiedades/zona/casas-en-venta-colombia" },
+      { label: "Apartamentos en arriendo", url: "/propiedades/zona/apartamentos-en-arriendo-colombia" },
+      { label: "Fincas en venta", url: "/propiedades/zona/fincas-en-venta-colombia" },
+      { label: "Propiedades en Manizales", url: "/propiedades/zona/manizales" },
+      { label: "Propiedades en Pereira", url: "/propiedades/zona/pereira" },
+      { label: "Propiedades en Anserma", url: "/propiedades/zona/anserma" },
+      { label: "Propiedades en Armenia", url: "/propiedades/zona/armenia" },
+      { label: "Propiedades en Dosquebradas", url: "/propiedades/zona/dosquebradas" },
+      { label: "Hub Caldas", url: "/propiedades/departamento/caldas" },
+      { label: "Hub Risaralda", url: "/propiedades/departamento/risaralda" },
+      { label: "Hub Quindío", url: "/propiedades/departamento/quindio" },
+      { label: "Hub Antioquia", url: "/propiedades/departamento/antioquia" },
+    ]}
+    relatedTitle="Explora por zona o tipo"
+  />
+</section>
     </div>
   );
 };
