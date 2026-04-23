@@ -8,28 +8,38 @@
  *
  * Uso no autorizado está prohibido.
  */
+
+// ─────────────────────────────────────────────────────────────
+// Entry point de la aplicación.
+//
+// ÁRBOL DE PROVIDERS (orden importa):
+//   StrictMode        → detecta efectos con cleanup incorrecto en dev
+//   HelmetProvider    → contexto global para react-helmet-async (SEO)
+//   ThemeProvider     → tema visual (dark/light) sin depender de Auth
+//   App               → BrowserRouter + AuthProvider viven adentro
+//                       (AuthProvider necesita estar dentro de
+//                        BrowserRouter para que useNavigate funcione)
+//
+// NOTA: AuthProvider NO va aquí — está en App.jsx dentro de
+//       BrowserRouter. Tenerlo en ambos lugares crea un contexto
+//       duplicado donde el interno silenciosamente opaca al externo.
+// ─────────────────────────────────────────────────────────────
+
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import "./index.css";
-
-import { ThemeProvider } from "./core/contexts/ThemeContext";
-import { AuthProvider } from "./core/contexts/AuthContext";
 import { HelmetProvider } from "react-helmet-async";
 
+import { ThemeProvider } from "./core/contexts/ThemeContext";
+import App from "./App";
 
-// ⚠️ React.StrictMode eliminado intencionalmente:
-// En desarrollo, StrictMode monta/desmonta cada componente DOS VECES para
-// detectar side-effects. Esto duplica los listeners onSnapshot de Firestore
-// antes de que el cleanup pueda ejecutarse, causando el error interno
-// "INTERNAL ASSERTION FAILED: Unexpected state (ID: ca9)" del SDK v12.
-// En producción StrictMode no tiene efecto, pero en dev provoca el crash.
+import "./index.css";
+
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <HelmetProvider>
-    <ThemeProvider>
-      <AuthProvider>
+  <React.StrictMode>
+    <HelmetProvider>
+      <ThemeProvider>
         <App />
-      </AuthProvider>
-    </ThemeProvider>
-  </HelmetProvider>
+      </ThemeProvider>
+    </HelmetProvider>
+  </React.StrictMode>
 );
