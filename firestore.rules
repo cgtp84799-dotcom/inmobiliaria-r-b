@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ════════════════════════════════════════════════════════════════════════
-    // HELPERS
+    // HELPERS DE AUTENTICACIÓN
     // ════════════════════════════════════════════════════════════════════════
 
     function isSignedIn() {
@@ -36,12 +36,10 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // ROLES
+    // ROLES INTERNOS
     // ════════════════════════════════════════════════════════════════════════
 
     function isAdmin()    { return hasRole(['admin']); }
-    function isMember()   { return hasRole(['member']); }
-    function isViewer()   { return hasRole(['viewer']); }
     function canOperate() { return hasRole(['admin', 'member']); }
     function canRead()    { return hasRole(['admin', 'member', 'viewer']); }
 
@@ -73,6 +71,10 @@ service cloud.firestore {
       return isSignedIn() && resource.data.clientEmail == authEmail();
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // CAMPOS PERMITIDOS EN UPDATE (whitelist)
+    // ════════════════════════════════════════════════════════════════════════
+
     function clientAllowedUpdateFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'nombre', 'telefono', 'ubicacionInteres', 'presupuesto',
@@ -101,7 +103,6 @@ service cloud.firestore {
 
     // ════════════════════════════════════════════════════════════════════════
     // VALIDADORES ANTI-SPAM (colecciones públicas)
-    // Reemplazan los "allow create: if true" para prevenir spam/DoS en Firestore
     // ════════════════════════════════════════════════════════════════════════
 
     function validContact() {
@@ -113,6 +114,7 @@ service cloud.firestore {
           && d.name is string && d.name.size() > 0 && d.name.size() < 200
           && d.email is string && d.email.matches('.*@.*\\..*')
           && d.message is string && d.message.size() > 0 && d.message.size() < 3000
+          && d.status == 'pending'
           && d.createdAt == request.time;
     }
 
@@ -156,8 +158,11 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /users/{userId} {
+      // Cada usuario puede leerse a sí mismo; staff puede leer todos
       allow read:   if canRead() || isOwner(userId);
+      // Solo el propio usuario puede crear su doc (al registrarse)
       allow create: if isSignedIn() && userId == authEmail();
+      // Admin puede editar todo; usuario solo sus campos permitidos
       allow update: if isAdmin() || (isOwner(userId) && userSelfAllowedFields());
       allow delete: if isAdmin();
     }
@@ -167,18 +172,19 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /accessRequests/{requestId} {
-      allow create:         if validAccessRequest();  // ← era: if true
+      allow create:         if validAccessRequest();
       allow read:           if isAdmin();
       allow update, delete: if isAdmin();
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // PRESENCIA (solo panel interno)
+    // PRESENCIA (RTDB-style en Firestore)
+    // FIX: usar authEmail() como ID, no request.auth.uid
     // ════════════════════════════════════════════════════════════════════════
 
     match /presence/{userId} {
       allow read:  if canOperate();
-      allow write: if canOperate() && request.auth.uid == userId;
+      allow write: if canOperate() && authEmail() == userId;
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -186,6 +192,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /properties/{propertyId} {
+      // Catálogo público — cualquiera puede leer
       allow read:           if true;
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
@@ -245,7 +252,7 @@ service cloud.firestore {
 
       match /alerts_sent/{alertId} {
         allow read:  if canOperate();
-        allow write: if false; // Solo Admin SDK (Cloud Functions)
+        allow write: if false; // Solo Admin SDK vía Cloud Functions
       }
     }
 
@@ -261,11 +268,12 @@ service cloud.firestore {
 
     // ════════════════════════════════════════════════════════════════════════
     // CONTACTOS
+    // FIX: canRead() → canOperate() para que viewer no vea msgs de otros
     // ════════════════════════════════════════════════════════════════════════
 
     match /contacts/{contactId} {
-      allow create:         if validContact();    // ← era: if true
-      allow read:           if canRead();
+      allow create:         if validContact();
+      allow read:           if canOperate();
       allow update, delete: if canOperate();
     }
 
@@ -274,7 +282,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /visits/{visitId} {
-      allow create: if validVisit();              // ← era: if true
+      allow create: if validVisit();
 
       allow read: if canRead() || isVisitOwner();
 
@@ -325,7 +333,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /privacyConsents/{consentId} {
-      allow create: if validConsent();            // ← era: if true
+      allow create: if validConsent();
       allow read:   if isAdmin();
       allow delete: if isAdmin();
     }
@@ -342,8 +350,9 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read:   if canOperate();
         allow create: if canOperate();
+        // Solo el autor puede editar su propio mensaje
         allow update: if canOperate()
-                      && request.auth.token.email == resource.data.senderEmail;
+                      && authEmail() == resource.data.senderEmail;
         allow delete: if isAdmin();
       }
     }
@@ -354,9 +363,11 @@ service cloud.firestore {
     }
 
     match /chatMessages/{messageId} {
-      allow read:           if canOperate();
-      allow create:         if canOperate();
-      allow update, delete: if isAdmin();
+      allow read:   if canOperate();
+      allow create: if canOperate();
+      // Solo el autor puede editar; solo admin puede borrar
+      allow update: if canOperate() && authEmail() == resource.data.senderEmail;
+      allow delete: if isAdmin();
     }
 
     match /chatRooms/{roomId} {
@@ -374,8 +385,10 @@ service cloud.firestore {
     }
 
     match /appointments/{appointmentId} {
-      allow create:         if validVisit();      // ← era: if true
-      allow read:           if canRead();
+      // FIX: añadir isVisitOwner() para que cliente vea su propia cita
+      // FIX: canRead() → canOperate() para que viewer no vea citas ajenas
+      allow create:         if validVisit();
+      allow read:           if canOperate() || isVisitOwner();
       allow update, delete: if canOperate();
     }
 
@@ -411,5 +424,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if isAdmin();
     }
+
   }
 }
