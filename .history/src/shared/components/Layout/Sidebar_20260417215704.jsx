@@ -86,7 +86,7 @@ export default function Sidebar({
   const { signOut, currentUser, userData } = useAuth();
 
   // userData tiene el rol real; currentUser.role puede no estar hidratado aún
-  const role = userData?.role ?? USER_ROLES.VIEWER;
+  const role         = userData?.role ?? currentUser?.role;
   const roleMeta     = ROLE_META[role] ?? FALLBACK_ROLE;
   const RoleIcon     = roleMeta.icon;
   const isDesktop    = useIsDesktop();

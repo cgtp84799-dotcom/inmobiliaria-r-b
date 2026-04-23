@@ -67,7 +67,7 @@ function useIsDesktop(bp = 1024) {
 export default function AdminLayout() {
   // ✅ userData es la fuente de verdad del rol (viene de Firestore)
   const { currentUser, userData } = useAuth();
-  const role = userData?.role ?? USER_ROLES.VIEWER;
+  const role     = userData?.role ?? currentUser?.role;
   const roleMeta = ROLE_META[role] ?? DEFAULT_ROLE;
   const RoleIcon = roleMeta.Icon;
 

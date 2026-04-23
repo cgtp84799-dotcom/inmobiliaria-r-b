@@ -17,12 +17,11 @@ import { useAuth } from '../../../core/contexts/AuthContext'; // ✅
 import { hasPermission } from '../../users/types/user.types'; // ✅
 
 const DocumentsPage = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser } = useAuth(); // ✅
 
   // ✅ Permisos granulares
-// ✅ DESPUÉS
-  const canCreate = hasPermission(userData?.role, 'documents', 'create');
-  const canDelete = hasPermission(userData?.role, 'documents', 'delete');
+  const canCreate = hasPermission(currentUser?.role, 'documents', 'create');
+  const canDelete = hasPermission(currentUser?.role, 'documents', 'delete');
 
   const [documents, setDocuments] = useState([]);
   const [filteredDocuments, setFilteredDocuments] = useState([]);

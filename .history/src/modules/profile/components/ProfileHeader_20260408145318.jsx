@@ -18,7 +18,7 @@ export default function ProfileHeader({ currentUser, userData, avatarPreview, up
   const displayName = userData?.displayName || currentUser?.displayName || currentUser?.email || 'Usuario';
   const initial = displayName.charAt(0).toUpperCase();
   const photoURL = avatarPreview || userData?.photoURL || currentUser?.photoURL;
-  const role = userData?.role || 'viewer';
+  const role = userData?.role || currentUser?.role || 'viewer';
   const status = userData?.status || 'pending';
   const isOnline = userData?.online ?? false;
   const roleColor = USER_ROLE_COLORS[role] || 'slate';

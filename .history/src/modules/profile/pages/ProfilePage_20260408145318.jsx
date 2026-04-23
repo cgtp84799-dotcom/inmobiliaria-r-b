@@ -129,7 +129,7 @@ export default function ProfilePage() {
   } = useProfile();
 
   const { checks, percent } = useProfileCompletion(currentUser, userData);
-  const role = userData?.role || USER_ROLES.VIEWER;
+  const role     = userData?.role || currentUser?.role || USER_ROLES.VIEWER;
   const roleName = USER_ROLE_LABELS[role] || role;
   const isOnline = userData?.online ?? false;
 

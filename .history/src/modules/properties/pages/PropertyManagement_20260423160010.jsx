@@ -40,7 +40,7 @@ import { hasPermission } from "../../users/types/user.types";
 const PAGE_SIZE = 12;
 
 const PropertyManagement = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser } = useAuth();
   const [activeContracts, setActiveContracts] = useState({}); // ✅
 
   // ✅ Permisos granulares

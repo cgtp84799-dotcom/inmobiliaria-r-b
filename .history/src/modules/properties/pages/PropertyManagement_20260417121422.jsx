@@ -40,13 +40,13 @@ import { hasPermission } from "../../users/types/user.types";
 const PAGE_SIZE = 12;
 
 const PropertyManagement = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser } = useAuth();
   const [activeContracts, setActiveContracts] = useState({}); // ✅
 
   // ✅ Permisos granulares
-  const canCreate = hasPermission(userData?.role, "properties", "create");
-  const canUpdate = hasPermission(userData?.role, "properties", "update");
-  const canDelete = hasPermission(userData?.role, "properties", "delete");
+  const canCreate = hasPermission(currentUser?.role, "properties", "create");
+  const canUpdate = hasPermission(currentUser?.role, "properties", "update");
+  const canDelete = hasPermission(currentUser?.role, "properties", "delete");
 
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
