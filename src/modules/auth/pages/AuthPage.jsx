@@ -14,19 +14,50 @@ import { USER_ROLES } from '../../users/types/user.types';
 import { getHomeRoute } from '../../../shared/components/ProtectedRoute';
 import toast from 'react-hot-toast';
 
-// ─── Rate limiting en memoria (useRef: se resetean si el componente se re-monta) ─
-const MAX_ATTEMPTS = 5;
+// ════════════════════════════════════════════════════════════════════════
+// CONSTANTES
+// ════════════════════════════════════════════════════════════════════════
+
+const MAX_ATTEMPTS  = 5;
 const BLOCK_TIME_MS = 30_000;
 
 const FIREBASE_ERRORS = {
-  'auth/user-not-found':       'No encontramos cuenta con ese correo.',
-  'auth/wrong-password':       'Contraseña incorrecta.',
-  'auth/invalid-email':        'El correo no tiene formato válido.',
-  'auth/user-disabled':        'Esta cuenta está deshabilitada.',
-  'auth/too-many-requests':    'Demasiados intentos. Intenta más tarde.',
-  'auth/invalid-credential':   'Correo o contraseña incorrectos.',
-  'auth/network-request-failed': 'Sin conexión. Verifica tu internet.',
+  'auth/user-not-found':        'No encontramos cuenta con ese correo.',
+  'auth/wrong-password':        'Contraseña incorrecta.',
+  'auth/invalid-email':         'El correo no tiene formato válido.',
+  'auth/user-disabled':         'Esta cuenta está deshabilitada.',
+  'auth/too-many-requests':     'Demasiados intentos. Intenta más tarde.',
+  'auth/invalid-credential':    'Correo o contraseña incorrectos.',
+  'auth/network-request-failed':'Sin conexión. Verifica tu internet.',
 };
+
+// ════════════════════════════════════════════════════════════════════════
+// RATE LIMITING — sessionStorage (persiste F5, se limpia al cerrar tab)
+// ════════════════════════════════════════════════════════════════════════
+
+const RL_KEY_ATTEMPTS = 'auth_rl_attempts';
+const RL_KEY_UNTIL    = 'auth_rl_until';
+
+function getRLAttempts() {
+  return parseInt(sessionStorage.getItem(RL_KEY_ATTEMPTS) || '0', 10);
+}
+function getRLUntil() {
+  return parseInt(sessionStorage.getItem(RL_KEY_UNTIL) || '0', 10);
+}
+function setRLAttempts(n) {
+  sessionStorage.setItem(RL_KEY_ATTEMPTS, String(n));
+}
+function setRLUntil(ts) {
+  sessionStorage.setItem(RL_KEY_UNTIL, String(ts));
+}
+function clearRL() {
+  sessionStorage.removeItem(RL_KEY_ATTEMPTS);
+  sessionStorage.removeItem(RL_KEY_UNTIL);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// COMPONENTE
+// ════════════════════════════════════════════════════════════════════════
 
 export default function AuthPage() {
   const [email,       setEmail]      = useState('');
@@ -36,51 +67,58 @@ export default function AuthPage() {
   const [isBlocked,   setIsBlocked]  = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
-  // useRef para rate limiting (no variables de módulo → no persisten entre re-mounts)
-  const failedAttempts = useRef(0);
-  const blockedUntil   = useRef(0);
-  const countdownRef   = useRef(null);
+  const countdownRef = useRef(null);
 
   const { currentUser, userData, signIn } = useAuth();
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Destino post-login: si venimos redirigidos por ProtectedRoute, volver ahí
   const from        = location.state?.from?.pathname;
   const defaultDest = PRIVATE_ROUTES.DASHBOARD;
 
-  // ── Redirect si ya está autenticado ──────────────────────────────────────────
+  // ── Restaurar bloqueo activo al montar (sobrevive F5) ──────────────────
   useEffect(() => {
-    if (!currentUser || !userData?.role) return;
-
-    if (userData.role === USER_ROLES.VIEWER) {
-      // Un viewer que llegó a /login → va a su portal
-      navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace: true });
-    } else {
-      // Admin/member → volver a donde iba, o al dashboard
-      const dest = from && !from.startsWith('/login') ? from : defaultDest;
-      navigate(dest, { replace: true });
+    const until = getRLUntil();
+    if (until && Date.now() < until) {
+      startBlockCountdown(until);
     }
-  }, [currentUser, userData, navigate, from, defaultDest]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Limpiar countdown al desmontar
+  // ── Limpiar countdown al desmontar ─────────────────────────────────────
   useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
-  // ── Countdown de bloqueo ──────────────────────────────────────────────────────
-  function startBlockCountdown() {
+  // ── Redirect si ya está autenticado ────────────────────────────────────
+  useEffect(() => {
+    if (!currentUser || !userData?.role) return;
+
+    if (userData.role === USER_ROLES.VIEWER) {
+      navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace: true });
+    } else {
+      const dest = from && !from.startsWith('/login') ? from : defaultDest;
+      navigate(dest, { replace: true });
+    }
+  }, [currentUser, userData, navigate, from, defaultDest]);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // RATE LIMITING — funciones
+  // ════════════════════════════════════════════════════════════════════════
+
+  function startBlockCountdown(until) {
     setIsBlocked(true);
-    setSecondsLeft(Math.ceil(BLOCK_TIME_MS / 1000));
+    setSecondsLeft(Math.ceil((until - Date.now()) / 1000));
+
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
     countdownRef.current = setInterval(() => {
-      const rem = Math.ceil((blockedUntil.current - Date.now()) / 1000);
+      const rem = Math.ceil((getRLUntil() - Date.now()) / 1000);
       if (rem <= 0) {
         clearInterval(countdownRef.current);
-        countdownRef.current    = null;
-        failedAttempts.current  = 0;
-        blockedUntil.current    = 0;
+        countdownRef.current = null;
+        clearRL();
         setIsBlocked(false);
         setSecondsLeft(0);
       } else {
@@ -89,30 +127,37 @@ export default function AuthPage() {
     }, 500);
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════
+  // HANDLERS
+  // ════════════════════════════════════════════════════════════════════════
+
   async function handleLogin(e) {
     e.preventDefault();
-    if (Date.now() < blockedUntil.current) {
-      toast.error(`Demasiados intentos. Espera ${Math.ceil((blockedUntil.current - Date.now()) / 1000)}s.`);
+
+    // Verificar bloqueo activo
+    const until = getRLUntil();
+    if (until && Date.now() < until) {
+      toast.error(`Demasiados intentos. Espera ${Math.ceil((until - Date.now()) / 1000)}s.`);
       return;
     }
 
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
-      // Redirect lo maneja el useEffect cuando userData cargue.
-      // Navigate aquí es fallback por si userData ya estaba en caché.
-      failedAttempts.current = 0;
+      clearRL(); // Login exitoso → resetear contador
       const dest = from && !from.startsWith('/login') ? from : defaultDest;
       navigate(dest, { replace: true });
     } catch (err) {
-      failedAttempts.current += 1;
-      if (failedAttempts.current >= MAX_ATTEMPTS) {
-        blockedUntil.current = Date.now() + BLOCK_TIME_MS;
-        startBlockCountdown();
+      const attempts = getRLAttempts() + 1;
+      setRLAttempts(attempts);
+
+      if (attempts >= MAX_ATTEMPTS) {
+        const blockedUntil = Date.now() + BLOCK_TIME_MS;
+        setRLUntil(blockedUntil);
+        startBlockCountdown(blockedUntil);
         toast.error(`Bloqueado ${BLOCK_TIME_MS / 1000}s tras ${MAX_ATTEMPTS} intentos fallidos.`);
       } else {
-        const left = MAX_ATTEMPTS - failedAttempts.current;
+        const left = MAX_ATTEMPTS - attempts;
         const msg  = FIREBASE_ERRORS[err.code] ?? 'Credenciales incorrectas.';
         toast.error(`${msg} Quedan ${left} intento${left !== 1 ? 's' : ''}.`);
       }
@@ -121,7 +166,6 @@ export default function AuthPage() {
     }
   }
 
-  // ── Recuperar contraseña ──────────────────────────────────────────────────────
   async function handleForgot() {
     if (!email.trim()) {
       toast.error('Escribe tu correo arriba primero.');
@@ -135,11 +179,14 @@ export default function AuthPage() {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ════════════════════════════════════════════════════════════════════════
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 relative overflow-hidden">
 
-      {/* Fondo decorativo sutil */}
+      {/* Fondo decorativo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div className="absolute top-20 right-20 w-96 h-96 bg-primary/8 rounded-full blur-3xl" />
         <div className="absolute bottom-20 left-20 w-96 h-96 bg-yellow-600/8 rounded-full blur-3xl" />
@@ -177,20 +224,27 @@ export default function AuthPage() {
         >
           {/* Banner de bloqueo */}
           {isBlocked && (
-            <div role="alert" className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-800/60 text-red-300 text-sm text-center">
+            <div
+              role="alert"
+              className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-800/60 text-red-300 text-sm text-center"
+            >
               Demasiados intentos. Espera{' '}
               <span className="font-bold">{secondsLeft}s</span> para continuar.
             </div>
           )}
 
           <form onSubmit={handleLogin} noValidate className="space-y-5">
+
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
                 Correo electrónico
               </label>
               <div className="relative">
-                <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" aria-hidden="true" />
+                <FaEnvelope
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                  aria-hidden="true"
+                />
                 <input
                   id="email"
                   type="email"
@@ -220,7 +274,10 @@ export default function AuthPage() {
                 </button>
               </div>
               <div className="relative">
-                <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" aria-hidden="true" />
+                <FaLock
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                  aria-hidden="true"
+                />
                 <input
                   id="password"
                   type={showPass ? 'text' : 'password'}
