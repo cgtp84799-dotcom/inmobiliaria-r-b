@@ -6,10 +6,12 @@
 //
 // Añadir aquí cualquier nuevo builder de email para exponerlo automáticamente.
 
-const visits   = require("./visits");
-const users    = require("./users");
+const visits    = require("./visits");
+const users     = require("./users");
 const contracts = require("./contracts");
 const payments  = require("./payments");
+const contacts  = require("./contacts");
+const documents = require("./documents");
 
 // Re-exportar todo con nombres explícitos
 module.exports = {
@@ -21,4 +23,8 @@ module.exports = {
   ...contracts,
   // ── Pagos y alertas ──
   ...payments,
+  // ── Contactos / Leads web ──
+  ...contacts,
+  // ── Documentos ──
+  ...documents,
 };

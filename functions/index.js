@@ -1,7 +1,7 @@
 // functions/index.js
 // ─── v2 imports ───────────────────────────────────────────────────────────────
 const { onRequest }                          = require("firebase-functions/v2/https");
-const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { defineSecret }                       = require("firebase-functions/params");
 const { setGlobalOptions }                   = require("firebase-functions/v2");
 const { onSchedule }                         = require("firebase-functions/v2/scheduler");
@@ -19,19 +19,45 @@ const {
   rejectedVisitEmail,
   rescheduledVisitEmail,
   agentVisitAssignedEmail,
+  visitCancelledByClientEmail,
+  visitCancelledAgentEmail,
+  visitCancelledAdminEmail,
   // Usuarios
   welcomeEmail,
+  accessRequestNotificationEmail,
+  accessRequestApprovedEmail,
+  accessRequestRejectedEmail,
+  clientInviteEmail,
+  accountDeletionRequestEmail,
   // Contratos
   contractCreatedEmail,
   contractCreatedAgentEmail,
   contractUpdatedEmail,
-  // Pagos y alertas
+  contractStageAgentEmail,
+  contractStageAdminEmail,
+  getContractStageEmail,
+  // Pagos y alertas — cliente
   paymentConfirmedEmail,
   paymentReminderEmail,
   paymentDueTodayEmail,
   latePaymentEmail,
   contractExpiryEmail,
   renewalWindowEmail,
+  // Pagos y alertas — agente
+  paymentConfirmedAgentEmail,
+  paymentDueAgentEmail,
+  latePaymentAgentEmail,
+  contractExpiryAgentEmail,
+  renewalWindowAgentEmail,
+  // Pagos y alertas — admin
+  paymentConfirmedAdminEmail,
+  latePaymentAdminEmail,
+  // Contactos / leads web
+  contactReceivedEmail,
+  contactReceivedAgentEmail,
+  contactReceivedAdminEmail,
+  // Documentos
+  contractDocumentUploadedClientEmail,
 } = require("./src/emails");
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -76,14 +102,50 @@ async function assertAdminFromRequest(req) {
   if (!authHeader?.startsWith("Bearer ")) {
     const err = new Error("No autenticado"); err.status = 401; throw err;
   }
-  const decoded      = await admin.auth().verifyIdToken(authHeader.split("Bearer ")[1]);
-  const callerEmail  = String(decoded.email || "").trim().toLowerCase();
+  // ★ FIX: verifyIdToken con checkRevoked=true → rechaza tokens de sesiones
+  // revocadas o usuarios deshabilitados desde Admin. Antes: bastaba con que
+  // el token no hubiera expirado (~1h) aunque el admin ya hubiera bloqueado
+  // la cuenta desde la consola.
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(
+      authHeader.split("Bearer ")[1],
+      true,
+    );
+  } catch (e) {
+    const err = new Error("Token inválido o revocado"); err.status = 401; throw err;
+  }
+  const callerEmail = String(decoded.email || "").trim().toLowerCase();
   if (!callerEmail) { const err = new Error("Token sin email"); err.status = 401; throw err; }
-  const callerDoc    = await admin.firestore().collection("users").doc(callerEmail).get();
+
+  // ★ FIX: intentar buscar por email tal cual (case-insensitive). Si no
+  // existe, probar versión lowercased. Evita DoS cuando un doc legacy
+  // quedó con mayúsculas (migraciones antiguas).
+  const users = admin.firestore().collection("users");
+  let callerDoc = await users.doc(callerEmail).get();
+  if (!callerDoc.exists) {
+    const alt = decoded.email.trim();
+    if (alt && alt !== callerEmail) {
+      callerDoc = await users.doc(alt).get();
+    }
+  }
   if (!callerDoc.exists || callerDoc.data()?.role !== "admin") {
     const err = new Error("Solo administradores"); err.status = 403; throw err;
   }
   return { callerEmail };
+}
+
+// ★ FIX: whitelist de roles válidos para creación — evita que un admin
+// cree usuarios con roles arbitrarios ("superadmin", "root", etc.).
+const VALID_ROLES = new Set(["admin", "member", "viewer"]);
+const VALID_STATUSES = new Set(["active", "inactive", "pending", "blocked"]);
+
+// Email validator — RFC 5322 simplificado para ganar en seguridad práctica.
+function isValidEmail(email) {
+  return typeof email === "string"
+      && email.length >= 5
+      && email.length <= 254
+      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function createTransport(gmailUser, gmailPass) {
@@ -104,9 +166,14 @@ exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
     if (handlePreflight(req, res)) return;
     setCorsHeaders(req, res);
     if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-    await assertAdminFromRequest(req);
+    const { callerEmail } = await assertAdminFromRequest(req);
     const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
     if (!userId) return res.status(400).json({ error: "userId es requerido" });
+    if (!isValidEmail(userId)) return res.status(400).json({ error: "userId debe ser un email válido" });
+    // ★ FIX: impedir auto-eliminación (el admin se quedaría sin acceso).
+    if (userId === callerEmail) {
+      return res.status(400).json({ error: "No puedes eliminar tu propia cuenta" });
+    }
     const userDoc = await admin.firestore().collection("users").doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
     const userUid = userDoc.data()?.uid;
@@ -147,12 +214,34 @@ exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
     const role        = String(data.role || "member").trim();
     const status      = String(data.status || "active").trim();
     if (!email || !password) return res.status(400).json({ error: "email y password son requeridos" });
+    // ★ FIX: validaciones previas a cualquier operación
+    if (!isValidEmail(email)) return res.status(400).json({ error: "email inválido" });
+    if (password.length < 8)  return res.status(400).json({ error: "password debe tener al menos 8 caracteres" });
+    if (!VALID_ROLES.has(role))     return res.status(400).json({ error: "role inválido" });
+    if (!VALID_STATUSES.has(status)) return res.status(400).json({ error: "status inválido" });
+
     let userRecord;
+    let preexisting = false;
     try {
       userRecord = await admin.auth().createUser({ email, password, displayName, disabled: status === "blocked" });
     } catch (e) {
-      if (e?.code === "auth/email-already-exists") userRecord = await admin.auth().getUserByEmail(email);
-      else throw e;
+      if (e?.code === "auth/email-already-exists") {
+        userRecord = await admin.auth().getUserByEmail(email);
+        preexisting = true;
+      } else {
+        throw e;
+      }
+    }
+    // ★ FIX (auditoría): si el usuario ya existía en Auth Y ya tiene doc en
+    // Firestore, NO sobreescribir — el admin debe usar updateUser. Esto
+    // evita "account takeover" pasivo donde un admin cambia el role/status
+    // de una cuenta existente sin pasar por flujos de auditoría.
+    const existingDoc = await admin.firestore().collection("users").doc(email).get();
+    if (preexisting && existingDoc.exists) {
+      return res.status(409).json({
+        error: "El usuario ya existe. Usa la función de edición para modificarlo.",
+        existingRole: existingDoc.data()?.role,
+      });
     }
     await admin.firestore().collection("users").doc(email).set(
       { uid: userRecord.uid, email, displayName, phone, role, status,
@@ -244,6 +333,53 @@ exports.onVisitStatusChanged = onDocumentWritten(
       return;
     }
 
+    // ── Cancelación del cliente desde el portal ───────────────────────────────
+    // ★ FIX (auditoría): client.portal.service.js setea status = "cancelada"
+    // y cancelledByClient = true. Antes solo había notif in-app — agente y
+    // admin se enteraban solo si abrían el panel. Ahora reciben email.
+    const isCancelByClient =
+      ["cancelada", "cancelled", "cancelado"].includes(nextStatus) &&
+      after.cancelledByClient === true;
+
+    if (isCancelByClient && prevStatus !== nextStatus) {
+      const cancelData = {
+        ...d,
+        cancelReason: String(after.cancelReason || "").trim(),
+        visitId: event.params.visitId,
+      };
+
+      // Cliente: confirmación de cancelación
+      if (d.clientEmail) {
+        const mail = visitCancelledByClientEmail(cancelData);
+        await send({ to: d.clientEmail, ...mail });
+      }
+
+      // Agente: alerta operativa
+      if (d.agentEmail && d.agentEmail !== d.clientEmail) {
+        const mail = visitCancelledAgentEmail(cancelData);
+        await send({ to: d.agentEmail, ...mail });
+      }
+
+      // Admins: visibilidad ejecutiva (no a quien sea cliente o agente)
+      try {
+        const adminsSnap = await admin.firestore()
+          .collection("users")
+          .where("role", "==", "admin")
+          .get();
+        const mail = visitCancelledAdminEmail(cancelData);
+        for (const adminDoc of adminsSnap.docs) {
+          const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim().toLowerCase();
+          if (!adminEmail) continue;
+          if (adminEmail === d.clientEmail.toLowerCase()) continue;
+          if (adminEmail === d.agentEmail.toLowerCase())  continue;
+          await send({ to: adminEmail, ...mail });
+        }
+      } catch (e) {
+        console.error("[onVisitStatusChanged] error notificando admins de cancelación:", e);
+      }
+      return;
+    }
+
     console.log(`[onVisitStatusChanged] Estado "${nextStatus}" manejado por visit.service.js. Ignorado.`);
   }
 );
@@ -258,7 +394,16 @@ exports.onUserCreated = onDocumentCreated(
     if (!data) return;
     const role  = String(data.role  || "").toLowerCase();
     const email = String(data.email || event.params.email || "").trim();
-    if (!email || role !== "viewer") return;
+    if (!email) return;
+
+    // ★ FIX (auditoría): antes solo se enviaba bienvenida a viewers, dejando
+    // a admins y members (agentes) sin notificación. Ahora todos los roles
+    // reciben welcome — el template ya diferencia internamente según el rol.
+    const validRoles = ["viewer", "admin", "member", "agent"];
+    if (!validRoles.includes(role)) {
+      console.log(`[onUserCreated] role="${role}" no reconocido — bienvenida omitida.`);
+      return;
+    }
 
     const gmailUser = GMAIL_USER.value();
     const gmailPass = GMAIL_PASS.value();
@@ -291,15 +436,45 @@ exports.onContractWritten = onDocumentWritten(
     const clientEmail = String(after.clientEmail || "").trim();
     const agentEmail  = String(after.agentEmail  || "").trim();
 
+    // ── Helper: obtener emails de admins (lazy, solo si se necesitan) ────────
+    const getAdminEmails = async () => {
+      try {
+        const snap = await admin.firestore()
+          .collection("users")
+          .where("role", "==", "admin")
+          .get();
+        return snap.docs
+          .map((d) => String(d.data().email || d.id || "").trim().toLowerCase())
+          .filter((e) => e && e !== clientEmail.toLowerCase() && e !== agentEmail.toLowerCase());
+      } catch (e) {
+        console.error("[onContractWritten] error obteniendo admins:", e);
+        return [];
+      }
+    };
+
     // ── Contrato nuevo ────────────────────────────────────────────────────────
     if (!before) {
+      // Cliente
       if (clientEmail) {
         const mail = contractCreatedEmail(after, contractId);
         await send({ to: clientEmail, ...mail });
       }
+      // Agente asignado
       if (agentEmail) {
         const mail = contractCreatedAgentEmail(after);
         await send({ to: agentEmail, ...mail });
+      }
+      // ★ FIX (auditoría): admins también deben enterarse cuando se crea un
+      // contrato nuevo. Antes recibían el mismo template del agente — ahora
+      // reciben uno dedicado con resumen ejecutivo, IDs y CTA al panel admin.
+      const adminEmails = await getAdminEmails();
+      if (adminEmails.length) {
+        // Para creación: usamos contractStageAdminEmail con prevStatus vacío
+        // y prevStage vacío — el template detectará que es un evento nuevo.
+        const mail = contractStageAdminEmail(after, "", "", contractId);
+        for (const adminEmail of adminEmails) {
+          await send({ to: adminEmail, ...mail });
+        }
       }
       return;
     }
@@ -311,9 +486,44 @@ exports.onContractWritten = onDocumentWritten(
     const nextStage  = String(after.businessStage  || "").toLowerCase();
 
     if (prevStatus !== nextStatus || prevStage !== nextStage) {
+      // ★ FIX (auditoría): el dispatcher elige el email específico según
+      // el businessStage al que se transicionó (cuota inicial, escritura
+      // firmada, canon en mora, etc.). Antes todo usaba el mismo email genérico.
       if (clientEmail) {
-        const mail = contractUpdatedEmail(after, prevStatus, prevStage);
+        const mail = getContractStageEmail(after, prevStatus, prevStage);
         await send({ to: clientEmail, ...mail });
+      }
+      // ★ FIX (auditoría): agente recibe email DEDICADO con datos de gestión
+      // (cliente, teléfono, IDs, CTA al panel) — no el mismo template del
+      // cliente. Solo cuando cambia status o cuando cambia a etapa relevante
+      // (no por cada micro-transición intermedia).
+      const stageRequiresAgentNotice =
+        ["reserva", "promesa_firmada", "credito_aprobado", "leasing_aprobado",
+         "escritura_firmada", "registrado", "entregado",
+         "arriendo_firmado", "arriendo_activo",
+         "ventana_renovacion", "arriendo_finalizado"].includes(nextStage);
+      const shouldNotifyAgent =
+        agentEmail &&
+        (prevStatus !== nextStatus || stageRequiresAgentNotice);
+
+      if (shouldNotifyAgent) {
+        const mail = contractStageAgentEmail(after, prevStatus, prevStage, contractId);
+        await send({ to: agentEmail, ...mail });
+      }
+
+      // ★ FIX (auditoría): admins reciben email DEDICADO con resumen
+      // ejecutivo, IDs y CTA al panel admin. Antes recibían el mismo
+      // genérico. Solo en cambios críticos para no saturar.
+      const isCritical =
+        nextStatus === "cancelado" ||
+        nextStatus === "finalizado" ||
+        ["entregado", "registrado", "arriendo_finalizado"].includes(nextStage);
+      if (isCritical && (prevStatus !== nextStatus || prevStage !== nextStage)) {
+        const adminEmails = await getAdminEmails();
+        const mail = contractStageAdminEmail(after, prevStatus, prevStage, contractId);
+        for (const adminEmail of adminEmails) {
+          await send({ to: adminEmail, ...mail });
+        }
       }
     }
   }
@@ -348,11 +558,74 @@ exports.onPaymentWritten = onDocumentWritten(
     const contract = contractSnap.data();
 
     const clientEmail = String(contract.clientEmail || "").trim();
-    if (!clientEmail) return;
+    const agentEmail  = String(contract.agentEmail  || "").trim();
 
     const transporter = createTransport(gmailUser, gmailPass);
-    const mail = paymentConfirmedEmail(contract, after);
-    await sendMail(transporter, gmailUser, { to: clientEmail, ...mail }, "onPaymentWritten");
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onPaymentWritten");
+
+    // Cliente: template emocional/humano
+    if (clientEmail) {
+      const mail = paymentConfirmedEmail(contract, after);
+      await send({ to: clientEmail, ...mail });
+    }
+
+    // ★ FIX (auditoría): agente recibe template DEDICADO con datos de cobranza
+    // — antes recibía el mismo template del cliente ("confirmamos tu pago").
+    if (agentEmail && agentEmail !== clientEmail) {
+      const mail = paymentConfirmedAgentEmail(contract, after);
+      await send({ to: agentEmail, ...mail });
+    }
+
+    // ★ FIX (auditoría): admin se entera SOLO en pagos críticos (cuota inicial,
+    // pagos > 5M COP, escrituración) para evitar saturación pero mantener
+    // visibilidad de tesorería.
+    const paidAmount = Number(after.paidAmount || after.amount || 0);
+    const paymentKind = String(after.kind || "").toLowerCase();
+    const isCriticalPayment =
+      paymentKind === "initial" ||
+      paymentKind === "cuota_inicial" ||
+      paymentKind === "deed" ||
+      paymentKind === "escritura" ||
+      paidAmount >= 5_000_000;
+
+    if (isCriticalPayment) {
+      try {
+        const adminsSnap = await admin.firestore()
+          .collection("users")
+          .where("role", "==", "admin")
+          .get();
+        const mail = paymentConfirmedAdminEmail(contract, after);
+        for (const adminDoc of adminsSnap.docs) {
+          const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim().toLowerCase();
+          if (!adminEmail) continue;
+          if (adminEmail === clientEmail.toLowerCase()) continue;
+          if (adminEmail === agentEmail.toLowerCase())  continue;
+          await send({ to: adminEmail, ...mail });
+        }
+      } catch (e) {
+        console.error("[onPaymentWritten] error notificando admins:", e);
+      }
+    }
+
+    // ★ FIX (auditoría): notif IN-APP al cliente — antes solo email. Si el
+    // cliente está navegando el portal, ahora ve la confirmación al instante.
+    if (clientEmail) {
+      try {
+        await admin.firestore().collection("notifications").add({
+          userId:    clientEmail.toLowerCase(),
+          type:      "payment_confirmed",
+          title:     "✅ Pago registrado",
+          message:   `Tu pago de "${contract.propertyName || "tu contrato"}" fue registrado correctamente.`,
+          relatedId: contractId,
+          actionUrl: "/portal",
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error("[onPaymentWritten] error creando notif in-app:", e);
+      }
+    }
   }
 );
 
@@ -439,6 +712,22 @@ exports.scheduledPaymentAlerts = onSchedule(
     const now  = new Date();
     const todayYmd = ymd(now);
 
+    // Cache de admins (para mora crítica) — evita una query por cada caso
+    let adminEmailsCache = null;
+    const getAdmins = async () => {
+      if (adminEmailsCache !== null) return adminEmailsCache;
+      try {
+        const snap = await db.collection("users").where("role", "==", "admin").get();
+        adminEmailsCache = snap.docs
+          .map((d) => String(d.data().email || d.id || "").trim().toLowerCase())
+          .filter(Boolean);
+      } catch (e) {
+        console.error(`[${TAG}] error obteniendo admins:`, e);
+        adminEmailsCache = [];
+      }
+      return adminEmailsCache;
+    };
+
     // ── Leer contratos activos de arriendo ────────────────────────────────────
     const contractsSnap = await db
       .collection("contracts")
@@ -449,6 +738,8 @@ exports.scheduledPaymentAlerts = onSchedule(
     for (const contractDoc of contractsSnap.docs) {
       const contract = contractDoc.data();
       const clientEmail = String(contract.clientEmail || "").trim();
+      const agentEmail  = String(contract.agentEmail  || "").trim();
+      const clientPhone = String(contract.clientPhone || "").trim();
       if (!clientEmail) continue;
 
       // ── Alertas de vencimiento del contrato ───────────────────────────────
@@ -456,28 +747,52 @@ exports.scheduledPaymentAlerts = onSchedule(
       if (endDate) {
         const daysToEnd = diffDays(endDate, now);
         if ([60, 30, 15].includes(daysToEnd)) {
-          await send({
-            to: clientEmail,
-            ...contractExpiryEmail({
-              clientName:   contract.clientName    || "Cliente",
-              propertyName: contract.propertyName  || "la propiedad",
-              endDate,
-              daysAhead: daysToEnd,
-              isRent: true,
-            }),
+          // Cliente: tono humano
+          const clientMail = contractExpiryEmail({
+            clientName:   contract.clientName    || "Cliente",
+            propertyName: contract.propertyName  || "la propiedad",
+            endDate,
+            daysAhead: daysToEnd,
+            isRent: true,
           });
+          await send({ to: clientEmail, ...clientMail });
+          // ★ FIX (auditoría): agente recibe template OPERATIVO con datos
+          // de gestión (cliente, teléfono, ID contrato), no el del cliente.
+          if (agentEmail && agentEmail !== clientEmail) {
+            const agentMail = contractExpiryAgentEmail({
+              clientName:   contract.clientName,
+              clientEmail,
+              clientPhone,
+              propertyName: contract.propertyName,
+              endDate,
+              daysAhead:    daysToEnd,
+              isRent:       true,
+              contractId:   contractDoc.id,
+            });
+            await send({ to: agentEmail, ...agentMail });
+          }
         }
         // Ventana de renovación: 45 días antes
         if (daysToEnd === 45) {
-          await send({
-            to: clientEmail,
-            ...renewalWindowEmail({
-              clientName:   contract.clientName   || "Cliente",
-              propertyName: contract.propertyName || "la propiedad",
-              endDate,
-              daysAhead: daysToEnd,
-            }),
+          const clientMail = renewalWindowEmail({
+            clientName:   contract.clientName   || "Cliente",
+            propertyName: contract.propertyName || "la propiedad",
+            endDate,
+            daysAhead: daysToEnd,
           });
+          await send({ to: clientEmail, ...clientMail });
+          if (agentEmail && agentEmail !== clientEmail) {
+            const agentMail = renewalWindowAgentEmail({
+              clientName:   contract.clientName,
+              clientEmail,
+              clientPhone,
+              propertyName: contract.propertyName,
+              endDate,
+              daysAhead:    daysToEnd,
+              contractId:   contractDoc.id,
+            });
+            await send({ to: agentEmail, ...agentMail });
+          }
         }
       }
 
@@ -494,51 +809,477 @@ exports.scheduledPaymentAlerts = onSchedule(
 
         const diff = diffDays(dueDate, now);
 
-        // Recordatorio anticipado (7 o 3 días antes)
+        // Recordatorio anticipado (7 o 3 días antes) — solo cliente
         if (diff === 7 || diff === 3) {
-          await send({
-            to: clientEmail,
-            ...paymentReminderEmail({
-              clientName:   contract.clientName   || "Cliente",
-              propertyName: contract.propertyName || "la propiedad",
-              amount:       payment.amount,
-              dueDate,
-              daysAhead: diff,
-            }),
+          const mail = paymentReminderEmail({
+            clientName:   contract.clientName   || "Cliente",
+            propertyName: contract.propertyName || "la propiedad",
+            amount:       payment.amount,
+            dueDate,
+            daysAhead: diff,
           });
+          await send({ to: clientEmail, ...mail });
           continue;
         }
 
         // Vence hoy
         if (diff === 0) {
-          await send({
-            to: clientEmail,
-            ...paymentDueTodayEmail({
-              clientName:   contract.clientName   || "Cliente",
-              propertyName: contract.propertyName || "la propiedad",
-              amount:       payment.amount,
-            }),
+          // Cliente: tono humano
+          const clientMail = paymentDueTodayEmail({
+            clientName:   contract.clientName   || "Cliente",
+            propertyName: contract.propertyName || "la propiedad",
+            amount:       payment.amount,
           });
+          await send({ to: clientEmail, ...clientMail });
+          // ★ FIX (auditoría): agente recibe template de COBRANZA, no el
+          // mismo del cliente. Datos específicos para gestión hoy mismo.
+          if (agentEmail && agentEmail !== clientEmail) {
+            const agentMail = paymentDueAgentEmail({
+              clientName:      contract.clientName,
+              clientEmail,
+              clientPhone,
+              propertyName:    contract.propertyName,
+              propertyAddress: contract.propertyAddress,
+              amount:          payment.amount,
+              dueDate,
+              contractId:      contractDoc.id,
+            });
+            await send({ to: agentEmail, ...agentMail });
+          }
           continue;
         }
 
         // En mora (1, 3, 7, 15, 30 días vencido)
         const daysLate = -diff;
         if (daysLate > 0 && [1, 3, 7, 15, 30].includes(daysLate)) {
-          await send({
-            to: clientEmail,
-            ...latePaymentEmail({
-              clientName:   contract.clientName   || "Cliente",
-              propertyName: contract.propertyName || "la propiedad",
+          // Cliente: tono firme pero con apertura
+          const clientMail = latePaymentEmail({
+            clientName:   contract.clientName   || "Cliente",
+            propertyName: contract.propertyName || "la propiedad",
+            amount:       payment.amount,
+            dueDate,
+            daysLate,
+          });
+          await send({ to: clientEmail, ...clientMail });
+          // ★ FIX (auditoría): agente con template DEDICADO con plan de
+          // cobranza adaptado a los días de mora.
+          if (agentEmail && agentEmail !== clientEmail) {
+            const agentMail = latePaymentAgentEmail({
+              clientName:      contract.clientName,
+              clientEmail,
+              clientPhone,
+              propertyName:    contract.propertyName,
+              propertyAddress: contract.propertyAddress,
+              amount:          payment.amount,
+              dueDate,
+              daysLate,
+              contractId:      contractDoc.id,
+            });
+            await send({ to: agentEmail, ...agentMail });
+          }
+
+          // ★ FIX (auditoría): admin recibe alerta de cartera SOLO en mora
+          // crítica (≥15d). Antes los admins quedaban ciegos a problemas
+          // graves de cobranza hasta abrir el panel.
+          if (daysLate >= 15) {
+            const admins = await getAdmins();
+            const adminMail = latePaymentAdminEmail({
+              clientName:   contract.clientName,
+              propertyName: contract.propertyName,
               amount:       payment.amount,
               dueDate,
               daysLate,
-            }),
-          });
+              agentName:    contract.agentName,
+              agentEmail,
+              contractId:   contractDoc.id,
+            });
+            for (const a of admins) {
+              if (a === clientEmail.toLowerCase()) continue;
+              if (a === agentEmail.toLowerCase())  continue;
+              await send({ to: a, ...adminMail });
+            }
+          }
+
+          // ★ FIX (auditoría): notif IN-APP al cliente — antes solo email,
+          // si el cliente tiene la app abierta no se enteraba hasta abrir
+          // Gmail. Ahora aparece en su campana de notificaciones.
+          try {
+            await admin.firestore().collection("notifications").add({
+              userId:    clientEmail,
+              type:      "payment_late",
+              title:     daysLate === 1 ? "Pago vencido" : `${daysLate} días de mora`,
+              message:   `Tu cuota de "${contract.propertyName || "la propiedad"}" lleva ${daysLate} día(s) vencida. Por favor regulariza para evitar cargos adicionales.`,
+              relatedId: contractDoc.id,
+              actionUrl: "/portal",
+              read:      false,
+              readAt:    null,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (e) {
+            console.error("[scheduledPaymentAlerts] error creando notif in-app de mora:", e);
+          }
         }
       }
     }
 
     console.log(`[${TAG}] Ciclo completado — ${contractsSnap.size} contrato(s) revisados.`);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 12: onAccessRequestCreated  (v2 Firestore trigger)
+//
+// AUDITORÍA: cuando alguien envía el formulario de "Solicitar acceso al
+// portal", la app crea un doc en /accessRequests y notif in-app a admins.
+// Pero el email a admins faltaba — admins quedaban sin alerta hasta abrir
+// el panel. Ahora se envía email a TODOS los admins.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onAccessRequestCreated = onDocumentCreated(
+  { document: "accessRequests/{requestId}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const data = event.data?.data() ?? null;
+    const requestId = event.params.requestId;
+    if (!data) return;
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    // Obtener emails de admins
+    const adminsSnap = await admin.firestore()
+      .collection("users")
+      .where("role", "==", "admin")
+      .get();
+
+    if (adminsSnap.empty) {
+      console.warn("[onAccessRequestCreated] No hay admins configurados — solicitud no notificada.");
+      return;
+    }
+
+    const transporter = createTransport(gmailUser, gmailPass);
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onAccessRequestCreated");
+
+    const mail = accessRequestNotificationEmail(data, requestId);
+
+    for (const adminDoc of adminsSnap.docs) {
+      const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim();
+      if (adminEmail) {
+        await send({ to: adminEmail, ...mail });
+      }
+    }
+
+    console.log(`[onAccessRequestCreated] ${requestId}: ${adminsSnap.size} admin(s) notificado(s).`);
+  }
+);
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 13: onAccessRequestUpdated  (v2 Firestore trigger)
+//
+// AUDITORÍA: cuando el admin aprueba o rechaza una solicitud de acceso desde
+// /solicitudes (request.service.js), antes el solicitante quedaba en silencio
+// — solo se actualizaba el doc en Firestore. Ahora recibe email.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onAccessRequestUpdated = onDocumentUpdated(
+  { document: "accessRequests/{requestId}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const before = event.data?.before?.data() ?? null;
+    const after  = event.data?.after?.data()  ?? null;
+    if (!before || !after) return;
+
+    const prevStatus = String(before.status || "").toLowerCase();
+    const nextStatus = String(after.status  || "").toLowerCase();
+    if (prevStatus === nextStatus) return;
+
+    const targetEmail = String(after.email || "").trim();
+    if (!targetEmail) return;
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    const transporter = createTransport(gmailUser, gmailPass);
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onAccessRequestUpdated");
+
+    if (nextStatus === "approved") {
+      const mail = accessRequestApprovedEmail(after);
+      await send({ to: targetEmail, ...mail });
+      console.log(`[onAccessRequestUpdated] ${event.params.requestId}: aprobada — email a ${targetEmail}`);
+      return;
+    }
+
+    if (nextStatus === "rejected") {
+      const mail = accessRequestRejectedEmail(after);
+      await send({ to: targetEmail, ...mail });
+      console.log(`[onAccessRequestUpdated] ${event.params.requestId}: rechazada — email a ${targetEmail}`);
+      return;
+    }
+
+    console.log(`[onAccessRequestUpdated] ${event.params.requestId}: estado "${nextStatus}" sin handler — ignorado.`);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 14: onContactCreated  (v2 Firestore trigger)
+//
+// AUDITORÍA: el formulario público (/contactos y "Pregunta sobre esta propiedad"
+// de PropertyDetail) escribe en /contacts pero ANTES no había trigger — los
+// admins quedaban ciegos a leads de la web. Ahora:
+//   • Auto-respuesta al cliente confirmando recepción
+//   • Email al agente asignado (si la propiedad tiene agentEmail)
+//   • Email a admins
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onContactCreated = onDocumentCreated(
+  { document: "contacts/{contactId}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const data = event.data?.data() ?? null;
+    const contactId = event.params.contactId;
+    if (!data) return;
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    const transporter = createTransport(gmailUser, gmailPass);
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onContactCreated");
+
+    const clientEmail = String(data.email || "").trim();
+
+    // 1) Auto-respuesta al cliente
+    if (clientEmail) {
+      const mail = contactReceivedEmail(data);
+      await send({ to: clientEmail, ...mail });
+    }
+
+    // 2) Email al agente asignado a la propiedad (si aplica)
+    let agentEmail = "";
+    const propertyId = String(data.propertyId || "").trim();
+    if (propertyId) {
+      try {
+        const propSnap = await admin.firestore().collection("properties").doc(propertyId).get();
+        if (propSnap.exists) {
+          agentEmail = String(propSnap.data()?.agentEmail || "").trim().toLowerCase();
+          if (agentEmail) {
+            const mail = contactReceivedAgentEmail(data, contactId);
+            await send({ to: agentEmail, ...mail });
+          }
+        }
+      } catch (e) {
+        console.error("[onContactCreated] error obteniendo propiedad:", e);
+      }
+    }
+
+    // 3) Email a admins (todos)
+    try {
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      const mail = contactReceivedAdminEmail(data, contactId);
+      for (const adminDoc of adminsSnap.docs) {
+        const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim().toLowerCase();
+        if (!adminEmail) continue;
+        if (adminEmail === clientEmail.toLowerCase()) continue;
+        if (adminEmail === agentEmail) continue;
+        await send({ to: adminEmail, ...mail });
+      }
+    } catch (e) {
+      console.error("[onContactCreated] error notificando admins:", e);
+    }
+
+    // 4) Notif in-app a admins (visibilidad rápida en panel)
+    try {
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      await Promise.all(adminsSnap.docs.map((adminDoc) =>
+        admin.firestore().collection("notifications").add({
+          userId:    adminDoc.id,
+          type:      "contact_received",
+          title:     "🆕 Nuevo lead web",
+          message:   `${data.name || "Una persona"} dejó datos${data.propertyTitle ? ` interesada en "${data.propertyTitle}"` : ""}.`,
+          relatedId: contactId,
+          actionUrl: "/contactos",
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+      ));
+    } catch (e) {
+      console.error("[onContactCreated] error creando notif in-app:", e);
+    }
+
+    console.log(`[onContactCreated] ${contactId}: lead procesado.`);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 15: onAccountDeletionRequested  (v2 Firestore trigger)
+//
+// AUDITORÍA: profile.service.js .requestAccountDeletion crea un doc en
+// /accountDeletionRequests pero los admins NO recibían email — quedaban
+// ciegos hasta abrir el panel.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onAccountDeletionRequested = onDocumentCreated(
+  { document: "accountDeletionRequests/{requestId}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const data = event.data?.data() ?? null;
+    const requestId = event.params.requestId;
+    if (!data) return;
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    const transporter = createTransport(gmailUser, gmailPass);
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onAccountDeletionRequested");
+
+    // Email a admins
+    try {
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      const mail = accountDeletionRequestEmail(data, requestId);
+      for (const adminDoc of adminsSnap.docs) {
+        const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim().toLowerCase();
+        if (!adminEmail) continue;
+        if (adminEmail === String(data.email || "").toLowerCase()) continue;
+        await send({ to: adminEmail, ...mail });
+      }
+    } catch (e) {
+      console.error("[onAccountDeletionRequested] error notificando admins:", e);
+    }
+
+    // Notif in-app a admins
+    try {
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      await Promise.all(adminsSnap.docs.map((adminDoc) =>
+        admin.firestore().collection("notifications").add({
+          userId:    adminDoc.id,
+          type:      "account_deletion_requested",
+          title:     "🗑️ Solicitud de eliminación de cuenta",
+          message:   `${data.email || "Un usuario"} solicitó eliminar su cuenta. Revisa antes de procesar.`,
+          relatedId: requestId,
+          actionUrl: "/usuarios",
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+      ));
+    } catch (e) {
+      console.error("[onAccountDeletionRequested] error creando notif in-app:", e);
+    }
+
+    console.log(`[onAccountDeletionRequested] ${requestId}: solicitud notificada a admins.`);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 16: onContractDocumentCreated  (v2 Firestore trigger)
+//
+// AUDITORÍA: cuando el agente sube un documento al contrato (subcollection
+// /contracts/{id}/documents) el cliente NO se enteraba — ni email, ni notif.
+// Ahora recibe email + notif in-app con CTA al portal.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onContractDocumentCreated = onDocumentCreated(
+  { document: "contracts/{contractId}/documents/{documentId}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const document = event.data?.data() ?? null;
+    const { contractId, documentId } = event.params;
+    if (!document) return;
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    // Leer contrato padre
+    const contractSnap = await admin.firestore().collection("contracts").doc(contractId).get();
+    if (!contractSnap.exists) return;
+    const contract = contractSnap.data();
+
+    const clientEmail = String(contract.clientEmail || "").trim();
+    if (!clientEmail) {
+      console.log(`[onContractDocumentCreated] contrato ${contractId} sin clientEmail — ignorado.`);
+      return;
+    }
+
+    const transporter = createTransport(gmailUser, gmailPass);
+    const send = (opts) => sendMail(transporter, gmailUser, opts, "onContractDocumentCreated");
+
+    // Email al cliente
+    const mail = contractDocumentUploadedClientEmail(contract, document);
+    await send({ to: clientEmail, ...mail });
+
+    // Notif in-app al cliente
+    try {
+      await admin.firestore().collection("notifications").add({
+        userId:    clientEmail.toLowerCase(),
+        type:      "contract_document_uploaded",
+        title:     "📎 Nuevo documento disponible",
+        message:   `Se cargó un documento nuevo en tu contrato de "${contract.propertyName || "tu propiedad"}". Revísalo en tu portal.`,
+        relatedId: contractId,
+        actionUrl: "/portal",
+        read:      false,
+        readAt:    null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("[onContractDocumentCreated] error creando notif in-app:", e);
+    }
+
+    console.log(`[onContractDocumentCreated] ${contractId}/${documentId}: cliente notificado (${clientEmail}).`);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 17: onVisitApprovedAdminNotice  (v2 Firestore trigger)
+//
+// AUDITORÍA: cuando una visita es aprobada, antes los admins NO recibían
+// notif in-app — solo agente + cliente. Esto deja sin visibilidad operativa
+// al admin sobre qué visitas se están confirmando. NO email (saturaría) —
+// solo notif in-app silenciosa.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onVisitApprovedAdminNotice = onDocumentWritten(
+  { document: "visits/{visitId}" },
+  async (event) => {
+    const before = event.data?.before?.data() ?? null;
+    const after  = event.data?.after?.data()  ?? null;
+    if (!after) return;
+
+    const prevStatus = String(before?.status || "").toLowerCase();
+    const nextStatus = String(after.status   || "").toLowerCase();
+    if (prevStatus === nextStatus) return;
+    if (nextStatus !== "approved") return;
+
+    try {
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      const agentEmailLower = String(after.agentEmail || "").toLowerCase();
+
+      await Promise.all(adminsSnap.docs.map((adminDoc) => {
+        const adminEmail = String(adminDoc.data().email || adminDoc.id || "").trim().toLowerCase();
+        if (!adminEmail) return Promise.resolve();
+        // No duplicar al admin que también es agente de esta visita
+        if (adminEmail === agentEmailLower) return Promise.resolve();
+        return admin.firestore().collection("notifications").add({
+          userId:    adminDoc.id,
+          type:      "visit_approved",
+          title:     "🗓️ Visita aprobada",
+          message:   `${after.clientName || "Un cliente"} visitará "${after.propertyName || "una propiedad"}" el ${after.requestedDate || "—"}.`,
+          relatedId: event.params.visitId,
+          actionUrl: "/usuarios/visitas",
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }));
+    } catch (e) {
+      console.error("[onVisitApprovedAdminNotice] error:", e);
+    }
   }
 );

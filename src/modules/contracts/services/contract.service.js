@@ -357,6 +357,33 @@ export const contractService = {
     const cur = await this.getContractById(id);
     if (!cur) throw new Error("Contrato no encontrado");
 
+    // ★ FIX (auditoría): validar transiciones permitidas. Antes el frontend
+    // podía mover un contrato de "cancelado" a "vigente" — eso rompe la
+    // trazabilidad legal. Las transiciones siguen una máquina de estados:
+    //   draft   → active | cancelled
+    //   active  → paused | completed | cancelled | expired
+    //   paused  → active | cancelled
+    //   expired → completed | cancelled
+    //   completed, cancelled → (terminal — solo admin con history especial)
+    const ALLOWED_TRANSITIONS = {
+      [CONTRACT_STATUS.DRAFT]:     [CONTRACT_STATUS.ACTIVE, CONTRACT_STATUS.CANCELLED],
+      [CONTRACT_STATUS.ACTIVE]:    [CONTRACT_STATUS.PAUSED, CONTRACT_STATUS.COMPLETED, CONTRACT_STATUS.CANCELLED, CONTRACT_STATUS.EXPIRED],
+      [CONTRACT_STATUS.PAUSED]:    [CONTRACT_STATUS.ACTIVE, CONTRACT_STATUS.CANCELLED],
+      [CONTRACT_STATUS.EXPIRED]:   [CONTRACT_STATUS.COMPLETED, CONTRACT_STATUS.CANCELLED],
+      [CONTRACT_STATUS.COMPLETED]: [],
+      [CONTRACT_STATUS.CANCELLED]: [],
+    };
+    const currentStatus = cur.statusGeneral || cur.status;
+    if (currentStatus !== newStatus) {
+      const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
+      if (!allowed.includes(newStatus)) {
+        throw new Error(
+          `Transición no permitida: ${currentStatus} → ${newStatus}. ` +
+          `Estados válidos desde "${currentStatus}": ${allowed.join(", ") || "(ninguno — estado terminal)"}.`
+        );
+      }
+    }
+
     const newBusinessStage = getDefaultBusinessStage({
       type: cur.type,
       operationMode: cur.operationMode,
@@ -596,6 +623,39 @@ export const contractService = {
         }).catch(() => {});
       }
     } catch { /* no romper el delete */ }
+
+    // ★ FIX (auditoría): antes solo se borraba el doc principal y las
+    // subcolecciones (milestones, payments, documents, history, alerts_sent)
+    // quedaban huérfanas en Firestore. Aquí limpiamos las subcolecciones
+    // metadata-only (los archivos en Storage ya tienen su propio cleanup
+    // a través de contractDocumentService.remove cuando borras un documento
+    // individual; un delete de contrato no las borra del bucket — eso
+    // requiere un onDocumentDeleted trigger backend para Storage que está
+    // fuera del alcance de este servicio).
+    const subcols = ["milestones", "payments", "documents", "history", "alerts_sent"];
+    for (const sub of subcols) {
+      try {
+        const subSnap = await getDocs(collection(db, COL, id, sub));
+        if (subSnap.empty) continue;
+        // Batched delete (máximo 500 ops por batch)
+        const batches = [];
+        let batch = writeBatch(db);
+        let count = 0;
+        for (const d of subSnap.docs) {
+          batch.delete(d.ref);
+          count++;
+          if (count === 450) {
+            batches.push(batch.commit());
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) batches.push(batch.commit());
+        await Promise.all(batches);
+      } catch (e) {
+        console.warn(`[deleteContract] error limpiando ${sub}:`, e?.message);
+      }
+    }
 
     await deleteDoc(ref_(id));
   },

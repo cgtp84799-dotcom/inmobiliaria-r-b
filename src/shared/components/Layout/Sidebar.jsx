@@ -11,6 +11,7 @@ import {
 import { useAuth }       from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
 import { hasPermission, USER_ROLES } from "../../../modules/users/types/user.types";
+import { useBreakpoint } from "../../hooks/useMediaQuery";
 
 /* ─── Variables CSS del sidebar (siempre oscuro) ───────────── */
 const SB = {
@@ -57,20 +58,6 @@ const ROLE_META = {
 };
 const FALLBACK_ROLE = ROLE_META[USER_ROLES.VIEWER];
 
-/* ─── Hook: detecta si es desktop con resize listener ────────── */
-function useIsDesktop(breakpoint = 1024) {
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== "undefined" && window.innerWidth >= breakpoint
-  );
-  useEffect(() => {
-    const handler = () => setIsDesktop(window.innerWidth >= breakpoint);
-    const mq = window.matchMedia(`(min-width: ${breakpoint}px)`);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [breakpoint]);
-  return isDesktop;
-}
-
 /* ═══════════════════════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════════════════════ */
@@ -89,7 +76,7 @@ export default function Sidebar({
   const role = userData?.role ?? USER_ROLES.VIEWER;
   const roleMeta     = ROLE_META[role] ?? FALLBACK_ROLE;
   const RoleIcon     = roleMeta.icon;
-  const isDesktop    = useIsDesktop();
+  const isDesktop    = useBreakpoint('lg');
 
   /* ── Menú según permisos — organizado por secciones ──── */
   const menuSections = [

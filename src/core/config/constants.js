@@ -1,59 +1,65 @@
-// Roles de usuario
-export const USER_ROLES = {
-  ADMIN: 'admin',
-  AGENT: 'agent',
-  LAWYER: 'lawyer',
-  CLIENT: 'client'
-};
+// src/core/config/constants.js
+//
+// ★ FIX (auditoría): este archivo ANTES definía constantes propias para roles
+// y estados de contratos que NO coincidían con el sistema real:
+//   - USER_ROLES.AGENT/LAWYER/CLIENT  → real es ADMIN/MEMBER/VIEWER
+//   - CONTRACT_STATUS.PENDING_SIGNATURE → real es 'borrador' / 'vigente' / etc.
+//
+// Estaban en dead code (nadie los importaba), pero su mera existencia confunde
+// a futuros desarrolladores. Ahora este archivo solo re-exporta de las
+// fuentes-de-verdad para mantener un único lugar canónico.
+//
+// Si necesitas USER_ROLES, importa desde:
+//   src/modules/users/types/user.types.js
+//
+// Si necesitas CONTRACT_STATUS / CONTRACT_TYPE / CONTRACT_BUSINESS_STAGE:
+//   src/modules/contracts/types/contract.types.js
 
-// Estados de propiedades
-export const PROPERTY_STATUS = {
+export {
+  USER_ROLES,
+  USER_STATUS,
+  USER_ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  hasPermission,
+} from '../../modules/users/types/user.types';
+
+export {
+  CONTRACT_STATUS,
+  CONTRACT_TYPE,
+  CONTRACT_BUSINESS_STAGE,
+  CONTRACT_OPERATION_MODE,
+} from '../../modules/contracts/types/contract.types';
+
+// ─── Constantes propias del proyecto que SÍ están bien tipadas ──────────────
+
+// Estados de propiedades (espejo de los valores que el frontend escribe en
+// /properties.status — coincide con storage.rules y firestore.rules).
+export const PROPERTY_STATUS = Object.freeze({
   AVAILABLE: 'disponible',
-  SOLD: 'vendida',
-  RENTED: 'arrendada',
-  RESERVED: 'reservada'
-};
+  SOLD:      'vendida',
+  RENTED:    'arrendada',
+  RESERVED:  'reservada',
+});
 
-// Tipos de propiedad
-export const PROPERTY_TYPES = {
-  HOUSE: 'casa',
-  APARTMENT: 'apartamento',
+export const PROPERTY_TYPES = Object.freeze({
+  HOUSE:      'casa',
+  APARTMENT:  'apartamento',
   COMMERCIAL: 'local',
-  OFFICE: 'oficina',
-  LOT: 'lote'
-};
+  OFFICE:     'oficina',
+  LOT:        'lote',
+});
 
-// Tipos de transacción
-export const TRANSACTION_TYPES = {
+export const TRANSACTION_TYPES = Object.freeze({
   SALE: 'venta',
   RENT: 'arriendo',
-  BOTH: 'venta-arriendo'
-};
+  BOTH: 'venta-arriendo',
+});
 
-// Documentos obligatorios
-export const REQUIRED_DOCUMENTS = [
-  { id: 'escritura', name: 'Escritura pública', required: true },
+// Documentos obligatorios para una propiedad en el flujo legal colombiano.
+export const REQUIRED_DOCUMENTS = Object.freeze([
+  { id: 'escritura',           name: 'Escritura pública',                   required: true },
   { id: 'certificadoLibertad', name: 'Certificado de libertad y tradición', required: true },
-  { id: 'impuestoPredial', name: 'Paz y salvo de impuesto predial', required: true },
-  { id: 'serviciosPublicos', name: 'Paz y salvo de servicios públicos', required: true },
-  { id: 'cedulaCatastral', name: 'Cédula catastral', required: true }
-];
-
-// Estados de contratos
-export const CONTRACT_STATUS = {
-  DRAFT: 'draft',
-  REVIEW: 'review',
-  PENDING_SIGNATURE: 'pending_signature',
-  SIGNED: 'signed',
-  REGISTERED: 'registered',
-  COMPLETED: 'completed'
-};
-
-// Tipos de notificaciones
-export const NOTIFICATION_TYPES = {
-  PROPERTY_UPDATE: 'property_update',
-  NEW_MESSAGE: 'new_message',
-  TASK_REMINDER: 'task_reminder',
-  DOCUMENT_EXPIRING: 'document_expiring',
-  NEW_INQUIRY: 'new_inquiry'
-};
+  { id: 'impuestoPredial',     name: 'Paz y salvo de impuesto predial',     required: true },
+  { id: 'serviciosPublicos',   name: 'Paz y salvo de servicios públicos',   required: true },
+  { id: 'cedulaCatastral',     name: 'Cédula catastral',                    required: true },
+]);

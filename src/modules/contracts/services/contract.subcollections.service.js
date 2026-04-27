@@ -84,10 +84,17 @@ export const paymentService = {
     });
   },
   async markPaid(contractId, paymentId, { paidAmount, receiptUrl, notes, actorEmail } = {}) {
+    // ★ FIX (auditoría): validar que el monto pagado sea positivo. Antes
+    // se aceptaba cualquier valor (incluido 0 o negativo) → emails de
+    // confirmación con $0 confundían al cliente.
+    const amt = Number(paidAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new Error("El monto pagado debe ser un número mayor a 0");
+    }
     await updateDoc(doc(db, COL, contractId, "payments", paymentId), {
       status: PAYMENT_STATUS.PAID,
       paidAt: serverTimestamp(),
-      paidAmount: Number(paidAmount) || 0,
+      paidAmount: amt,
       receiptUrl: receiptUrl || null,
       notes: notes || "",
       paidBy: actorEmail || "sistema",
@@ -115,8 +122,29 @@ export const contractDocumentService = {
   },
   async upload(contractId, file, { kind = DOCUMENT_KIND.OTHER, label = "", uploadedBy = "" } = {}) {
     if (!file) throw new Error("Archivo requerido");
-    const ext = file.name.split(".").pop();
-    const path = `contracts/${contractId}/docs/${Date.now()}_${file.name}`;
+    // ★ FIX (auditoría): validaciones cliente antes de subir.
+    // Storage rules ya validan tipo y tamaño, pero esto da feedback inmediato
+    // al usuario en vez de un error opaco al final del upload.
+    if (file.size === 0) {
+      throw new Error("El archivo está vacío");
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      throw new Error("El archivo excede el tamaño máximo permitido (20 MB)");
+    }
+    const allowedMime = /^(application\/pdf|image\/(jpeg|jpg|png|webp|heic)|application\/msword|application\/vnd\.openxmlformats-officedocument.*)$/i;
+    if (file.type && !allowedMime.test(file.type)) {
+      throw new Error(`Tipo de archivo no permitido: ${file.type}`);
+    }
+    if (!file.name || !file.name.trim()) {
+      throw new Error("El archivo no tiene nombre válido");
+    }
+    // Sanitizar nombre — evita caracteres conflictivos en Storage paths
+    const safeName = file.name
+      .replace(/[\/\\?%*:|"<>]/g, "_")
+      .replace(/\s+/g, "_")
+      .slice(0, 200);
+    const ext = safeName.includes(".") ? safeName.split(".").pop() : "";
+    const path = `contracts/${contractId}/docs/${Date.now()}_${safeName}`;
     const sRef = storageRef(storage, path);
     const snap = await uploadBytes(sRef, file);
     const url = await getDownloadURL(snap.ref);

@@ -32,7 +32,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../../core/config/firebase.config';
 import { VISIT_STATUS } from '../types/visit.types';
-import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
+import { sendClientNotification, createNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 
 const COLLECTION = 'visits';
 const col = () => collection(db, COLLECTION);
@@ -65,14 +65,19 @@ function emailHeader(previewText = '') {
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no" />
   <meta name="color-scheme" content="light" />
   <title></title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body{margin:0;padding:0;background:#f4f4f0;font-family:'Inter',Helvetica,Arial,sans-serif;}
+    /* Auditoría notificaciones: el @import de Google Fonts está BLOQUEADO
+       por Gmail y la mayoría de clientes — usamos stack de sistema. */
+    *{box-sizing:border-box;}
+    body{margin:0;padding:0;background:#f4f4f0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;}
+    img{max-width:100%;height:auto;border:0;}
     .email-wrapper{background:#f4f4f0;padding:32px 16px;}
-    .email-card{background:#ffffff;border-radius:16px;overflow:hidden;max-width:560px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
+    .email-card{background:#ffffff;border-radius:16px;overflow:hidden;max-width:560px;margin:0 auto;width:100%;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
     .email-header{background:#0d0d0b;padding:28px 40px 24px;text-align:center;}
     .brand-logo-img{display:block;margin:0 auto;}
     .brand-sub{font-size:9px;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;color:#8a7a5a;margin-top:8px;display:block;text-align:center;}
@@ -80,14 +85,14 @@ function emailHeader(previewText = '') {
     .email-footer{background:#f9f8f6;border-top:1px solid #e8e5e0;padding:20px 40px;text-align:center;}
     .footer-text{font-size:12px;color:#a09a8e;line-height:1.7;margin:0;}
     .footer-link{color:#c8a44a;text-decoration:none;}
-    h1{font-size:22px;font-weight:700;color:#1a1a18;margin:0 0 8px;line-height:1.3;}
+    h1{font-size:24px;font-weight:700;color:#1a1a18;margin:0 0 8px;line-height:1.3;}
     .subtitle{font-size:14px;color:#7a7670;margin:0 0 24px;}
     p{font-size:15px;color:#3d3c38;line-height:1.7;margin:0 0 16px;}
     .highlight-box{background:#faf8f3;border:1px solid #e8e0cc;border-radius:12px;padding:20px 24px;margin:20px 0;}
     .detail-row{display:flex;padding:8px 0;border-bottom:1px solid #f0ede6;align-items:flex-start;}
     .detail-row:last-child{border-bottom:none;}
     .detail-label{font-size:12px;font-weight:600;color:#9a9288;text-transform:uppercase;letter-spacing:0.06em;min-width:100px;padding-right:12px;padding-top:2px;}
-    .detail-value{font-size:14px;color:#2a2a27;font-weight:500;}
+    .detail-value{font-size:14px;color:#2a2a27;font-weight:500;word-break:break-word;}
     .status-badge{display:inline-block;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;}
     .badge-approved{background:#e8f4ee;color:#1e6b3d;}
     .badge-rejected{background:#fce8ee;color:#8b1a2e;}
@@ -96,11 +101,25 @@ function emailHeader(previewText = '') {
     .divider{border:none;border-top:1px solid #ede9e2;margin:24px 0;}
     .greeting{font-size:16px;color:#3d3c38;margin:0 0 20px;}
     @media only screen and (max-width:600px){
-      .email-body{padding:24px 20px 20px;}
-      .email-header{padding:20px 20px 18px;}
-      .email-footer{padding:16px 20px;}
-      h1{font-size:20px;}
-      .detail-label{min-width:80px;font-size:11px;}
+      .email-wrapper{padding:20px 8px!important;}
+      .email-card{border-radius:14px!important;}
+      .email-body{padding:26px 20px!important;}
+      .email-header{padding:24px 20px 20px!important;}
+      .email-footer{padding:18px 20px!important;}
+      h1{font-size:22px!important;}
+      .detail-label{min-width:90px!important;font-size:11px!important;}
+      .highlight-box{padding:16px 18px!important;}
+    }
+    @media only screen and (max-width:480px){
+      .email-wrapper{padding:12px 0!important;}
+      .email-card{border-radius:0!important;box-shadow:none!important;}
+      .email-body{padding:22px 16px!important;}
+      .email-header{padding:22px 16px 18px!important;}
+      .email-footer{padding:16px 16px!important;}
+      h1{font-size:20px!important;}
+      .detail-row{display:block!important;padding:10px 0!important;}
+      .detail-label{display:block!important;min-width:0!important;width:auto!important;margin:0 0 4px!important;padding-top:0!important;padding-right:0!important;}
+      .detail-value{display:block!important;}
     }
   </style>
 </head>
@@ -336,7 +355,7 @@ export const visitService = {
     try {
       const admins = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin'), limit(20)));
       await Promise.allSettled(admins.docs.map((d) =>
-        notificationService.createNotification({
+        createNotification({
           userId: d.id, type: 'visit_request',
           title:   'Nueva solicitud de visita',
           message: `${payload.clientName} quiere visitar "${payload.propertyName}"`,
@@ -347,7 +366,7 @@ export const visitService = {
     try {
       const members = await getDocs(query(collection(db, 'users'), where('role', '==', 'member'), limit(50)));
       await Promise.allSettled(members.docs.map((d) =>
-        notificationService.createNotification({
+        createNotification({
           userId: d.id, type: 'visit_request',
           title:   'Nueva visita disponible',
           message: `Hay una nueva solicitud para "${payload.propertyName}" esperando ser tomada.`,
@@ -437,7 +456,7 @@ export const visitService = {
 
     // Notificación in-app al agente
     if (agentEmail) {
-      notificationService.createNotification({
+      createNotification({
         userId: agentEmail, type: 'visit_assigned',
         title:   'Visita asignada',
         message: `Tienes una visita aprobada: "${visit.propertyName}" — ${visit.clientName} el ${visit.requestedDate}.`,

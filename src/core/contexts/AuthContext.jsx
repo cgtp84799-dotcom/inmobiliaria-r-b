@@ -137,8 +137,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Sync a Firestore ────────────────────────────────────────────────────
+  //
+  // ★ FIX de coste: antes se hacía getDoc() en cada onAuthStateChanged.
+  // Firebase dispara este callback cada vez que refresca el token (~1h),
+  // así que un usuario activo 8h generaba ~8 lecturas/día gratis.
+  // Ahora cacheamos en memoria el UID ya sincronizado: solo creamos el
+  // doc si NO existe, y solo una vez por sesión.
+
+  const syncedUidsRef = useRef(new Set());
 
   const syncUserToFirestore = async (firebaseUser) => {
+    if (syncedUidsRef.current.has(firebaseUser.uid)) return;
+    // ★ FIX (auditoría): proveedores OAuth pueden devolver user sin email.
+    // Sin email no podemos crear el doc /users/{email} (la convención del
+    // proyecto). Logueamos y salimos — el siguiente intento (cuando el user
+    // verifique email o re-auth) sí lo creará.
+    if (!firebaseUser.email) {
+      console.warn('[syncUserToFirestore] Usuario sin email — sync abortado.');
+      return;
+    }
+
     const userRef = doc(db, 'users', firebaseUser.email);
 
     try {
@@ -165,6 +183,8 @@ export const AuthProvider = ({ children }) => {
           await setDoc(userRef, { uid: firebaseUser.uid }, { merge: true });
         }
       }
+
+      syncedUidsRef.current.add(firebaseUser.uid);
     } catch (err) {
       console.warn('[syncUserToFirestore] error (puede ser temporal):', err.message);
     }
@@ -311,6 +331,7 @@ export const AuthProvider = ({ children }) => {
         await clearPresence(authUser.uid, authUser.email);
       }
       await firebaseSignOut(auth);
+      syncedUidsRef.current.clear();
       resetAuthState();
       toast.success('Sesión cerrada correctamente');
     } catch (err) {
@@ -356,7 +377,11 @@ export const AuthProvider = ({ children }) => {
       isAdmin, isMember, isViewer, canOperate, canRead,
       signIn, signOut,
     }}>
-      {!loading && children}
+      {/* ★ FIX: antes se hacía `{!loading && children}` → pantalla blanca
+          durante la carga inicial. Ahora exponemos `loading` en el contexto
+          y cada componente decide qué mostrar (skeleton, spinner, etc.).
+          ProtectedRoute ya maneja su propio LoadingScreen. */}
+      {children}
     </AuthContext.Provider>
   );
 };

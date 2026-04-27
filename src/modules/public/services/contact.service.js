@@ -11,19 +11,45 @@ class ContactService {
    */
   async createContact(contactData) {
     try {
+      // ★ FIX (auditoría): sanitización mínima para evitar inyección.
+      // El backend ya escapa HTML al renderizar el email (escapeHtml en
+      // utils.js), pero recortar valores y forzar tipos protege contra
+      // inputs hostiles (formularios automatizados, bots).
+      const trim = (v, max) => String(v ?? '').trim().slice(0, max);
+      const safeData = {
+        name:    trim(contactData.name, 200),
+        email:   trim(contactData.email, 200).toLowerCase(),
+        phone:   trim(contactData.phone, 30),
+        message: trim(contactData.message, 3000),
+      };
+      // Campos opcionales — solo si vienen
+      if (contactData.propertyId)    safeData.propertyId    = trim(contactData.propertyId, 100);
+      if (contactData.propertyTitle) safeData.propertyTitle = trim(contactData.propertyTitle, 300);
+      if (contactData.interest)      safeData.interest      = trim(contactData.interest, 100);
+      if (contactData.source)        safeData.source        = trim(contactData.source, 100);
+
+      // Validaciones básicas
+      if (!safeData.name)    throw new Error('El nombre es obligatorio');
+      if (!safeData.email || !safeData.email.includes('@')) throw new Error('Correo inválido');
+      if (!safeData.message) throw new Error('El mensaje es obligatorio');
+
       const docRef = await addDoc(collection(db, this.collectionName), {
-        ...contactData,
+        ...safeData,
         status: 'pending', // pending, contacted, closed
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       return {
         id: docRef.id,
-        ...contactData
+        ...safeData,
       };
     } catch (error) {
       console.error('Error creando contacto:', error);
+      // Si el error ya tiene mensaje específico (validación), propagarlo
+      if (error?.message && error.message.length < 200 && !error.code) {
+        throw error;
+      }
       throw new Error('No se pudo enviar la consulta. Intenta nuevamente.');
     }
   }

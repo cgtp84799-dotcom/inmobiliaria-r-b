@@ -1,24 +1,28 @@
 {
   "name": "inmobiliaria-ryb-nueva",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --fix",
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy --only hosting:production",
+    "deploy:functions": "cd functions && npm run deploy && cd ..",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage:rules"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-
-    "@jitsi/react-sdk": "^1.4.4",
     "date-fns": "^4.1.0",
-    "emoji-picker-react": "^4.16.1",
     "firebase": "^12.6.0",
-    "firebase-functions": "^7.2.5",
     "framer-motion": "^12.23.25",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
@@ -27,7 +31,6 @@
     "react": "^19.2.0",
     "react-big-calendar": "^1.19.4",
     "react-dom": "^19.2.0",
-    "react-h5-audio-player": "^3.10.1",
     "react-helmet-async": "^3.0.0",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
@@ -43,6 +46,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.22",
     "eslint": "^9.39.1",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",

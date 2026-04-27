@@ -27,6 +27,7 @@ const requiredEnvVars = [
   'VITE_FIREBASE_STORAGE_BUCKET',
   'VITE_FIREBASE_MESSAGING_SENDER_ID',
   'VITE_FIREBASE_APP_ID',
+  'VITE_FIREBASE_APP_CHECK_KEY',
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -41,16 +42,28 @@ const app = initializeApp(firebaseConfig);
 // ── App Check ─────────────────────────────────────────────────────────────────
 // IMPORTANTE: debe inicializarse ANTES que Auth, Firestore, etc.
 //
-// En desarrollo: activa el debug token automáticamente.
-// Al correr npm run dev, la consola del navegador mostrará:
-//   "App Check debug token: XXXXXXXX-XXXX-..."
-// Copia ese token y añádelo en:
-//   Firebase Console → App Check → tu app → Manage debug tokens
+// ★ FIX DE SEGURIDAD: antes se activaba el debug token siempre que `DEV`
+// fuera true. Eso implicaba que cualquier preview build que corriera con
+// `vite dev` en un entorno con URL pública (ej: un túnel ngrok, un deploy
+// preview de Vercel/Netlify, un entorno de QA) quedaba con debug habilitado
+// → bypass efectivo de App Check.
 //
-// En producción: usa reCAPTCHA v3 silencioso (invisible para el usuario).
-if (import.meta.env.DEV) {
-  // eslint-disable-next-line no-restricted-globals
-  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+// REGLA: activar debug token SI Y SOLO SI el hostname es claramente local.
+// Aplica tanto para `npm run dev` (DEV=true) como `npm run preview`
+// (DEV=false pero corriendo contra localhost). En producción real
+// (inmobiliaria-ryb-y-asociados.com) el hostname NO es local → no debug.
+if (typeof window !== 'undefined') {
+  const host = window.location?.hostname || '';
+  const isLocalHost =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.local') ||
+    host.endsWith('.localhost');
+  if (isLocalHost) {
+    // eslint-disable-next-line no-restricted-globals
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
 }
 
 export const appCheck = initializeAppCheck(app, {

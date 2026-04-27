@@ -22,7 +22,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider, useAuth } from './core/contexts/AuthContext';
@@ -54,7 +54,6 @@ const NotFoundPage      = lazy(() => import('./modules/public/pages/NotFoundPage
 
 // ── Páginas lazy privadas ──────────────────────────────────────────────────
 const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
-const LoginPage          = lazy(() => import('./modules/auth/pages/LoginPage'));
 const ClientPortal       = lazy(() => import('./modules/clients/pages/ClientPortal'));
 const DashboardPage      = lazy(() => import('./modules/dashboard/pages/DashboardPage'));
 const PropertyManagement = lazy(() => import('./modules/properties/pages/PropertyManagement'));
@@ -197,9 +196,12 @@ function AppRoutes() {
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* AUTH AGENTES                                                    */}
+        {/* NOTA: AUTH_ROUTES.LOGIN y "/login" coincidían y apuntaban a dos  */}
+        {/* componentes distintos. React Router solo matcheaba el primero.  */}
+        {/* Mantenemos AuthPage como la ruta oficial de login de agentes.   */}
+        {/* LoginPage legacy queda eliminado del árbol.                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <Route path={AUTH_ROUTES.LOGIN}          element={<AuthPage />} />
-        <Route path="/login"                     element={<S><LoginPage /></S>} />
         <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -269,8 +271,6 @@ function AppRoutes() {
             }
           />
         </Route>
-
-        <Route path="*" element={<Navigate to={PUBLIC_ROUTES.HOME} replace />} />
 
       </Routes>
 

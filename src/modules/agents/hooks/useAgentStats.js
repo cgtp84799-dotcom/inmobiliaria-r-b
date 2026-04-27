@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   collection, onSnapshot, query, where, orderBy,
 } from 'firebase/firestore';
-import { db } from '../../../core/services/firebase';
+import { db } from '../../../core/config/firebase.config';
 
 /**
  * useAgentStats — suscripción en tiempo real a visitas + contratos
@@ -78,17 +78,23 @@ export function useAgentStats(agentEmail = null) {
     // Visitas
     const totalVisits     = visits.length;
     const pendingVisits   = visits.filter((v) => v.status === 'pending').length;
-    const completedVisits = visits.filter((v) => v.status === 'completed').length;
+    const completedVisits = visits.filter((v) => v.status === 'completed' || v.status === 'completada').length;
     const visitsThisMonth = visits.filter((v) => {
       const d = toDate(v.createdAt);
       return d && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
     }).length;
 
     // Contratos
+    // ★ FIX (auditoría): el campo es `statusGeneral` (con fallback a `status`)
+    // y los valores son 'vigente' / 'borrador' / 'pausado' / etc., NO 'active'.
+    const isActiveContract = (c) => {
+      const s = String(c.statusGeneral || c.status || '').toLowerCase();
+      return s === 'vigente' || s === 'active' || s === 'activo';
+    };
     const totalContracts  = contracts.length;
-    const activeContracts = contracts.filter((c) => c.status === 'active').length;
+    const activeContracts = contracts.filter(isActiveContract).length;
     const totalRevenue    = contracts
-      .filter((c) => c.status === 'active')
+      .filter(isActiveContract)
       .reduce((sum, c) => sum + (Number(c.value) || 0), 0);
     const contractsThisMonth = contracts.filter((c) => {
       const d = toDate(c.createdAt);
@@ -136,7 +142,8 @@ export function useAgentStats(agentEmail = null) {
       ...visits.slice(0, 20).map((v) => ({
         id:      v.id,
         type:    'visit',
-        title:   v.propertyTitle || v.propertyAddress || 'Propiedad sin nombre',
+        // ★ FIX (auditoría): el campo es propertyName, no propertyTitle.
+        title:   v.propertyName || v.propertyAddress || 'Propiedad sin nombre',
         client:  v.clientName   || v.visitorName || v.email || '—',
         status:  v.status,
         date:    toDate(v.createdAt),

@@ -45,9 +45,11 @@ export default defineConfig({
     minify: "terser",
     terserOptions: {
       compress: {
-        drop_console: true,
+        drop_console: false, // ★ FIX: antes true → eliminaba también console.error, perdiendo señales críticas en prod.
         drop_debugger: true,
-        pure_funcs: ["console.log", "console.info", "console.debug"],
+        // Solo eliminamos logs informativos; conservamos error/warn.
+        pure_funcs: ["console.log", "console.info", "console.debug", "console.trace"],
+        pure_getters: true,
         passes: 2,
       },
       format: {
@@ -90,13 +92,26 @@ export default defineConfig({
           // Router
           if (id.includes("react-router")) return "router";
 
-          // Firebase — por módulo para tree-shaking óptimo
-          if (id.includes("firebase/app")       || id.includes("@firebase/app"))       return "firebase-app";
-          if (id.includes("firebase/auth")      || id.includes("@firebase/auth"))      return "firebase-auth";
-          if (id.includes("firebase/firestore") || id.includes("@firebase/firestore")) return "firebase-firestore";
-          if (id.includes("firebase/storage")   || id.includes("@firebase/storage"))   return "firebase-storage";
-          if (id.includes("firebase/messaging") || id.includes("@firebase/messaging")) return "firebase-messaging";
-          if (id.includes("firebase")           || id.includes("@firebase"))           return "firebase-misc";
+          // ═══════════════════════════════════════════════════════════════════
+          // Firebase — UN SOLO CHUNK
+          //
+          // Razón: Firebase tiene muchas dependencias cruzadas internas
+          // (@firebase/util, @firebase/logger, @firebase/component, etc.) y
+          // separarlo en chunks por módulo (app/auth/firestore/storage/etc.)
+          // causa errores de TDZ "Cannot access 'X' before initialization"
+          // en runtime. Los submódulos se importan unos a otros en orden
+          // no determinista cuando están en chunks separados.
+          //
+          // Agrupar todo en 'firebase' resuelve el problema. El tree-shaking
+          // sigue funcionando a nivel de archivo fuente (solo importas lo
+          // que usas en tu código), pero el bundle agrupado no se fragmenta.
+          // ═══════════════════════════════════════════════════════════════════
+          if (
+            id.includes("firebase/")   ||
+            id.includes("@firebase/")  ||
+            id.includes("/firebase/")  ||
+            id.includes("/@firebase/")
+          ) return "firebase";
 
           // SEO
           if (id.includes("react-helmet-async")) return "seo";
@@ -111,9 +126,22 @@ export default defineConfig({
           // Toasts
           if (id.includes("react-hot-toast")) return "toast";
 
-          // Calendario — react-big-calendar + invariant (dependencia problemática)
-          // ✅ @fullcalendar eliminado del package.json — no se usa en código fuente
-          if (id.includes("react-big-calendar") || id.includes("invariant")) return "calendar-lazy";
+          // ═══════════════════════════════════════════════════════════════════
+          // NOTA IMPORTANTE sobre agrupar en chunks manuales:
+          //
+          // react-big-calendar + invariant NO se agrupan en un chunk propio
+          // porque producía un TDZ (Temporal Dead Zone) "Cannot access 'g'
+          // before initialization" en runtime. La causa: invariant exporta
+          // como CommonJS con side effects en top-level; al hoistear los
+          // imports en el chunk lazy, Vite pone la ejecución de invariant
+          // ANTES de declarar los symbols que luego usa react-big-calendar,
+          // resultando en el TDZ.
+          //
+          // La solución robusta es dejar que Rollup/Vite determine el chunk
+          // (va a 'vendor' por defecto) SIN perder el beneficio de lazy-load,
+          // porque estos módulos solo se cargan cuando el CalendarPage hace
+          // el import dinámico.
+          // ═══════════════════════════════════════════════════════════════════
 
           // Mapas
           if (id.includes("leaflet") || id.includes("react-leaflet")) return "maps-lazy";
@@ -127,18 +155,14 @@ export default defineConfig({
           ) return "charts-lazy";
 
           // PDF — html2pdf.js incluye jspdf y html2canvas internamente
-          // ✅ jspdf standalone eliminado del package.json
           if (id.includes("html2pdf") || id.includes("html2canvas")) return "pdf-lazy";
 
-          // DnD — solo @dnd-kit (hello-pangea eliminado — no se usa en fuente)
+          // DnD
           if (id.includes("@dnd-kit")) return "dnd-lazy";
 
           // Resto lazy
-          if (id.includes("swiper"))                return "swiper-lazy";
-          if (id.includes("emoji-picker-react"))     return "emoji-lazy";
-          if (id.includes("@jitsi"))                return "jitsi-lazy";
-          if (id.includes("react-h5-audio-player")) return "audio-lazy";
-          if (id.includes("date-fns"))              return "date-fns";
+          if (id.includes("swiper"))   return "swiper-lazy";
+          if (id.includes("date-fns")) return "date-fns";
 
           return "vendor";
         },
@@ -178,7 +202,6 @@ export default defineConfig({
       "react-leaflet",
       "html2pdf.js",
       "html2canvas",
-      "@jitsi/react-sdk",
     ],
   },
 

@@ -3,19 +3,36 @@
 #
 # FLUJO:
 #   push a main → lint → build → deploy a Firebase Hosting
+#   PRs        → lint + build (sin deploy)
 #
 # SECRETS requeridos en GitHub → Settings → Secrets → Actions:
+#
 #   FIREBASE_SERVICE_ACCOUNT   → JSON de cuenta de servicio Firebase
+#
+#   # Firebase core
 #   VITE_FIREBASE_API_KEY
 #   VITE_FIREBASE_AUTH_DOMAIN
+#   VITE_FIREBASE_DATABASE_URL
 #   VITE_FIREBASE_PROJECT_ID
 #   VITE_FIREBASE_STORAGE_BUCKET
 #   VITE_FIREBASE_MESSAGING_SENDER_ID
 #   VITE_FIREBASE_APP_ID
 #   VITE_FIREBASE_MEASUREMENT_ID
-#   VITE_FIREBASE_VAPID_KEY
-#   VITE_FIREBASE_DATABASE_URL
-#   VITE_FIREBASE_APP_CHECK_KEY      # ← AÑADIR ESTE
+#
+#   # App Check (reCAPTCHA v3)
+#   VITE_FIREBASE_APP_CHECK_KEY
+#
+#   # Cloud Messaging (Web Push certificate)
+#   VITE_VAPID_KEY          # ← corregido: antes VITE_FIREBASE_VAPID_KEY (no coincidía con el código cliente)
+#
+#   # Google Maps
+#   VITE_GOOGLE_MAPS_API_KEY
+#
+#   # WhatsApp Business
+#   VITE_WA_NUMBER
+#
+#   # Opcional: sobrescribir URL base de Cloud Functions
+#   # VITE_FUNCTIONS_BASE_URL
 # ─────────────────────────────────────────────────────────────
 
 name: Deploy to Firebase Hosting
@@ -57,16 +74,22 @@ jobs:
 
       - name: Build
         env:
-          VITE_FIREBASE_API_KEY:            ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN:        ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID:         ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET:     ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID:${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID:             ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID:     ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-          VITE_FIREBASE_VAPID_KEY:          ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
-          VITE_FIREBASE_DATABASE_URL:       ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
-          VITE_FIREBASE_APP_CHECK_KEY:      ${{ secrets.VITE_FIREBASE_APP_CHECK_KEY }}   # ← NUEVO
+          VITE_FIREBASE_API_KEY:             ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN:         ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_DATABASE_URL:        ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
+          VITE_FIREBASE_PROJECT_ID:          ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET:      ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID:      ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          VITE_FIREBASE_APP_CHECK_KEY:       ${{ secrets.VITE_FIREBASE_APP_CHECK_KEY }}
+          # ★ FIX: el cliente usa VITE_VAPID_KEY (no VITE_FIREBASE_VAPID_KEY).
+          VITE_VAPID_KEY:                    ${{ secrets.VITE_VAPID_KEY }}
+          # ★ FIX: faltaban estas variables → Maps, WhatsApp y Functions URL
+          #         quedaban undefined en producción.
+          VITE_GOOGLE_MAPS_API_KEY:          ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_WA_NUMBER:                    ${{ secrets.VITE_WA_NUMBER }}
+          VITE_FUNCTIONS_BASE_URL:           ${{ secrets.VITE_FUNCTIONS_BASE_URL }}
         run: npm run build
 
       - name: Upload dist artifact
@@ -97,8 +120,86 @@ jobs:
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken:             ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount:${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId:             inmobiliaria-ryb-y-asociados
-          target:                production
-          channelId:             live
+          repoToken:              ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId:              inmobiliaria-ryb-y-asociados
+          target:                 production
+          channelId:              live
+
+  # ── 3. Deploy Rules + Indexes (solo si cambiaron) ────────────
+  # ★ FIX (auditoría): antes el workflow solo desplegaba hosting. Si
+  # alguien modificaba firestore.rules / storage.rules / indexes y hacía
+  # push, las rules viejas seguían activas hasta correr firebase deploy
+  # manualmente — un riesgo serio si una rule corregía un bug de seguridad.
+  deploy-rules:
+    name: Deploy Rules & Indexes
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Firestore rules + indexes + Storage rules
+        run: |
+          firebase deploy \
+            --only firestore:rules,firestore:indexes,storage:rules \
+            --project inmobiliaria-ryb-y-asociados \
+            --non-interactive
+
+  # ── 4. Deploy Cloud Functions (solo si cambiaron) ────────────
+  # NOTA: El paso de Functions es OPCIONAL — si no quieres redeploy
+  # automático en cada push, comenta este job y deploya manualmente
+  # con `firebase deploy --only functions`. Las Functions tienen secrets
+  # (GMAIL_USER, GMAIL_PASS) que deben estar configurados en Firebase
+  # antes de cualquier deploy: `firebase functions:secrets:set GMAIL_USER`.
+  deploy-functions:
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install functions deps
+        working-directory: functions
+        run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Functions
+        run: |
+          firebase deploy \
+            --only functions \
+            --project inmobiliaria-ryb-y-asociados \
+            --non-interactive

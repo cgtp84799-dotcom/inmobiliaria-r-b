@@ -10,6 +10,7 @@ import Sidebar            from './Sidebar';
 import NotificationBell   from '../../../modules/notifications/components/NotificationBell';
 import { useAuth }        from '../../../core/contexts/AuthContext';
 import { USER_ROLES }     from '../../../modules/users/types/user.types';
+import { useBreakpoint }  from '../../hooks/useMediaQuery';
 
 /* ─── Metadatos de rol — clases estáticas, sin interpolación ── */
 // Mismo objeto que Sidebar para consistencia visual
@@ -46,21 +47,6 @@ const DEFAULT_ROLE = {
   Icon:  FaUser,
 };
 
-/* ─── Hook seguro para SSR / resize ─────────────────────────── */
-function useIsDesktop(bp = 1024) {
-  // Inicialización lazy — no accede a window en el module scope
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth >= bp
-  );
-  useEffect(() => {
-    const mq      = window.matchMedia(`(min-width: ${bp}px)`);
-    const handler = (e) => setIsDesktop(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, [bp]);
-  return isDesktop;
-}
-
 /* ═══════════════════════════════════════════════════════════════
    ADMIN LAYOUT
 ═══════════════════════════════════════════════════════════════ */
@@ -71,7 +57,7 @@ export default function AdminLayout() {
   const roleMeta = ROLE_META[role] ?? DEFAULT_ROLE;
   const RoleIcon = roleMeta.Icon;
 
-  const isDesktop = useIsDesktop();
+  const isDesktop = useBreakpoint('lg');
 
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);

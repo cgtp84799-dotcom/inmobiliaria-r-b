@@ -70,11 +70,13 @@ export default function PropertyPrintView({ property, onClose }) {
   const docRef = useRef(null);
   const [loading, setLoading] = useState(false);
 
-  if (!property) return null;
+  // ★ FIX rules-of-hooks: early return movido DESPUÉS de todos los hooks.
+  // Usamos safeProperty para evitar TypeErrors cuando property es null.
+  const safeProperty = property || {};
 
   const logoUrl = '/favicon.ico';
 
-  const allImages = cleanImages(property.images || []);
+  const allImages = cleanImages(safeProperty.images || []);
   const heroUrl = allImages[0] || '';
   const afterHero = allImages.slice(1);
   const basePool = afterHero.length ? afterHero : allImages;
@@ -93,7 +95,7 @@ export default function PropertyPrintView({ property, onClose }) {
   const handleDownload = async () => {
     setLoading(true);
     try {
-      const safeTitle = safeFilename(property.title || 'propiedad');
+      const safeTitle = safeFilename(safeProperty.title || 'propiedad');
       await downloadPDFExactVisual(
         docRef,
         `FichaAdmin-${safeTitle}.pdf`,
@@ -107,70 +109,70 @@ export default function PropertyPrintView({ property, onClose }) {
     }
   };
 
-  const isArriendo = property.transactionType === 'arriendo';
-  const txLabel = TX[property.transactionType] ?? 'PROPIEDAD';
-  const txCls = TX_CLS[property.transactionType] ?? 'chip-type';
-  const stLabel = ST[property.status] ?? (property.status || '').toUpperCase();
-  const stCls = ST_CLS[property.status] ?? 'chip-type';
-  const refId = property.id ? property.id.substring(0, 8).toUpperCase() : 'SIN-REF';
+  const isArriendo = safeProperty.transactionType === 'arriendo';
+  const txLabel = TX[safeProperty.transactionType] ?? 'PROPIEDAD';
+  const txCls = TX_CLS[safeProperty.transactionType] ?? 'chip-type';
+  const stLabel = ST[safeProperty.status] ?? (safeProperty.status || '').toUpperCase();
+  const stCls = ST_CLS[safeProperty.status] ?? 'chip-type';
+  const refId = safeProperty.id ? safeProperty.id.substring(0, 8).toUpperCase() : 'SIN-REF';
 
   const loc = [
-    property.address,
-    property.neighborhood,
-    property.city,
-    property.department,
+    safeProperty.address,
+    safeProperty.neighborhood,
+    safeProperty.city,
+    safeProperty.department,
   ]
     .filter(Boolean)
     .join(', ');
 
   const amenities = normalizeList([
-    ...(property.amenities ?? []),
-    ...(property.customAmenities ?? []),
+    ...(safeProperty.amenities ?? []),
+    ...(safeProperty.customAmenities ?? []),
   ]);
 
-  const documents = property.documents || [];
+  const documents = safeProperty.documents || [];
 
   const commission =
-    property.commissionPercentage && property.price
-      ? (Number(property.price) * Number(property.commissionPercentage)) / 100
+    safeProperty.commissionPercentage && safeProperty.price
+      ? (Number(safeProperty.price) * Number(safeProperty.commissionPercentage)) / 100
       : null;
 
   const summaryStats = [
-    property.area
-      ? { label: 'Área total', value: `${Number(property.area).toLocaleString('es-CO')} m²` }
+    safeProperty.area
+      ? { label: 'Área total', value: `${Number(safeProperty.area).toLocaleString('es-CO')} m²` }
       : null,
-    property.builtArea
-      ? { label: 'Área const.', value: `${Number(property.builtArea).toLocaleString('es-CO')} m²` }
+    safeProperty.builtArea
+      ? { label: 'Área const.', value: `${Number(safeProperty.builtArea).toLocaleString('es-CO')} m²` }
       : null,
-    property.rooms ? { label: 'Habitaciones', value: property.rooms } : null,
-    property.bathrooms ? { label: 'Baños', value: property.bathrooms } : null,
-    property.parkingSpots ? { label: 'Parqueaderos', value: property.parkingSpots } : null,
-    property.floors ? { label: 'Pisos', value: property.floors } : null,
-    property.yearBuilt ? { label: 'Año const.', value: property.yearBuilt } : null,
-    property.stratum ? { label: 'Estrato', value: property.stratum } : null,
+    safeProperty.rooms ? { label: 'Habitaciones', value: safeProperty.rooms } : null,
+    safeProperty.bathrooms ? { label: 'Baños', value: safeProperty.bathrooms } : null,
+    safeProperty.parkingSpots ? { label: 'Parqueaderos', value: safeProperty.parkingSpots } : null,
+    safeProperty.floors ? { label: 'Pisos', value: safeProperty.floors } : null,
+    safeProperty.yearBuilt ? { label: 'Año const.', value: safeProperty.yearBuilt } : null,
+    safeProperty.stratum ? { label: 'Estrato', value: safeProperty.stratum } : null,
   ].filter(Boolean);
 
   const featuresLeft = [
-    ['Tipo de inmueble', property.type],
-    ['Área total', property.area ? `${Number(property.area).toLocaleString('es-CO')} m²` : null],
-    ['Área construida', property.builtArea ? `${Number(property.builtArea).toLocaleString('es-CO')} m²` : null],
-    ['Habitaciones', property.rooms],
-    ['Baños', property.bathrooms],
-    ['Parqueaderos', property.parkingSpots],
-    ['Pisos / niveles', property.floors],
-    ['Año de construcción', property.yearBuilt],
-    ['Estrato', property.stratum],
+    ['Tipo de inmueble', safeProperty.type],
+    ['Área total', safeProperty.area ? `${Number(safeProperty.area).toLocaleString('es-CO')} m²` : null],
+    ['Área construida', safeProperty.builtArea ? `${Number(safeProperty.builtArea).toLocaleString('es-CO')} m²` : null],
+    ['Habitaciones', safeProperty.rooms],
+    ['Baños', safeProperty.bathrooms],
+    ['Parqueaderos', safeProperty.parkingSpots],
+    ['Pisos / niveles', safeProperty.floors],
+    ['Año de construcción', safeProperty.yearBuilt],
+    ['Estrato', safeProperty.stratum],
   ].filter(([, value]) => value || value === 0);
 
   const locationRows = [
-    ['Dirección', property.address],
-    ['Barrio / Vereda', property.neighborhood],
-    ['Ciudad', property.city],
-    ['Departamento', property.department],
+    ['Dirección', safeProperty.address],
+    ['Barrio / Vereda', safeProperty.neighborhood],
+    ['Ciudad', safeProperty.city],
+    ['Departamento', safeProperty.department],
     [
       'Coordenadas',
-      property.latitude && property.longitude
-        ? `${property.latitude}, ${property.longitude}`
+      safeProperty.latitude && safeProperty.longitude
+        ? `${safeProperty.latitude}, ${safeProperty.longitude}`
         : null,
       true,
     ],
@@ -178,41 +180,45 @@ export default function PropertyPrintView({ property, onClose }) {
 
   const costRows = [
     ['Tipo de transacción', txLabel],
-    [isArriendo ? 'Canon de arriendo' : 'Precio de venta', property.price ? fmt(property.price) : null],
-    ['Comisión', property.commissionPercentage ? `${property.commissionPercentage}%` : null],
+    [isArriendo ? 'Canon de arriendo' : 'Precio de venta', safeProperty.price ? fmt(safeProperty.price) : null],
+    ['Comisión', safeProperty.commissionPercentage ? `${safeProperty.commissionPercentage}%` : null],
     ['Valor comisión', commission ? fmt(commission) : null],
-    ['Predial anual', property.propertyTax ? fmt(property.propertyTax) : null],
-    ['Administración / mes', property.administrationFee ? fmt(property.administrationFee) : null],
-    ['Depósito', property.rentalDeposit ? `${property.rentalDeposit} meses` : null],
-    ['Período mínimo', property.minimumRentalPeriod ? `${property.minimumRentalPeriod} meses` : null],
+    ['Predial anual', safeProperty.propertyTax ? fmt(safeProperty.propertyTax) : null],
+    ['Administración / mes', safeProperty.administrationFee ? fmt(safeProperty.administrationFee) : null],
+    ['Depósito', safeProperty.rentalDeposit ? `${safeProperty.rentalDeposit} meses` : null],
+    ['Período mínimo', safeProperty.minimumRentalPeriod ? `${safeProperty.minimumRentalPeriod} meses` : null],
   ].filter(([, value]) => value || value === 0);
 
   const ownerRows = [
-    ['Nombre', property.ownerName],
-    ['Teléfono', property.ownerPhone],
-    ['Correo', property.ownerEmail],
+    ['Nombre', safeProperty.ownerName],
+    ['Teléfono', safeProperty.ownerPhone],
+    ['Correo', safeProperty.ownerEmail],
   ].filter(([, value]) => value || value === 0);
 
   const adminRows = [
     ['Estado actual', stLabel],
     ['Tipo transacción', txLabel],
     ['ID referencia', refId, true],
-    ['Publicado', fmtDate(property.createdAt)],
-    ['Actualizado', fmtDate(property.updatedAt)],
+    ['Publicado', fmtDate(safeProperty.createdAt)],
+    ['Actualizado', fmtDate(safeProperty.updatedAt)],
   ].filter(([, value]) => value || value === 0);
 
   const legalRows = [
-    ['Matrícula inmobiliaria', property.registrationNumber, true],
-    ['Ficha catastral', property.cadastralReference, true],
-    ['Escritura pública', property.publicDeedNumber],
-    ['Propietario registrado', property.registeredOwner],
-    ['Estado jurídico', property.legalStatus],
-    ['Avalúo catastral', property.cadastralAppraisal ? fmt(property.cadastralAppraisal) : null],
-    ['Propiedad horizontal', property.horizontalProperty ? 'Sí' : null],
-    ['Régimen PH', property.horizontalPropertyRegime],
+    ['Matrícula inmobiliaria', safeProperty.registrationNumber, true],
+    ['Ficha catastral', safeProperty.cadastralReference, true],
+    ['Escritura pública', safeProperty.publicDeedNumber],
+    ['Propietario registrado', safeProperty.registeredOwner],
+    ['Estado jurídico', safeProperty.legalStatus],
+    ['Avalúo catastral', safeProperty.cadastralAppraisal ? fmt(safeProperty.cadastralAppraisal) : null],
+    ['Propiedad horizontal', safeProperty.horizontalProperty ? 'Sí' : null],
+    ['Régimen PH', safeProperty.horizontalPropertyRegime],
   ].filter(([, value]) => value || value === 0);
 
   const amenityGroups = useMemo(() => chunk(amenities, 12), [amenities]);
+
+  // ★ Early return DESPUÉS de todos los hooks (rules-of-hooks).
+  // safeProperty usado arriba permite que los hooks corran sin crashear.
+  if (!property) return null;
 
   const hasOwner = ownerRows.length > 0;
   const hasCosts = costRows.length > 1;

@@ -200,11 +200,20 @@ const CatalogPage = () => {
       });
     }
 
+    // ★ FIX (auditoría): cuando hay filtro de precio, excluir propiedades
+    // sin precio (antes una propiedad sin precio se contaba como precio=0
+    // y aparecía siempre en filtros "hasta X").
     if (filters.minPrice) {
-      list = list.filter((p) => Number(p.price?.sale ?? p.price?.rent ?? p.price ?? 0) >= Number(filters.minPrice));
+      list = list.filter((p) => {
+        const price = Number(p.price?.sale ?? p.price?.rent ?? p.price ?? 0);
+        return price > 0 && price >= Number(filters.minPrice);
+      });
     }
     if (filters.maxPrice) {
-      list = list.filter((p) => Number(p.price?.sale ?? p.price?.rent ?? p.price ?? 0) <= Number(filters.maxPrice));
+      list = list.filter((p) => {
+        const price = Number(p.price?.sale ?? p.price?.rent ?? p.price ?? 0);
+        return price > 0 && price <= Number(filters.maxPrice);
+      });
     }
     if (filters.bedrooms) {
       list = list.filter((p) => {

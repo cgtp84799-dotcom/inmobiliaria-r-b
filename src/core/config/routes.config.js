@@ -29,7 +29,7 @@
  * Internas (todas noindex vía firebase.json X-Robots-Tag):
  *   /login, /dashboard, /mi-panel, /portal, /propiedades-admin, /clientes,
  *   /contratos, /consultas, /documentos, /calendario, /visitas, /usuarios,
- *   /solicitudes, /perfil, /agentes, /agentes/:agentId, /chat, /solicitar-acceso
+ *   /solicitudes, /perfil, /agentes, /agentes/:agentId, /solicitar-acceso
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -69,7 +69,6 @@ export const PRIVATE_ROUTES = {
   CLIENTS:         '/clientes',
   CONTRACTS:       '/contratos',
   QUERIES:         '/consultas',
-  CHAT:            '/chat',
   DOCUMENTS:       '/documentos',
   CALENDAR:        '/calendario',
   USERS:           '/usuarios',

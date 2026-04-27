@@ -195,30 +195,46 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
   );
 }
 
-function ContractsTab({ clientId }) {
+function ContractsTab({ clientId, clientEmail }) {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!clientId) return;
-    // FIX: eliminado orderBy — podría requerir índice. Ordenar en cliente.
-    const unsub = onSnapshot(
+    // ★ FIX (auditoría): los contratos pueden tener clientId, clientEmail o
+    // ambos. Hacer 2 listeners y combinar para no perder contratos legacy
+    // creados solo con email.
+    let docsById = [];
+    let docsByEmail = [];
+    const merge = () => {
+      const map = new Map();
+      [...docsById, ...docsByEmail].forEach((d) => map.set(d.id, d));
+      const arr = Array.from(map.values());
+      arr.sort((a, b) => {
+        const at = a.createdAt?.toDate?.()?.getTime?.() ?? a.createdAt?.seconds ?? 0;
+        const bt = b.createdAt?.toDate?.()?.getTime?.() ?? b.createdAt?.seconds ?? 0;
+        return bt - at;
+      });
+      setContracts(arr);
+      setLoading(false);
+    };
+
+    const unsubById = onSnapshot(
       query(collection(db, 'contracts'), where('clientId', '==', clientId)),
-      (s) => {
-        const docs = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-        // Ordenar por createdAt desc en cliente
-        docs.sort((a, b) => {
-          const at = a.createdAt?.toDate?.()?.getTime?.() ?? a.createdAt?.seconds ?? 0;
-          const bt = b.createdAt?.toDate?.()?.getTime?.() ?? b.createdAt?.seconds ?? 0;
-          return bt - at;
-        });
-        setContracts(docs);
-        setLoading(false);
-      },
+      (s) => { docsById = s.docs.map((d) => ({ id: d.id, ...d.data() })); merge(); },
       () => setLoading(false)
     );
-    return unsub;
-  }, [clientId]);
+
+    let unsubByEmail = () => {};
+    if (clientEmail) {
+      unsubByEmail = onSnapshot(
+        query(collection(db, 'contracts'), where('clientEmail', '==', String(clientEmail).toLowerCase().trim())),
+        (s) => { docsByEmail = s.docs.map((d) => ({ id: d.id, ...d.data() })); merge(); },
+        () => {}
+      );
+    }
+    return () => { unsubById(); unsubByEmail(); };
+  }, [clientId, clientEmail]);
 
   if (loading) return <div className="py-8 flex justify-center"><FaSpinner className="animate-spin text-primary" /></div>;
   if (!contracts.length) return <div className="py-10 text-center text-slate-500"><FaFileContract size={28} className="mx-auto mb-2 opacity-30" /><p className="text-sm">No hay contratos registrados</p></div>;
@@ -323,21 +339,108 @@ function PortalTab({ client }) {
     if (!email) return;
     setSendingInvite(true);
     try {
+      // Template alineado con el branding y responsive — usa el mismo
+      // sistema de la extensión /mail, pero con HTML consistente con los
+      // demás emails del sistema (ver functions/src/emails/users.js
+      // → clientInviteEmail si quieres replicar cambios del backend).
+      const clientName = client?.nombre || client?.name || 'cliente';
+      const firstName = String(clientName).split(' ')[0] || 'cliente';
+      const portalUrl = `${window.location.origin}/acceso-clientes`;
+      const whatsappUrl = 'https://wa.me/573105968202';
+
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="format-detection" content="telephone=no"/>
+  <title>Tu portal personal</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{margin:0;padding:0;background:#f0f4f8;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;}
+    img{max-width:100%;height:auto;border:0;}
+    .wrapper{background:#f0f4f8;padding:40px 16px;}
+    .container{max-width:600px;margin:0 auto;width:100%;}
+    .card{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);}
+    .header{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px 28px;text-align:center;}
+    .body{padding:36px 40px;}
+    .footer{background:#f8f9fb;border-top:1px solid #e8ecf0;padding:20px 40px;text-align:center;font-size:12px;color:#9ca3af;}
+    .footer a{color:#b8952a;text-decoration:none;}
+    h1{font-size:24px;font-weight:700;color:#b8952a;margin:0 0 12px;line-height:1.3;text-align:center;}
+    p{font-size:15px;color:#3d3c38;line-height:1.7;margin:0 0 16px;}
+    .info-card{background:#f8fbff;border:1px solid #dbeafe;border-radius:14px;padding:20px 24px;margin:0 0 24px;}
+    .info-card p{margin:0;font-size:14px;color:#1f2937;}
+    .btn{display:inline-block;background:linear-gradient(135deg,#b8952a,#d4a836);color:#fff;font-weight:700;padding:14px 32px;border-radius:50px;text-decoration:none;font-size:15px;}
+    .btn-center{text-align:center;margin-top:28px;}
+    @media only screen and (max-width:600px){
+      .wrapper{padding:20px 8px!important;}
+      .card{border-radius:14px!important;}
+      .header{padding:24px 20px 20px!important;}
+      .body{padding:26px 20px!important;}
+      .footer{padding:18px 20px!important;}
+      h1{font-size:22px!important;}
+      .info-card{padding:16px 18px!important;}
+      .btn{display:block!important;width:100%!important;max-width:320px!important;margin:0 auto!important;}
+    }
+    @media only screen and (max-width:480px){
+      .wrapper{padding:12px 0!important;}
+      .card{border-radius:0!important;box-shadow:none!important;}
+      .body{padding:22px 16px!important;}
+      h1{font-size:20px!important;}
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <img src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" alt="Inmobiliaria Rincón Bedoya y Asociados" height="52" style="height:52px;max-width:80%;"/>
+      </div>
+      <div class="body">
+        <div style="text-align:center;font-size:48px;margin-bottom:14px;">🏠</div>
+        <h1>Tu portal personal está listo</h1>
+        <p style="text-align:center;color:#6b7280;font-size:15px;margin:0 0 28px;">
+          Hola <strong style="color:#1f2937;">${firstName}</strong>, te hemos habilitado un portal exclusivo
+          en <strong>Inmobiliaria Rincón Bedoya y Asociados</strong> para que gestiones tus
+          propiedades favoritas, visitas y contratos en un solo lugar.
+        </p>
+        <div class="info-card">
+          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">¿Qué puedes hacer?</p>
+          <p style="margin:6px 0;"><strong>Visitas</strong> — solicitar y gestionar visitas en línea</p>
+          <p style="margin:6px 0;"><strong>Contratos</strong> — consultar estado, etapas y pagos</p>
+          <p style="margin:6px 0;"><strong>Favoritos</strong> — guardar y comparar propiedades</p>
+          <p style="margin:6px 0;"><strong>Documentos</strong> — descargar comprobantes</p>
+        </div>
+        <p style="text-align:center;color:#6b7280;font-size:14px;">
+          Ingresa con el correo en el que recibes este mensaje. Si es la primera vez,
+          usa <strong>"Crear contraseña"</strong> en el login.
+        </p>
+        <div class="btn-center">
+          <a href="${portalUrl}" class="btn">Acceder al portal →</a>
+        </div>
+        <p style="text-align:center;color:#9ca3af;font-size:13px;margin-top:24px;">
+          ¿Dudas? Escríbenos por <a href="${whatsappUrl}" style="color:#b8952a;font-weight:600;">WhatsApp</a>.
+        </p>
+      </div>
+      <div class="footer">
+        <p style="margin:0;color:#9ca3af;">
+          <strong style="color:#374151;">Inmobiliaria Rincón Bedoya y Asociados</strong><br/>
+          Cra 5 No. 9-28, Anserma, Caldas, Colombia<br/>
+          <a href="tel:+573105968202">+57 310 596 8202</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+
       await addDoc(collection(db, 'mail'), {
         to: email,
         message: {
-          subject: 'Accede a tu portal inmobiliario personal 🏠',
-          html: `
-            <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0f172a;color:#f8fafc;padding:32px;border-radius:16px;">
-              <h2 style="color:#f59e0b;margin-bottom:8px;">Tu portal personal está listo</h2>
-              <p style="color:#94a3b8;margin-bottom:24px;">Hola ${client?.nombre || 'cliente'},</p>
-              <p style="color:#cbd5e1;">Hemos creado un portal exclusivo para ti donde podrás gestionar tus propiedades favoritas, visitas y contratos.</p>
-              <a href="${window.location.origin}/acceso-clientes" style="display:inline-block;margin-top:24px;background:#f59e0b;color:#0f172a;font-weight:700;padding:12px 28px;border-radius:10px;text-decoration:none;">
-                Acceder al portal →
-              </a>
-              <p style="color:#475569;font-size:12px;margin-top:24px;">Rincón Bedoya & Asociados · Medellín, Colombia</p>
-            </div>
-          `,
+          subject: '🏠 Tu portal personal está listo · Inmobiliaria Rincón Bedoya y Asociados',
+          html,
         },
         createdAt: serverTimestamp(),
       });
@@ -604,7 +707,7 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-y-auto">
           {tab === 'actividad' && <ActivityTab client={client} onScheduleVisit={() => onScheduleVisit?.(client)} onAddActivity={() => onAddActivity?.(client)} />}
-          {tab === 'contratos' && <ContractsTab clientId={client.id} />}
+          {tab === 'contratos' && <ContractsTab clientId={client.id} clientEmail={client.email} />}
           {tab === 'favoritos' && <FavoritesTab favoriteIds={client.favorites || []} />}
           {tab === 'portal'    && <PortalTab client={client} />}
         </motion.div>

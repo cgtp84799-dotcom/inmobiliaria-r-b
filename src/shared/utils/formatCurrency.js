@@ -23,7 +23,7 @@ export function formatCOP(value, compact = false) {
     maximumFractionDigits: 0,
   })
     .format(num)
-    // Intl en es-CO devuelve "COP 1.500.000" — lo convertimos a "$ 1.500.000"
+    // Intl en es-CO devuelve "COP 1.500.000" — lo convertimos a "$ 1.500.000"
     .replace('COP', '$')
     .replace('\u00a0', ' ')
     .trim();

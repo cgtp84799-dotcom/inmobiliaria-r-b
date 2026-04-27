@@ -5,12 +5,28 @@ import { collection, doc, setDoc, getDoc } from 'firebase/firestore';
  * Script para migrar usuarios de Firebase Auth a Firestore
  * Ejecuta esto UNA VEZ para crear documentos en Firestore
  * para todos los usuarios que ya existen en Auth
+ *
+ * ★ FIX (auditoría): añadido guard contra ejecución accidental en producción.
+ * Si quieres correrlo en producción, exporta `VITE_ALLOW_USER_MIGRATION=true`
+ * antes del build. Esto evita que un import accidental en otro componente
+ * dispare la migración con los emails de ejemplo hardcodeados abajo.
  */
 export async function migrateAuthUsersToFirestore() {
+  if (
+    !import.meta.env.DEV &&
+    import.meta.env.VITE_ALLOW_USER_MIGRATION !== 'true'
+  ) {
+    console.error(
+      '[migrateUsers] BLOQUEADO en producción. ' +
+      'Para autorizar, define VITE_ALLOW_USER_MIGRATION=true en tu env.'
+    );
+    return;
+  }
+
   try {
     // Obtener usuario actual (debes estar logueado como admin)
     const currentUser = auth.currentUser;
-    
+
     if (!currentUser) {
       console.error('Debes estar logueado como administrador');
       return;

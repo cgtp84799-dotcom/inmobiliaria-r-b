@@ -1,31 +1,45 @@
 // src/modules/agents/hooks/useAgentDashboard.js
 // Hook central del AgentDashboard — une Firestore en tiempo real con datos calculados
+//
+// ★ FIX (auditoría): este hook usaba campos inexistentes del esquema:
+//   - `scheduledAt` (no existe — el campo real es `requestedDate` string YYYY-MM-DD
+//     + `requestedTime`).
+//   - `status === 'active'` para propiedades (real: 'disponible' / 'reservada' / 'arrendada' / 'vendida').
+//   - `status === 'active'` para contratos (real: 'vigente').
+//   - `status === 'cancelled'` para visitas (real: 'cancelada' o 'cancelled' según origen).
+//
+// Resultado: TODOS los KPIs del agent dashboard quedaban en 0.
+// Ahora se calcula en cliente sobre el conjunto de visitas/propiedades/
+// contratos del agente — costo bajo (un agente típico tiene <100 docs)
+// y elimina la necesidad de índices compuestos sobre Timestamp.
 
 import { useEffect, useState, useCallback } from 'react';
 import {
   collection, query, where, onSnapshot,
-  orderBy, limit, Timestamp,
+  orderBy, limit,
 } from 'firebase/firestore';
-import { db } from '../../../core/services/firebase';
+import { db } from '../../../core/config/firebase.config';
 
-const today = () => {
+// ── Helpers para fechas ─────────────────────────────────────────────────────
+const ymdToday = () => {
   const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return Timestamp.fromDate(d);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const tomorrow = () => {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return Timestamp.fromDate(d);
+const isThisMonth = (timestampOrDate) => {
+  if (!timestampOrDate) return false;
+  const d = timestampOrDate?.toDate?.() ?? new Date(timestampOrDate);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 };
 
-const startOfMonth = () => {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return Timestamp.fromDate(d);
-};
+// Estados públicos (visibles) de propiedad
+const ACTIVE_PROPERTY_STATUSES = new Set(['disponible', 'reservada', 'available', 'active']);
+// Estados activos de contrato (corresponde a CONTRACT_STATUS)
+const ACTIVE_CONTRACT_STATUSES = new Set(['vigente', 'active']);
+// Visitas canceladas (admite ambos formatos: cliente cancela usa 'cancelada')
+const CANCELLED_VISIT_STATUSES = new Set(['cancelled', 'cancelada', 'cancelado']);
 
 export const useAgentDashboard = (agentEmail) => {
   const [state, setState] = useState({
@@ -56,103 +70,86 @@ export const useAgentDashboard = (agentEmail) => {
 
   useEffect(() => {
     if (!agentEmail) return;
+    const normalizedEmail = String(agentEmail).toLowerCase().trim();
 
     const unsubs = [];
 
-    // ── Visitas de hoy ──────────────────────────────────────────────────────
-    const qVisitsHoy = query(
-      collection(db, 'visits'),
-      where('agentEmail', '==', agentEmail),
-      where('scheduledAt', '>=', today()),
-      where('scheduledAt', '<=', tomorrow()),
-      orderBy('scheduledAt', 'asc'),
-    );
-    unsubs.push(onSnapshot(qVisitsHoy, snap => {
-      const visitsHoy = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      updateState({ visitsHoy, visitsToday: visitsHoy.length });
-    }));
-
-    // ── Todas mis visitas (para KPIs de estado) ─────────────────────────────
+    // ── Todas mis visitas (KPIs + lista de hoy + mes) ──────────────────────
+    // Una sola query, calculamos derivados en cliente.
     const qVisitsAll = query(
       collection(db, 'visits'),
-      where('agentEmail', '==', agentEmail),
+      where('agentEmail', '==', normalizedEmail),
     );
     unsubs.push(onSnapshot(qVisitsAll, snap => {
-      const all = snap.docs.map(d => d.data());
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const today = ymdToday();
+
+      const visitsHoy = all
+        .filter(v => v.requestedDate === today)
+        .sort((a, b) => String(a.requestedTime || '').localeCompare(String(b.requestedTime || '')));
+
+      const monthVisits = all.filter(v => isThisMonth(v.createdAt)).length;
+
       updateState({
+        visitsHoy,
+        visitsToday:     visitsHoy.length,
         visitsPending:   all.filter(v => v.status === 'pending').length,
-        visitsCompleted: all.filter(v => v.status === 'completed').length,
-        visitsCancelled: all.filter(v => v.status === 'cancelled').length,
+        visitsCompleted: all.filter(v => v.status === 'completed' || v.status === 'completada').length,
+        visitsCancelled: all.filter(v => CANCELLED_VISIT_STATUSES.has(v.status)).length,
+        monthVisits,
       });
-    }));
+    }, (e) => console.warn('[useAgentDashboard] visits:', e?.code)));
 
-    // ── Visitas del mes ─────────────────────────────────────────────────────
-    const qVisitsMes = query(
-      collection(db, 'visits'),
-      where('agentEmail', '==', agentEmail),
-      where('scheduledAt', '>=', startOfMonth()),
-    );
-    unsubs.push(onSnapshot(qVisitsMes, snap =>
-      updateState({ monthVisits: snap.size }),
-    ));
-
-    // ── Propiedades recientes ───────────────────────────────────────────────
+    // ── Propiedades del agente ──────────────────────────────────────────────
     const qProps = query(
       collection(db, 'properties'),
-      where('agentEmail', '==', agentEmail),
+      where('agentEmail', '==', normalizedEmail),
       orderBy('createdAt', 'desc'),
-      limit(6),
+      limit(20),
     );
     unsubs.push(onSnapshot(qProps, snap => {
-      const propertiesRecent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const propertiesAll = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const propertiesRecent = propertiesAll.slice(0, 6);
+      const propertiesActive = propertiesAll.filter(p =>
+        ACTIVE_PROPERTY_STATUSES.has(String(p.status || '').toLowerCase())
+      ).length;
+      const monthProperties = propertiesAll.filter(p => isThisMonth(p.createdAt)).length;
+
       updateState({
         propertiesRecent,
-        propertiesActive: propertiesRecent.filter(p => p.status === 'active').length,
-        propertiesTotal:  snap.size,
+        propertiesActive,
+        propertiesTotal: snap.size,
+        monthProperties,
       });
-    }));
+    }, (e) => console.warn('[useAgentDashboard] properties:', e?.code)));
 
-    // ── Propiedades del mes ─────────────────────────────────────────────────
-    const qPropsMes = query(
-      collection(db, 'properties'),
-      where('agentEmail', '==', agentEmail),
-      where('createdAt', '>=', startOfMonth()),
-    );
-    unsubs.push(onSnapshot(qPropsMes, snap =>
-      updateState({ monthProperties: snap.size }),
-    ));
-
-    // ── Contratos ───────────────────────────────────────────────────────────
+    // ── Contratos del agente ────────────────────────────────────────────────
     const qContracts = query(
       collection(db, 'contracts'),
-      where('agentEmail', '==', agentEmail),
+      where('agentEmail', '==', normalizedEmail),
       orderBy('createdAt', 'desc'),
-      limit(5),
+      limit(20),
     );
     unsubs.push(onSnapshot(qContracts, snap => {
-      const contractsRecent = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const activeContracts = contractsRecent.filter(c => c.status === 'active');
+      const contractsAll = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const contractsRecent = contractsAll.slice(0, 5);
+      const activeContracts = contractsAll.filter(c =>
+        ACTIVE_CONTRACT_STATUSES.has(String(c.statusGeneral || c.status || '').toLowerCase())
+      );
+      const monthContracts = contractsAll.filter(c => isThisMonth(c.createdAt)).length;
+
       updateState({
         contractsRecent,
         contractsActive: activeContracts.length,
-        contractsValue:  activeContracts.reduce((sum, c) => sum + (c.value || 0), 0),
+        contractsValue:  activeContracts.reduce((sum, c) => sum + (Number(c.value) || 0), 0),
+        monthContracts,
       });
-    }));
-
-    // ── Contratos del mes ───────────────────────────────────────────────────
-    const qContractsMes = query(
-      collection(db, 'contracts'),
-      where('agentEmail', '==', agentEmail),
-      where('createdAt', '>=', startOfMonth()),
-    );
-    unsubs.push(onSnapshot(qContractsMes, snap =>
-      updateState({ monthContracts: snap.size }),
-    ));
+    }, (e) => console.warn('[useAgentDashboard] contracts:', e?.code)));
 
     // ── Actividad reciente (notifications) ─────────────────────────────────
     const qActivity = query(
       collection(db, 'notifications'),
-      where('userId', '==', agentEmail),
+      where('userId', '==', normalizedEmail),
       orderBy('createdAt', 'desc'),
       limit(10),
     );

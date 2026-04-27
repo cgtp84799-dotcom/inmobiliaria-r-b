@@ -42,6 +42,9 @@ export default function VisitCard({
   const [action,        setAction]        = useState(null);
   const [proposedDate,  setProposedDate]  = useState('');
   const [proposedTime,  setProposedTime]  = useState('');
+  // ★ FIX (auditoría): protección anti-doble-click. Sin esto un clic acelerado
+  // dispara dos veces el handler → 2 emails al cliente y 2 entradas en history.
+  const [busy,          setBusy]          = useState(false);
 
   const colors = VISIT_STATUS_COLORS[visit.status] ?? VISIT_STATUS_COLORS[VISIT_STATUS.PENDING];
   const label  = VISIT_STATUS_LABELS[visit.status] ?? visit.status;
@@ -55,25 +58,32 @@ export default function VisitCard({
   };
 
   const handleAction = async () => {
-    if (action === 'approve') {
-      const agentObj  = agents.find((a) => a.uid === selectedAgent) ?? {};
-      const agentData = selectedAgent ? {
-        agentId:    agentObj.uid,
-        agentName:  agentObj.displayName || agentObj.email,
-        agentEmail: agentObj.email,
-      } : {};
-      await onApprove?.(visit, noteInput, agentData);
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (action === 'approve') {
+        const agentObj  = agents.find((a) => a.uid === selectedAgent) ?? {};
+        const agentData = selectedAgent ? {
+          agentId:    agentObj.uid,
+          agentName:  agentObj.displayName || agentObj.email,
+          agentEmail: agentObj.email,
+        } : {};
+        await onApprove?.(visit, noteInput, agentData);
+      }
+      if (action === 'reject')     await onReject?.(visit, noteInput);
+      if (action === 'complete')   await onComplete?.(visit.id, noteInput);
+      if (action === 'reschedule') await onReschedule?.(visit.id, proposedDate, proposedTime, noteInput);
+      closeAction();
+    } finally {
+      setBusy(false);
     }
-    if (action === 'reject')     await onReject?.(visit, noteInput);
-    if (action === 'complete')   await onComplete?.(visit.id, noteInput);
-    if (action === 'reschedule') await onReschedule?.(visit.id, proposedDate, proposedTime, noteInput);
-    closeAction();
   };
 
-  const canConfirm =
+  const canConfirm = !busy && (
     action === 'reschedule'
       ? proposedDate.trim() !== '' && proposedTime.trim() !== ''
-      : true;
+      : true
+  );
 
   // ── Permisos por acción ───────────────────────────────────────────────
   // canOperate = isAdmin || isMember  (de AuthContext)
@@ -211,7 +221,13 @@ export default function VisitCard({
 
           {canDelete && onDelete && (
             <button
-              onClick={() => onDelete(visit.id)}
+              onClick={() => {
+                // ★ FIX (auditoría): confirmación nativa antes de eliminar — antes
+                // un solo clic borraba la visita sin advertencia.
+                if (window.confirm(`¿Eliminar permanentemente la visita de "${visit.clientName || ''}" en "${visit.propertyName || ''}"? Esta acción no se puede deshacer.`)) {
+                  onDelete(visit.id);
+                }
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors ml-auto"
             >
               <FaTrash size={10} /> Eliminar

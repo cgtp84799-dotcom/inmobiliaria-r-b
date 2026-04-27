@@ -1,166 +1,188 @@
 # Inmobiliaria Rincón Bedoya y Asociados
 
-Aplicación web para la gestión integral de inmuebles de Inmobiliaria Rincón Bedoya y Asociados (Anserma, Caldas - Colombia), desarrollada con React + Vite, Firebase y Tailwind CSS. Permite administrar propiedades urbanas y rurales, arriendos, procesos legales asociados, comunicación con clientes, videoconferencias, calendarios y generación de reportes.
+Plataforma inmobiliaria con respaldo jurídico para la gestión integral de propiedades en Colombia: catálogo público SEO-first, portal de clientes, panel administrativo, contratos, pagos programados, notificaciones push y videoconferencias.
 
-## 🚀 Demo en producción
+**Stack:** React 19 · Vite 7 · Firebase 12 (Auth, Firestore, Storage, Functions v2, Realtime DB, FCM, App Check) · Tailwind 3 · Cloud Functions (Node 22).
 
-- Sitio en línea: https://inmobiliaria-ryb-y-asociados.com
+**Producción:** https://inmobiliaria-ryb-y-asociados.com
 
-## 🧱 Tecnologías y librerías principales
+---
 
-### Core
-- **React 19** + **Vite 7** - Framework y tooling moderno para desarrollo rápido.
-- **React Router DOM 7** - Navegación y rutas de la SPA.
-- **Tailwind CSS 3** - Sistema de diseño y estilos utility-first.
+## ✅ Requisitos
 
-### Firebase Stack
-- **Firebase 12** - Plataforma backend completa.
-- **Firebase Hosting** - CDN y despliegue global.
-- **Firebase Authentication** - Gestión de usuarios y login seguro.
-- **Cloud Firestore** - Base de datos NoSQL para datos estructurados.
-- **Realtime Database** - Sincronización en tiempo real.
-- **Cloud Storage** - Almacenamiento de archivos e imágenes.
-- **Cloud Functions** - Lógica serverless y automatizaciones.
-- **Cloud Messaging** - Notificaciones push.
+- Node.js **20 o superior** (el CI corre en 20, las Functions en 22).
+- npm **10+**.
+- Cuenta de Firebase con un proyecto creado y los siguientes servicios activos: Authentication, Firestore, Storage, Realtime Database, Cloud Functions, Cloud Messaging, App Check (reCAPTCHA v3).
+- Firebase CLI: `npm install -g firebase-tools`.
 
-### UI y experiencia de usuario
-- **Framer Motion 12** - Animaciones fluidas y transiciones.
-- **React Icons 5** + **Lucide React** - Biblioteca de iconos.
-- **React Hot Toast 2** - Notificaciones y toasts elegantes.
-- **Emoji Picker React 4** - Selector de emojis integrado.
-- **Swiper 12** - Carruseles y sliders táctiles.
+---
 
-### Funcionalidades avanzadas
-- **React Big Calendar 1** - Calendario interactivo para eventos y citas.
-- **Recharts 3** - Gráficos y visualización de datos.
-- **jsPDF 3** + **jsPDF AutoTable 5** - Generación de PDFs y reportes.
-- **Leaflet 1.9** + **React Leaflet 5** - Mapas interactivos para ubicación de inmuebles.
-- **Jitsi React SDK 1** - Videoconferencias integradas.
-- **React H5 Audio Player 3** - Reproductor de audio.
-- **date-fns 4** + **moment 2** - Manipulación y formato de fechas.
+## 🚀 Setup inicial (primera vez)
 
-## ✨ Funcionalidades clave
-
-- **Gestión completa de inmuebles**: urbanos, rurales, arriendos, ventas, aparcerías, turismo.
-- **Información jurídica detallada**: saneamientos, procesos de pertenencia, sucesiones, remates, créditos hipotecarios, propiedad horizontal, avalúos.
-- **Panel administrativo** con visualización de propiedades, estados y acciones disponibles.
-- **Calendario integrado** para citas, visitas y eventos relacionados con inmuebles.
-- **Mapas interactivos** para ubicar propiedades geográficamente.
-- **Generación de reportes PDF** con información de inmuebles y transacciones.
-- **Videoconferencias** integradas para reuniones remotas con clientes.
-- **Gráficos y estadísticas** de propiedades, transacciones y rendimiento.
-- **Sistema de notificaciones** push y en tiempo real.
-- **Reproductor de audio** para notas de voz o grabaciones.
-- **Diseño responsivo** optimizado para escritorio, tablet y móvil.
-
-## 🔥 Servicios de Firebase utilizados
-
-Configurados en `src/core/config/firebase.config.js`:
-
-- **Authentication (getAuth)** - Gestión de usuarios y autenticación segura.
-- **Cloud Firestore (getFirestore)** - Base de datos principal NoSQL.
-- **Realtime Database (getDatabase)** - Sincronización en tiempo real de datos críticos.
-- **Cloud Storage (getStorage)** - Almacenamiento de imágenes de propiedades y documentos.
-- **Cloud Functions (getFunctions)** - Lógica de backend y procesos automáticos.
-- **Cloud Messaging (getMessaging + isSupported)** - Notificaciones push cross-browser.
-
-## 🛠️ Requisitos
-
-- **Node.js** (versión LTS recomendada, 18 o superior).
-- **npm** (incluido con Node.js).
-- **Cuenta de Firebase** con proyecto configurado.
-- **Git** para clonar el repositorio.
-
-## ⚙️ Instalación y uso en local
-
-Clonar el repositorio
+```bash
+# 1. Clonar el repo
 git clone https://github.com/cgtp84799-dotcom/inmobiliaria-r-b.git
 cd inmobiliaria-r-b
 
-Instalar todas las dependencias
+# 2. Instalar dependencias del cliente
 npm install
 
-Ejecutar en modo desarrollo
+# 3. Instalar dependencias de las Cloud Functions
+cd functions && npm install && cd ..
+
+# 4. Crear el archivo de variables de entorno
+cp .env.example .env.local
+# Editar .env.local con los valores reales del proyecto Firebase
+
+# 5. Autenticarse con Firebase CLI
+firebase login
+firebase use inmobiliaria-ryb-y-asociados
+
+# 6. Levantar en desarrollo
 npm run dev
+```
 
-text
+La aplicación quedará en `http://localhost:5173`.
 
-La aplicación se abrirá en `http://localhost:5173` (Vite muestra el puerto en consola).
+---
 
-## 🚢 Despliegue en Firebase Hosting
+## 🔧 Variables de entorno
 
-Generar build de producción optimizado
-npm run build
+Todas viven en `.env.local` (nunca commitear). Ver `.env.example` para la lista completa y cómo obtener cada valor.
 
-Desplegar a Firebase Hosting
-firebase deploy --only hosting
+**Imprescindibles para arrancar:**
 
-text
+| Variable | Dónde conseguirla |
+|---|---|
+| `VITE_FIREBASE_API_KEY` y demás `VITE_FIREBASE_*` | Firebase Console → Configuración del proyecto → Tus apps (Web) |
+| `VITE_FIREBASE_APP_CHECK_KEY` | Firebase Console → App Check → Web apps → reCAPTCHA v3 site key |
+| `VITE_VAPID_KEY` | Firebase Console → Cloud Messaging → Web Push certificates |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console (restringir por HTTP referrer al dominio) |
+| `VITE_WA_NUMBER` | Número WhatsApp Business, formato internacional sin `+` |
 
-El directorio de salida es `dist/` y la configuración está en `firebase.json`.
+---
 
-## 📂 Estructura del proyecto
+## 📦 Scripts disponibles
 
-.
-├── functions/ # Cloud Functions (backend serverless)
-├── public/ # Recursos estáticos (favicon, assets, verificación)
+```bash
+npm run dev               # Vite dev server en http://localhost:5173
+npm run build             # Build de producción → dist/
+npm run preview           # Previsualizar el build
+npm run lint              # ESLint
+npm run lint:fix          # ESLint + autofix
+npm run deploy            # Build + deploy de Hosting (target: production)
+npm run deploy:functions  # Deploy solo de Cloud Functions
+npm run deploy:rules      # Deploy solo de Firestore + Storage rules
+```
+
+Desde `functions/` también hay scripts propios (`npm run serve`, `npm run deploy`, etc.).
+
+---
+
+## 🏗 Arquitectura del proyecto
+
+```
+inmobiliaria-r-b/
+├── .github/workflows/     # CI/CD (lint + build + deploy)
+├── functions/             # Cloud Functions v2 (Node 22)
+│   ├── src/
+│   │   ├── emails/        # Builders de plantillas de email
+│   │   ├── prerender.js   # SSR mínimo para crawlers
+│   │   ├── sitemap.js     # Sitemap dinámico (XML)
+│   │   └── visitEmails.js
+│   └── index.js           # Entry point — exporta todas las funciones
+├── public/                # Assets estáticos + SW + analytics.js + schema-ld.json
 ├── src/
-│ ├── core/ # Configuración Firebase y lógica central
-│ ├── components/ # Componentes React reutilizables
-│ ├── pages/ # Vistas/páginas principales
-│ └── main.jsx # Punto de entrada de React
-├── firebase.json # Configuración Firebase Hosting/Functions
-├── firestore.rules # Reglas de seguridad Firestore
-├── storage.rules # Reglas de seguridad Storage
-├── .firebaserc # Proyecto Firebase asociado
-├── package.json # Dependencias y scripts
-├── tailwind.config.js # Configuración Tailwind CSS
-├── vite.config.js # Configuración Vite
-├── index.html # HTML base
-└── README.md # Este archivo
+│   ├── core/              # Firebase config, AuthContext, ThemeContext, rutas
+│   ├── modules/           # Feature-based (agents, auth, clients, contracts, ...)
+│   │   └── <feature>/
+│   │       ├── components/
+│   │       ├── hooks/
+│   │       ├── pages/
+│   │       ├── services/
+│   │       └── types/
+│   ├── shared/            # Layouts, UI, SEO, utils compartidos
+│   ├── App.jsx            # Router principal
+│   └── main.jsx           # Entry point de React
+├── firebase.json          # Hosting, Functions, headers, redirects, CSP
+├── firestore.rules        # Reglas de seguridad de Firestore (VERIFICAR antes de deploy)
+├── firestore.indexes.json # Índices compuestos para queries
+├── storage.rules          # Reglas de seguridad de Cloud Storage
+└── vite.config.js         # Build config (chunks, terser, etc.)
+```
 
-text
+### Sistema de roles
 
-## 📈 SEO e indexación
+| Rol | Acceso | Colección |
+|---|---|---|
+| `admin`  | Panel interno completo + gestión de usuarios | `users/{email}` |
+| `member` | Panel interno operativo (sin usuarios)       | `users/{email}` |
+| `viewer` | Portal de clientes — solo sus propios datos   | `users/{email}` |
 
-- Verificado en **Google Search Console**.
-- Archivos `sitemap.xml` y `robots.txt` se pueden añadir en `public/`.
-- Despliegue en Firebase Hosting con CDN global y SSL automático.
+**Nota técnica:** `users` usa el email como ID de documento. Eso está identificado como deuda técnica (ver `AUDIT.md`); la migración a `users/{uid}` está pendiente y requiere coordinación de datos en producción.
 
-## 🔐 Seguridad
+---
 
-- Reglas de seguridad configuradas en `firestore.rules` y `storage.rules`.
-- Autenticación Firebase para control de acceso.
-- Variables sensibles manejadas mediante configuración Firebase (no expuestas en código público).
+## 🛡 Seguridad
 
-## 👤 Autor
+### Capas activas
 
-**Mateo Carvajal Tamayo** - Desarrollador web full-stack.
+1. **Firestore Rules** (`firestore.rules`): modelo RBAC + validación de campos en creación/update + whitelist para colecciones públicas (contactos, solicitudes de visita, solicitudes de acceso). Chat aislado por array de `participants`.
+2. **Storage Rules** (`storage.rules`): CRUD restringido por rol + validación de tipo MIME + límites de tamaño.
+3. **App Check** (reCAPTCHA v3): bloquea tráfico de bots y apps no autorizadas a Firestore/Storage.
+4. **Content Security Policy** estricta en `firebase.json` — sin `unsafe-inline` en scripts.
+5. **Cloud Functions** usan `verifyIdToken(token, checkRevoked=true)` para detectar sesiones revocadas en tiempo real.
 
-Este software fue desarrollado como proyecto de desarrollo web para **Andrés Medardo Rincón Bedoya** (Inmobiliaria Rincón Bedoya y Asociados, Anserma - Caldas), enfocado en la gestión inmobiliaria integral y soporte a procesos legales asociados.
+### Antes de un deploy
 
-## 🏢 Cliente
+```bash
+# Auditar reglas
+firebase emulators:start --only firestore,storage,auth
 
-**Andrés Medardo Rincón Bedoya**  
-CC: 1087985594  
-NIT: 1087985594-7  
-Matrícula Mercantil: 238639  
-Cámara de Comercio de Manizales por Caldas  
-Actividad: Actividades inmobiliarias (CIIU L6810)  
-Domicilio: Anserma, Caldas, Colombia
+# Testear reglas con el playground
+# Firebase Console → Firestore → Rules → Playground
 
-## 📄 Derechos de autor y licencia
+# Deploy seguro en orden
+npm run deploy:rules      # 1. Reglas primero
+npm run deploy:functions  # 2. Functions
+npm run deploy            # 3. Frontend al final
+```
+
+---
+
+## 🤖 SEO y prerender
+
+La SPA se sirve tal cual a humanos, pero los crawlers (Googlebot, Bingbot, FB, WhatsApp, etc.) son detectados por User-Agent en la Cloud Function `serveApp` y reciben HTML pre-renderizado con meta tags, Open Graph y JSON-LD completos. Ver `functions/src/prerender.js`.
+
+Sitemaps dinámicos servidos por `functions/src/sitemap.js` en:
+- `/sitemap.xml`
+- `/sitemap-properties.xml`
+- `/sitemap-cities.xml`
+- `/sitemap-static.xml`
+
+---
+
+## 🧪 Testing
+
+**Estado actual:** sin suite de tests. Deuda técnica identificada — especialmente crítica para los flujos de contratos y pagos. Planificado: Vitest + React Testing Library + Firebase Emulator Suite.
+
+---
+
+## 🚢 Deploy
+
+CI/CD vía GitHub Actions (`.github/workflows/deploy.yml`):
+
+- **Pull Request → `main`:** corre lint + build.
+- **Push a `main`:** corre lint + build + deploy a Hosting producción.
+
+**Secrets requeridos en el repo** (ver cabecera de `deploy.yml` para la lista completa):
+- `FIREBASE_SERVICE_ACCOUNT` (JSON service account)
+- Todas las variables `VITE_*` que necesita el build.
+
+---
+
+## 📄 Licencia y autoría
+
+Software propietario desarrollado por **Mateo Carvajal Tamayo** para uso exclusivo de **Andrés Medardo Rincón Bedoya** (NIT 1087985594-7, Matrícula Mercantil 238639 — Cámara de Comercio de Manizales por Caldas). Ver `LICENSE` para los términos completos.
 
 © 2025 Mateo Carvajal Tamayo. Todos los derechos reservados.
-
-Este software fue desarrollado exclusivamente para **Andrés Medardo Rincón Bedoya** (NIT 1087985594-7), comerciante registrado ante la Cámara de Comercio de Manizales por Caldas con Matrícula Mercantil No. 238639, para uso en su actividad económica de servicios inmobiliarios.
-
-**Términos de la licencia:**
-
-1. El autor (Mateo Carvajal Tamayo) retiene la propiedad intelectual completa del código fuente, arquitectura, diseño y estructura de la aplicación.
-
-2. Se concede a **Andrés Medardo Rincón Bedoya** (NIT 1087985594-7) una licencia perpetua, no exclusiva y no transferible para usar la plataforma exclusivamente en sus operaciones comerciales de actividades inmobiliarias.
-
-3. **Restricciones**: Queda prohibida la copia, distribución, modificación, sublicenciamiento, cesión o uso comercial de este software por parte de terceros sin consentimiento expreso y por escrito del autor.
-
-4. Este acuerdo se rige por las leyes de la República de Colombia.

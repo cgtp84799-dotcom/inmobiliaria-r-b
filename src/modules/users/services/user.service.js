@@ -237,6 +237,34 @@ class UserService {
       throw new Error('No puedes eliminar tu propia cuenta desde aquí.');
     }
 
+    // ★ FIX (auditoría): si el usuario es agente (admin/member), verificar
+    // que no tenga contratos activos. Antes podías borrar a un agente con
+    // contratos vigentes → los emails de cobranza iban a buzón inexistente.
+    const normalizedEmail = email.toLowerCase().trim();
+    const isAgent = userRole === 'admin' || userRole === 'member';
+    if (isAgent) {
+      try {
+        const activeContractsSnap = await getDocs(
+          query(
+            collection(db, 'contracts'),
+            where('agentEmail', '==', normalizedEmail),
+            where('statusGeneral', 'in', ['vigente', 'activo', 'borrador', 'pausado']),
+            limit(1),
+          )
+        );
+        if (!activeContractsSnap.empty) {
+          throw new Error(
+            `No se puede eliminar: este agente tiene contratos activos asignados. ` +
+            `Reasigna los contratos a otro agente antes de eliminar al usuario.`
+          );
+        }
+      } catch (e) {
+        if (e?.message?.includes('No se puede eliminar')) throw e;
+        // Si la query falla por permisos o índice, no bloqueamos — log
+        console.warn('[deleteUser] no se pudo verificar contratos:', e?.message);
+      }
+    }
+
     // Paso 1: Intentar Cloud Function
     let cfSuccess = false;
     try {

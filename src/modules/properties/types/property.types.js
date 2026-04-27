@@ -20,4 +20,4 @@ export const PROPERTY_STATUS = {
   SOLD: 'sold',
   RENTED: 'rented',
   INACTIVE: 'inactive',
-};S
+};

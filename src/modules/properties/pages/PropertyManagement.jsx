@@ -31,6 +31,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../../core/config/firebase.config";
+import propertyService from "../services/property.service";
 import PropertyForm from "../components/PropertyForm";
 import PropertyDetail from "../components/PropertyDetail";
 import ConfirmModal from "../../../shared/components/UI/ConfirmModal";
@@ -272,15 +273,18 @@ const PropertyManagement = () => {
   };
 
   // ✅ CAMBIO — antes eliminaba directo sin confirmación
+  // ★ FIX (auditoría): usar propertyService.deleteProperty para que se
+  // apliquen las protecciones (verificar contratos activos, cancelar
+  // visitas pendientes). Antes hacía deleteDoc directo y bypass.
   const handleDeleteProperty = (propertyId) => {
     setConfirmModal({
       isOpen: true,
       title: "Eliminar propiedad",
-      message: "¿Seguro que quieres eliminar esta propiedad? Esta acción no se puede deshacer.",
+      message: "¿Seguro que quieres eliminar esta propiedad? Si tiene contratos activos, no se podrá borrar. Las visitas pendientes serán canceladas. Esta acción no se puede deshacer.",
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
-          await deleteDoc(doc(db, "properties", propertyId));
+          await propertyService.deleteProperty(propertyId);
           toast.success("Propiedad eliminada");
 
           await loadTotalCount();
@@ -291,7 +295,11 @@ const PropertyManagement = () => {
           }
         } catch (error) {
           console.error("Error eliminando propiedad:", error);
-          toast.error("Error al eliminar");
+          // Mostrar mensaje específico si es válido (ej. "contrato activo asociado")
+          const msg = error?.message && error.message.length < 200
+            ? error.message
+            : "Error al eliminar";
+          toast.error(msg);
         }
       },
     });
