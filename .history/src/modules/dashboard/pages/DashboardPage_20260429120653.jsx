@@ -198,12 +198,10 @@ function useDashboardData() {
 
       const [propsSnap, clientsSnap, contractsSnap, visitsSnap, usersSnap] =
         await Promise.all([
-          // ★ FIX: limit(50) en lugar de 500 - suficiente para gráficos y listas
-          // Los stats usan getCountFromServer en analytics.service.js
-          getDocs(query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(50))),
-          getDocs(query(collection(db, 'clients'),    orderBy('createdAt', 'desc'), limit(50))),
-          getDocs(query(collection(db, 'contracts'),  orderBy('createdAt', 'desc'), limit(50))),
-          getDocs(query(collection(db, 'visits'),     orderBy('createdAt', 'desc'), limit(50))),
+          getDocs(query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(500))),
+          getDocs(query(collection(db, 'clients'),    orderBy('createdAt', 'desc'), limit(500))),
+          getDocs(query(collection(db, 'contracts'),  orderBy('createdAt', 'desc'), limit(500))),
+          getDocs(query(collection(db, 'visits'),     orderBy('createdAt', 'desc'), limit(250))),
           getDocs(query(collection(db, 'users'),      where('role', 'in', ['admin', 'member']))),
         ]);
 
