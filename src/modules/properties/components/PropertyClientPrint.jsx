@@ -56,9 +56,13 @@ export default function PropertyClientPrint({ property, onClose }) {
   const [loading, setLoading] = useState(false);
   const [, setScale] = useState(1);
 
-  if (!property) return null;
+  // ★ FIX rules-of-hooks: hooks deben llamarse SIEMPRE en el mismo orden.
+  // Antes: `if (!property) return null;` antes de useMemo/useEffect → bug.
+  // Ahora: computamos con fallback seguro y el early return va AL FINAL,
+  // justo antes del render (pero después de todos los hooks).
+  const safeProperty = property || {};
 
-  const allImages = cleanImages(property.images || []);
+  const allImages = cleanImages(safeProperty.images || []);
   const logo = '/favicon.ico';
   const hero = allImages[0] || '';
   const afterHero = allImages.slice(1);
@@ -72,62 +76,62 @@ export default function PropertyClientPrint({ property, onClose }) {
 
   const extraGalleryGroups = useMemo(
     () => getOptionalGalleryGroups(afterHero, 8, 2, 4),
-    [property.images]
+    [safeProperty.images]
   );
 
-  const txLabel = TX[property.transactionType] ?? 'PROPIEDAD';
-  const stLabel = ST[property.status] ?? (property.status || '').toUpperCase();
-  const txCls = `chip-${property.transactionType || 'venta'}`;
-  const stCls = `chip-${property.status || 'disponible'}`;
-  const isArriendo = property.transactionType === 'arriendo';
+  const txLabel = TX[safeProperty.transactionType] ?? 'PROPIEDAD';
+  const stLabel = ST[safeProperty.status] ?? (safeProperty.status || '').toUpperCase();
+  const txCls = `chip-${safeProperty.transactionType || 'venta'}`;
+  const stCls = `chip-${safeProperty.status || 'disponible'}`;
+  const isArriendo = safeProperty.transactionType === 'arriendo';
 
   const loc = [
-    property.address,
-    property.neighborhood,
-    property.city,
-    property.department,
+    safeProperty.address,
+    safeProperty.neighborhood,
+    safeProperty.city,
+    safeProperty.department,
   ].filter(Boolean).join(', ');
 
   const amenities = normalizeList([
-    ...(property.amenities ?? []),
-    ...(property.customAmenities ?? []),
+    ...(safeProperty.amenities ?? []),
+    ...(safeProperty.customAmenities ?? []),
   ]);
 
   const stats = [
-    property.area ? { label: 'Área total', value: `${Number(property.area).toLocaleString('es-CO')} m²` } : null,
-    property.builtArea ? { label: 'Área const.', value: `${Number(property.builtArea).toLocaleString('es-CO')} m²` } : null,
-    property.rooms ? { label: 'Habitaciones', value: property.rooms } : null,
-    property.bathrooms ? { label: 'Baños', value: property.bathrooms } : null,
-    property.parkingSpots ? { label: 'Parqueaderos', value: property.parkingSpots } : null,
-    property.floors ? { label: 'Niveles', value: property.floors } : null,
-    property.stratum ? { label: 'Estrato', value: property.stratum } : null,
-    property.yearBuilt ? { label: 'Año const.', value: property.yearBuilt } : null,
+    safeProperty.area ? { label: 'Área total', value: `${Number(safeProperty.area).toLocaleString('es-CO')} m²` } : null,
+    safeProperty.builtArea ? { label: 'Área const.', value: `${Number(safeProperty.builtArea).toLocaleString('es-CO')} m²` } : null,
+    safeProperty.rooms ? { label: 'Habitaciones', value: safeProperty.rooms } : null,
+    safeProperty.bathrooms ? { label: 'Baños', value: safeProperty.bathrooms } : null,
+    safeProperty.parkingSpots ? { label: 'Parqueaderos', value: safeProperty.parkingSpots } : null,
+    safeProperty.floors ? { label: 'Niveles', value: safeProperty.floors } : null,
+    safeProperty.stratum ? { label: 'Estrato', value: safeProperty.stratum } : null,
+    safeProperty.yearBuilt ? { label: 'Año const.', value: safeProperty.yearBuilt } : null,
   ].filter(Boolean);
 
   const featureRows = [
-    ['Tipo de inmueble', property.type],
-    ['Área total', property.area ? `${Number(property.area).toLocaleString('es-CO')} m²` : null],
-    ['Área construida', property.builtArea ? `${Number(property.builtArea).toLocaleString('es-CO')} m²` : null],
-    ['Habitaciones', property.rooms],
-    ['Baños', property.bathrooms],
-    ['Parqueaderos', property.parkingSpots],
-    ['Pisos / niveles', property.floors],
-    ['Año de construcción', property.yearBuilt],
-    ['Estrato', property.stratum],
+    ['Tipo de inmueble', safeProperty.type],
+    ['Área total', safeProperty.area ? `${Number(safeProperty.area).toLocaleString('es-CO')} m²` : null],
+    ['Área construida', safeProperty.builtArea ? `${Number(safeProperty.builtArea).toLocaleString('es-CO')} m²` : null],
+    ['Habitaciones', safeProperty.rooms],
+    ['Baños', safeProperty.bathrooms],
+    ['Parqueaderos', safeProperty.parkingSpots],
+    ['Pisos / niveles', safeProperty.floors],
+    ['Año de construcción', safeProperty.yearBuilt],
+    ['Estrato', safeProperty.stratum],
   ].filter(([, v]) => v || v === 0);
 
   const locationRows = [
-    ['Dirección', property.address],
-    ['Barrio / Vereda', property.neighborhood],
-    ['Ciudad', property.city],
-    ['Departamento', property.department],
+    ['Dirección', safeProperty.address],
+    ['Barrio / Vereda', safeProperty.neighborhood],
+    ['Ciudad', safeProperty.city],
+    ['Departamento', safeProperty.department],
   ].filter(([, v]) => v || v === 0);
 
   const priceRows = [
-    [isArriendo ? 'Canon de arriendo' : 'Precio de venta', property.price ? fmt(property.price) : null],
-    ['Administración', property.administrationFee ? fmt(property.administrationFee) : null],
-    ['Depósito', property.rentalDeposit ? `${property.rentalDeposit} meses` : null],
-    ['Período mínimo', property.minimumRentalPeriod ? `${property.minimumRentalPeriod} meses` : null],
+    [isArriendo ? 'Canon de arriendo' : 'Precio de venta', safeProperty.price ? fmt(safeProperty.price) : null],
+    ['Administración', safeProperty.administrationFee ? fmt(safeProperty.administrationFee) : null],
+    ['Depósito', safeProperty.rentalDeposit ? `${safeProperty.rentalDeposit} meses` : null],
+    ['Período mínimo', safeProperty.minimumRentalPeriod ? `${safeProperty.minimumRentalPeriod} meses` : null],
   ].filter(([, v]) => v || v === 0);
 
   const amenityGroups = useMemo(() => chunk(amenities, 12), [amenities]);
@@ -135,7 +139,7 @@ export default function PropertyClientPrint({ property, onClose }) {
   const hasThirdPage =
     extraGalleryGroups.length > 0 ||
     amenityGroups.length > 1 ||
-    (property.description && property.description.length > 1000);
+    (safeProperty.description && safeProperty.description.length > 1000);
 
   const totalPages = hasThirdPage ? 3 : 2;
 
@@ -170,6 +174,9 @@ export default function PropertyClientPrint({ property, onClose }) {
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, [property]);
+
+  // ★ Early return AQUÍ (después de todos los hooks) — cumple rules-of-hooks
+  if (!property) return null;
 
   const handleDownload = async () => {
     setLoading(true);

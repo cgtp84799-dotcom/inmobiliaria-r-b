@@ -85,7 +85,12 @@ export function useContracts() {
       toast.success(`Estado: ${getStatusLabel(newStatus)}`);
     } catch (e) {
       console.error('[useContracts.updateStatus]', e);
-      toast.error('Error al actualizar el estado');
+      // ★ FIX (auditoría): si el error proviene de la validación de
+      // transiciones, mostrar el mensaje real en vez de uno genérico.
+      const msg = e?.message?.includes('Transición no permitida')
+        ? e.message
+        : 'Error al actualizar el estado';
+      toast.error(msg);
     }
   }, []);
 

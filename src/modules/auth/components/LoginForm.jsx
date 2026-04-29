@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -13,6 +14,7 @@ const LoginForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -20,6 +22,20 @@ const LoginForm = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error('Error en login:', error);
+      // ★ FIX (auditoría): antes el usuario no veía nada cuando el login
+      // fallaba (credenciales mal, demasiados intentos, cuenta deshabilitada).
+      const code = error?.code || '';
+      let msg = 'Error al iniciar sesión';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        msg = 'Correo o contraseña incorrectos';
+      } else if (code === 'auth/too-many-requests') {
+        msg = 'Demasiados intentos. Espera unos minutos antes de volver a intentar.';
+      } else if (code === 'auth/user-disabled') {
+        msg = 'Esta cuenta está deshabilitada. Contacta al administrador.';
+      } else if (code === 'auth/network-request-failed') {
+        msg = 'Error de conexión. Verifica tu internet.';
+      }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

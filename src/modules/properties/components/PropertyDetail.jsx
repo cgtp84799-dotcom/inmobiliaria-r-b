@@ -169,7 +169,12 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
       toast.success("Propiedad eliminada");
       onClose?.();
     } catch (error) {
-      toast.error("Error al eliminar");
+      // ★ FIX (auditoría): si el error contiene mensaje específico (ej.
+      // "contrato activo asociado"), mostrarlo. Antes siempre era genérico.
+      const msg = error?.message && error.message.length < 200
+        ? error.message
+        : "Error al eliminar";
+      toast.error(msg);
       console.error(error);
     } finally {
       setIsDeleting(false);

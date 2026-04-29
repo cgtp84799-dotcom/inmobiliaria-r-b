@@ -1,0 +1,113 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "RealEstateAgent",
+      "@id": "https://inmobiliaria-ryb-y-asociados.com/#organization",
+      "name": "Inmobiliaria Rincón Bedoya y Asociados",
+      "legalName": "Inmobiliaria Rincón Bedoya y Asociados",
+      "alternateName": ["Rincón Bedoya", "Inmobiliaria RYB", "RYB y Asociados"],
+      "description": "Gestión inmobiliaria integral con respaldo jurídico especializado: compra, venta, arriendo, saneamiento predial, procesos de pertenencia, sucesiones, avalúos certificados y remates en Colombia.",
+      "url": "https://inmobiliaria-ryb-y-asociados.com",
+      "telephone": "+573105968202",
+      "email": "inmojuridi09@gmail.com",
+      "foundingDate": "2018",
+      "slogan": "Gestión inmobiliaria con respaldo jurídico",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://inmobiliaria-ryb-y-asociados.com/logo-ryb.png",
+        "width": 512,
+        "height": 512,
+        "caption": "Logo Inmobiliaria Rincón Bedoya y Asociados"
+      },
+      "image": [
+        "https://inmobiliaria-ryb-y-asociados.com/og-default.jpg",
+        "https://inmobiliaria-ryb-y-asociados.com/logo-ryb.png"
+      ],
+      "hasMap": "https://maps.google.com/?q=5.23889,-75.78463",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Cra 5 #9-28",
+        "addressLocality": "Anserma",
+        "addressRegion": "Caldas",
+        "postalCode": "170001",
+        "addressCountry": "CO"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 5.2383,
+        "longitude": -75.7850
+      },
+      "contactPoint": [
+        {
+          "@type": "ContactPoint",
+          "telephone": "+573105968202",
+          "contactType": "customer service",
+          "areaServed": "CO",
+          "availableLanguage": ["Spanish", "es"]
+        },
+        {
+          "@type": "ContactPoint",
+          "telephone": "+573206736391",
+          "contactType": "sales",
+          "areaServed": "CO",
+          "availableLanguage": ["Spanish", "es"]
+        }
+      ],
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+          "opens": "08:00",
+          "closes": "17:30"
+        },
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": "Saturday",
+          "opens": "08:30",
+          "closes": "13:00"
+        }
+      ],
+      "areaServed": [
+        { "@type": "Country", "name": "Colombia" },
+        { "@type": "AdministrativeArea", "name": "Caldas" },
+        { "@type": "AdministrativeArea", "name": "Risaralda" },
+        { "@type": "AdministrativeArea", "name": "Quindío" },
+        { "@type": "AdministrativeArea", "name": "Valle del Cauca" },
+        { "@type": "AdministrativeArea", "name": "Antioquia" },
+        { "@type": "AdministrativeArea", "name": "Cundinamarca" },
+        { "@type": "City", "name": "Anserma" },
+        { "@type": "City", "name": "Manizales" },
+        { "@type": "City", "name": "Pereira" },
+        { "@type": "City", "name": "Armenia" },
+        { "@type": "City", "name": "Cali" },
+        { "@type": "City", "name": "Medellín" },
+        { "@type": "City", "name": "Bogotá" }
+      ],
+      "priceRange": "$$",
+      "currenciesAccepted": "COP",
+      "paymentAccepted": ["Cash", "Bank Transfer", "PSE", "Credit Card"],
+      "sameAs": [
+        "https://www.facebook.com/profile.php?id=61559014741338",
+        "https://instagram.com/inmobiliaria_ryb"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://inmobiliaria-ryb-y-asociados.com/#website",
+      "url": "https://inmobiliaria-ryb-y-asociados.com/",
+      "name": "Inmobiliaria Rincón Bedoya y Asociados",
+      "description": "Plataforma inmobiliaria con respaldo jurídico en Colombia",
+      "publisher": { "@id": "https://inmobiliaria-ryb-y-asociados.com/#organization" },
+      "inLanguage": "es-CO",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://inmobiliaria-ryb-y-asociados.com/catalogo?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+  ]
+}

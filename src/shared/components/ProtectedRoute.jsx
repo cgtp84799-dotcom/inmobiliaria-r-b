@@ -90,12 +90,32 @@ const ProtectedRoute = ({
   }
 
   const role       = userData?.role;
+  const status     = userData?.status;
   const validRoles = Object.values(USER_ROLES);
   const isViewer   = role === USER_ROLES.VIEWER;
 
   // 3. Rol ausente o no reconocido → sesión corrupta, forzar re-login
   if (!role || !validRoles.includes(role)) {
     return <Navigate to="/login" replace />;
+  }
+
+  // ★ FIX (auditoría): rechazar usuarios bloqueados/inactivos.
+  // Antes solo se validaba el rol — un admin que bloqueaba un usuario en
+  // /usuarios no surtía efecto hasta que el usuario perdía sesión por
+  // expiración natural del token (~1h). Ahora se rechaza al instante.
+  if (status === 'blocked' || status === 'inactive') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="text-center px-6">
+          <div className="text-5xl mb-4">🚫</div>
+          <h2 className="text-2xl font-bold text-red-400 mb-2">Cuenta inhabilitada</h2>
+          <p className="text-slate-400 mb-6">Tu cuenta ha sido pausada o bloqueada. Contacta al administrador.</p>
+          <a href="/login" className="inline-block bg-primary text-slate-950 font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition">
+            Volver al inicio
+          </a>
+        </div>
+      </div>
+    );
   }
 
   // 4. clientOnly → solo viewers; admin/member van al dashboard

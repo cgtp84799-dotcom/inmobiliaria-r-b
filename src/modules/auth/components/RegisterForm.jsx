@@ -22,9 +22,20 @@ const RegisterForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
 
+    // ★ FIX (auditoría): validar antes de llamar a Firebase Auth.
+    // Firebase rechaza < 6 chars con un error opaco.
+    if (!formData.email.trim() || !formData.email.includes('@')) {
+      toast.error('Correo inválido');
+      return;
+    }
+    if (formData.password.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Las contraseñas no coinciden'); // ← usa toast, no alert()
+      toast.error('Las contraseñas no coinciden');
       return;
     }
 
@@ -35,7 +46,7 @@ const RegisterForm = () => {
       navigate('/dashboard');
     } catch (error) {
       // AuthContext ya lanza el mensaje localizado — solo mostrarlo
-      toast.error(error.message);
+      toast.error(error.message || 'Error al crear la cuenta');
     } finally {
       setLoading(false);
     }

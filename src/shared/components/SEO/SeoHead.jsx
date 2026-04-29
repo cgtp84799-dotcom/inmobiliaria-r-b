@@ -207,9 +207,13 @@ export default function SeoHead({
       <meta name="image" content={finalImage} />
 
       {/* ── JSON-LD ─────────────────────────────────────────── */}
+      {/* ★ FIX (auditoría): escapar </script> dentro del JSON para evitar
+          que un valor de descripción que contenga ese substring rompa el
+          parsing del HTML. Es una salvaguarda defensiva incluso si los
+          builders de schema no introducen el patrón hoy. */}
       {jsonLdArray.map((json, i) => (
         <script key={`ld-${i}`} type="application/ld+json">
-          {JSON.stringify(json)}
+          {JSON.stringify(json).replace(/<\/script>/gi, '<\\/script>')}
         </script>
       ))}
 

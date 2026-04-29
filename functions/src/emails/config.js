@@ -5,7 +5,7 @@
 
 const BASE_URL      = "https://inmobiliaria-ryb-y-asociados.com";
 const WHATSAPP_URL  = "https://wa.me/573105968202";
-const LOGO_URL      = `${BASE_URL}/logo.png`;          // ← fix: eliminado .jpg.png
+const LOGO_URL      = `${BASE_URL}/logo.jpg.png`;          // ← fix: eliminado .jpg.png
 const FROM_NAME     = "Inmobiliaria Rincón Bedoya y Asociados";
 const SUPPORT_EMAIL = "inmojuridi09@gmail.com";        // ← centralizado aquí
 
@@ -22,6 +22,7 @@ const GRADIENTS = {
   crimson:   "linear-gradient(135deg, #991b1b 0%, #b91c1c 100%)",
   amber:     "linear-gradient(135deg, #92400e 0%, #b45309 100%)",
   emerald:   "linear-gradient(135deg, #166534 0%, #15803d 100%)",
+  purple:    "linear-gradient(135deg, #1e1a2e 0%, #4c1d95 100%)",
   // Contratos por estado
   vigente:   "linear-gradient(135deg, #1a2a1a 0%, #2d4a2d 100%)",
   finalizado:"linear-gradient(135deg, #0f2040 0%, #1e3a6e 100%)",

@@ -1,21 +1,20 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { HelmetProvider } from "react-helmet-async";
-import { ThemeProvider } from "./core/contexts/ThemeContext";
-import App from "./App";
-import "./index.css";
+import React       from 'react';
+import ReactDOM    from 'react-dom/client';
+import { HelmetProvider } from 'react-helmet-async';
+import { ThemeProvider } from './core/contexts/ThemeContext';
+import App from './App';
+import './index.css';
 
-// ← Añade este import
-import ErrorBoundary from "./shared/components/UI/ErrorBoundary";
+// NOTA: <ErrorBoundary> YA envuelve a <App /> dentro de App.jsx.
+// No duplicarlo aquí para evitar dos boundaries anidados (el interno
+// captura primero y el externo nunca se dispara).
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ErrorBoundary>          {/* ← añadir */}
-      <HelmetProvider>
-        <ThemeProvider>
-          <App />
-        </ThemeProvider>
-      </HelmetProvider>
-    </ErrorBoundary>         {/* ← añadir */}
+    <HelmetProvider>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </HelmetProvider>
   </React.StrictMode>
 );

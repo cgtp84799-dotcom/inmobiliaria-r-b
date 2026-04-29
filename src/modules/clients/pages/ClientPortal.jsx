@@ -107,6 +107,17 @@ export default function ClientPortal() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('inicio');
 
+  // ★ FIX (auditoría): si admin/agente entra equivocadamente al portal cliente
+  // (URL /portal), redirigir a su dashboard. Antes el portal montaba todos los
+  // hooks → resolveClientByEmail creaba un /clients fantasma.
+  useEffect(() => {
+    if (!currentUser) return;
+    const role = userData?.role;
+    if (role === 'admin' || role === 'member') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [currentUser, userData?.role, navigate]);
+
   const portal = useClientPortal();
   const { showWelcome, dismiss: dismissWelcome } = useWelcome(portal.onboardingDone, portal.loading);
 
@@ -133,8 +144,11 @@ export default function ClientPortal() {
   }
 
   function handleModalDone() {
+    // ★ FIX (auditoría): WelcomeModal.handleFinish/handleSkip ya marcan
+    // onboardingDone:true en el doc real (con dedup). Llamar finishOnboarding
+    // aquí escribiría DE NUEVO sobre el clientId (que puede ser stale si hubo
+    // dedup en el camino). Solo cerramos el modal.
     dismissWelcome();
-    portal.finishOnboarding();
   }
 
   const displayName = portal.clientData?.nombre
@@ -275,4 +289,4 @@ export default function ClientPortal() {
       </main>
     </div>
   );
-}
+} 

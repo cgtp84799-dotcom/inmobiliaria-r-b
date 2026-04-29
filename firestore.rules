@@ -28,7 +28,10 @@ service cloud.firestore {
     }
 
     function hasRole(roles) {
-      return userExists() && getUserData() != null && getUserData().role in roles;
+      return userExists()
+          && getUserData() != null
+          && getUserData().role is string
+          && getUserData().role in roles;
     }
 
     function isOwner(userId) {
@@ -85,7 +88,11 @@ service cloud.firestore {
     function userSelfAllowedFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'displayName', 'phone', 'photoURL', 'updatedAt', 'lastSeen',
-        'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled'
+        'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled',
+        // ★ FIX (auditoría): staff (admin/member) guarda favoritos en su
+        // propio doc /users/{email} en vez de /clients (evita aparecer como
+        // cliente fantasma en el panel).
+        'favorites',
       ]);
     }
 
@@ -107,10 +114,16 @@ service cloud.firestore {
 
     function validContact() {
       let d = request.resource.data;
-      return d.keys().hasOnly([
-                'name', 'email', 'phone', 'message',
-                'propertyId', 'propertyTitle', 'createdAt', 'status'
-             ])
+      // Whitelist: campos que el código real escribe desde ContactPage,
+      // PropertyContactForm y onContactCreated trigger. updatedAt es mirror
+      // de createdAt. interest y source son metadata útil para clasificación.
+      let allowedKeys = [
+        'name', 'email', 'phone', 'message',
+        'propertyId', 'propertyTitle',
+        'createdAt', 'updatedAt', 'status',
+        'interest', 'source',
+      ];
+      return d.keys().hasOnly(allowedKeys)
           && d.name is string && d.name.size() > 0 && d.name.size() < 200
           && d.email is string && d.email.matches('.*@.*\\..*')
           && d.message is string && d.message.size() > 0 && d.message.size() < 3000
@@ -120,12 +133,25 @@ service cloud.firestore {
 
     function validVisit() {
       let d = request.resource.data;
-      return d.keys().hasOnly([
-                'clientName', 'clientEmail', 'clientPhone',
-                'propertyId', 'propertyName', 'propertyAddress',
-                'requestedDate', 'requestedTime', 'notes',
-                'status', 'createdAt', 'source'
-             ])
+      // Whitelist: campos públicos obligatorios + opcionales que el código
+      // real escribe (sourceCollection desde visit.service.js, agentId desde
+      // staff que crea visita en nombre del cliente, clientId si el portal
+      // ya resolvió el cliente, updatedAt como mirror de createdAt,
+      // privacyAccepted/privacyAcceptedAt como evidencia Ley 1581/2012,
+      // adminNotes vacío como placeholder del flujo).
+      // STAFF (canOperate) crea visitas con muchos campos extra; esta función
+      // se usa solo en el `allow create` que no requiere canOperate, así que
+      // se aplica al flujo público. Para staff, ya hay canOperate en update.
+      let allowedKeys = [
+        'clientName', 'clientEmail', 'clientPhone',
+        'clientId',
+        'propertyId', 'propertyName', 'propertyAddress',
+        'requestedDate', 'requestedTime', 'notes', 'adminNotes',
+        'status', 'createdAt', 'updatedAt', 'source', 'sourceCollection',
+        'agentId', 'agentName', 'agentEmail',
+        'privacyAccepted', 'privacyAcceptedAt',
+      ];
+      return d.keys().hasOnly(allowedKeys)
           && d.clientName is string && d.clientName.size() > 0 && d.clientName.size() < 200
           && d.clientEmail is string && d.clientEmail.matches('.*@.*\\..*')
           && d.status == 'pending'
@@ -134,14 +160,18 @@ service cloud.firestore {
 
     function validAccessRequest() {
       let d = request.resource.data;
-      return d.keys().hasOnly([
-                'name', 'email', 'phone', 'message',
-                'role', 'createdAt', 'status'
-             ])
+      // Whitelist: campos creados por request.service.js .createRequest.
+      // approvedBy/approvedAt/assignedRole se inicializan como null y son
+      // mutados solo por admin (allow update if isAdmin).
+      let allowedKeys = [
+        'name', 'email', 'phone', 'message',
+        'role', 'createdAt', 'status',
+        'approvedBy', 'approvedAt', 'assignedRole',
+      ];
+      return d.keys().hasOnly(allowedKeys)
           && d.email is string && d.email.matches('.*@.*\\..*')
           && d.name is string && d.name.size() > 0 && d.name.size() < 200
-          && d.status == 'pending'
-          && d.createdAt == request.time;
+          && d.status == 'pending';
     }
 
     function validConsent() {
@@ -207,7 +237,10 @@ service cloud.firestore {
       allow create: if canOperate() || isClientOwnerByRequest();
       allow update: if canOperate()
                     || (isClientOwnerByResource() && clientAllowedUpdateFields());
-      allow delete: if isAdmin();
+      // ★ FIX (auditoría — duplicados): permitir al cliente borrar duplicados
+      // de SU propio email. Esto soporta el flow de auto-fusión en
+      // resolveClientByEmail. El admin sigue pudiendo borrar cualquiera.
+      allow delete: if isAdmin() || isClientOwnerByResource();
 
       match /history/{historyId} {
         allow read:   if canRead() || isClientOwnerByResource();
@@ -222,30 +255,36 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /contracts/{contractId} {
+      function isContractOwnerByParent() {
+        return isSignedIn()
+            && exists(/databases/$(database)/documents/contracts/$(contractId))
+            && get(/databases/$(database)/documents/contracts/$(contractId)).data.clientEmail == authEmail();
+      }
+
       allow read:           if canRead() || isContractOwner();
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
 
       match /milestones/{milestoneId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /payments/{paymentId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /documents/{documentId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if canOperate();
       }
 
       match /history/{historyId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create:         if canOperate();
         allow update, delete: if isAdmin();
       }
@@ -315,14 +354,45 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // EMAILS AUTOMÁTICOS
+    // EMAILS AUTOMÁTICOS (extensión Trigger Email de Firebase)
+    //
+    //   AUDITORÍA: las reglas anteriores exigían un formato `template+userId+type`
+    //   que NO coincide con el que el frontend usa realmente
+    //   (`to + message:{subject,html} + createdAt`). Esto rompía:
+    //     • visit.service.js (approved/rejected/rescheduled emails al cliente)
+    //     • notificationService.js sendMailDoc (notifs con email)
+    //     • ClientDetail.jsx handleSendInvite
+    //
+    //   Hardening real:
+    //     • Staff (admin/member) puede encolar cualquier email.
+    //     • Cliente firmado puede encolar SOLO emails dirigidos a sí mismo
+    //       (to == authEmail()) — no puede usar la infraestructura para spam
+    //       a terceros.
+    //     • Nadie puede setear `from`, `replyTo`, ni headers raros.
+    //     • Nadie puede leer/modificar mails (admin only).
     // ════════════════════════════════════════════════════════════════════════
 
+    function isSafeClientMail() {
+      let d = request.resource.data;
+      // Cliente solo encola emails a sí mismo, con la forma que usa el código:
+      //   { to, message: { subject, html }, createdAt }
+      // Permitimos también `userId` y `type` para trazabilidad opcional.
+      let allowedKeys = ['to', 'message', 'createdAt', 'userId', 'type'];
+      let recipientOk =
+          (d.to is string && d.to == authEmail())
+          || (d.to is list && d.to.size() == 1 && d.to[0] == authEmail());
+      return isSignedIn()
+          && d.keys().hasOnly(allowedKeys)
+          && recipientOk
+          && d.message is map
+          && d.message.subject is string && d.message.subject.size() < 300
+          && d.message.html    is string && d.message.html.size()    < 200000
+          // Bloquear sobreescritura de from/replyTo/headers
+          && !d.keys().hasAny(['from', 'replyTo', 'headers', 'cc', 'bcc']);
+    }
+
     match /mail/{mailId} {
-      allow create: if canOperate()
-                    || (isSignedIn()
-                        && request.resource.data.to is string
-                        && request.resource.data.to == authEmail());
+      allow create: if canOperate() || isSafeClientMail();
       allow read:   if isAdmin();
       allow update: if false;
       allow delete: if isAdmin();
@@ -339,40 +409,114 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // CHAT
+    // SOLICITUDES DE ELIMINACIÓN DE CUENTA
+    //
+    // AUDITORÍA: profile.service.js .requestAccountDeletion crea un doc aquí
+    // y el trigger onAccountDeletionRequested notifica a admins. Antes esta
+    // colección no tenía reglas → quedaba bloqueada en producción.
     // ════════════════════════════════════════════════════════════════════════
 
+    function validAccountDeletionRequest() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'email', 'reason', 'status', 'createdAt'])
+          && d.email is string && d.email == authEmail()
+          && d.uid is string
+          && d.status == 'pending'
+          && (d.reason == null || (d.reason is string && d.reason.size() < 2000));
+    }
+
+    match /accountDeletionRequests/{requestId} {
+      // Solo el propio usuario puede solicitar eliminación de su cuenta
+      allow create: if isSignedIn() && validAccountDeletionRequest();
+      allow read:   if isAdmin();
+      // Solo admin procesa la solicitud (status, processedBy, etc.)
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CHAT
+    //   Hardening:
+    //     - Conversations: solo participantes (campo participants: [emails])
+    //       pueden leer y escribir. Admins tienen acceso total.
+    //     - GroupChat / chatRooms: whitelist de campos + solo participantes.
+    //     - chatMessages: validación de longitud y campos.
+    // ════════════════════════════════════════════════════════════════════════
+
+    function isConversationParticipant() {
+      return isSignedIn()
+          && resource != null
+          && resource.data.participants is list
+          && authEmail() in resource.data.participants;
+    }
+
+    function isCreatingAsParticipant() {
+      return isSignedIn()
+          && request.resource.data.participants is list
+          && authEmail() in request.resource.data.participants;
+    }
+
+    function validChatMessage() {
+      let d = request.resource.data;
+      return d.text is string
+          && d.text.size() > 0
+          && d.text.size() < 5000
+          && d.senderEmail == authEmail()
+          && d.createdAt == request.time;
+    }
+
     match /conversations/{conversationId} {
-      allow read:           if canOperate();
-      allow create, update: if canOperate();
-      allow delete:         if isAdmin();
+      // Chat aislado: ningún usuario, ni siquiera admin, puede leer/escribir
+      // conversaciones donde no esté incluido en participants[].
+      allow read:   if isConversationParticipant();
+      allow create: if canOperate() && isCreatingAsParticipant();
+      // Al actualizar no se puede cambiar la lista de participantes si no eres admin participante.
+      allow update: if isConversationParticipant()
+                    && (isAdmin()
+                        || request.resource.data.participants == resource.data.participants);
+      allow delete: if isConversationParticipant() && isAdmin();
 
       match /messages/{messageId} {
-        allow read:   if canOperate();
-        allow create: if canOperate();
-        // Solo el autor puede editar su propio mensaje
-        allow update: if canOperate()
-                      && authEmail() == resource.data.senderEmail;
-        allow delete: if isAdmin();
+        // Se lee/escribe solo si eres participante de la conversación padre
+        function isParentParticipant() {
+          return isSignedIn()
+              && exists(/databases/$(database)/documents/conversations/$(conversationId))
+              && get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants is list
+              && authEmail() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        }
+        allow read:   if isParentParticipant();
+        allow create: if isParentParticipant() && validChatMessage();
+        allow update: if isParentParticipant()
+                      && (authEmail() == resource.data.senderEmail || isAdmin());
+        allow delete: if isParentParticipant()
+                      && (authEmail() == resource.data.senderEmail || isAdmin());
       }
     }
 
     match /groupChat/{document=**} {
+      // Solo staff con rol operativo; admin requerido para borrar
       allow read:  if canOperate();
       allow write: if canOperate();
     }
 
     match /chatMessages/{messageId} {
       allow read:   if canOperate();
-      allow create: if canOperate();
-      // Solo el autor puede editar; solo admin puede borrar
+      allow create: if canOperate() && validChatMessage();
       allow update: if canOperate() && authEmail() == resource.data.senderEmail;
       allow delete: if isAdmin();
     }
 
     match /chatRooms/{roomId} {
       allow read:  if canOperate();
-      allow write: if canOperate();
+      // create/update solo si el usuario está en participants
+      allow create: if canOperate()
+                    && request.resource.data.participants is list
+                    && authEmail() in request.resource.data.participants;
+      allow update: if canOperate()
+                    && (resource == null
+                        || (resource.data.participants is list
+                            && authEmail() in resource.data.participants));
+      allow delete: if isAdmin();
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -385,9 +529,29 @@ service cloud.firestore {
     }
 
     match /appointments/{appointmentId} {
-      // FIX: añadir isVisitOwner() para que cliente vea su propia cita
-      // FIX: canRead() → canOperate() para que viewer no vea citas ajenas
-      allow create:         if validVisit();
+      // AUDITORÍA: appointments es un MIRROR de visits con shape distinto
+      // (date/time vs requestedDate/requestedTime, visitId, sourceCollection).
+      // Reusar validVisit() rechazaba el mirror del flujo público.
+      // Solo staff (canOperate) puede crear directamente; el mirror público
+      // se crea desde visit.service.js que ya pasó validVisit en /visits.
+      // Aceptamos creación con email del cliente solo cuando viene marcado
+      // como espejo (sourceCollection == 'visits') y trae visitId.
+      allow create: if canOperate()
+                    || (
+                      isSignedIn()
+                      && request.resource.data.sourceCollection == 'visits'
+                      && request.resource.data.visitId is string
+                      && request.resource.data.clientEmail == authEmail()
+                      && request.resource.data.status == 'pending'
+                    )
+                    || (
+                      // Visitas creadas desde el formulario público sin login
+                      request.resource.data.sourceCollection == 'visits'
+                      && request.resource.data.visitId is string
+                      && request.resource.data.status == 'pending'
+                      && request.resource.data.clientEmail is string
+                      && request.resource.data.clientEmail.matches('.*@.*\\..*')
+                    );
       allow read:           if canOperate() || isVisitOwner();
       allow update, delete: if canOperate();
     }

@@ -24,13 +24,29 @@ class DocumentService {
    */
   async uploadFile(file, category, entityId) {
     try {
+      // ★ FIX (auditoría): validaciones cliente antes de subir.
+      if (!file) throw new Error('Archivo requerido');
+      if (file.size === 0) throw new Error('El archivo está vacío');
+      if (file.size > 20 * 1024 * 1024) throw new Error('El archivo excede el tamaño máximo permitido (20 MB)');
+      const allowedMime = /^(application\/pdf|image\/(jpeg|jpg|png|webp|heic)|application\/msword|application\/vnd\.openxmlformats-officedocument.*)$/i;
+      if (file.type && !allowedMime.test(file.type)) {
+        throw new Error(`Tipo de archivo no permitido: ${file.type}`);
+      }
+      if (!file.name || !file.name.trim()) {
+        throw new Error('El archivo no tiene nombre válido');
+      }
+
       const storage = getStorage();
       const timestamp = Date.now();
 
       const safeCategory = (category || 'other').toString().trim() || 'other';
       const safeEntityId = (entityId || 'general').toString().trim() || 'general';
 
-      const originalName = (file?.name || 'archivo').replace(/\s+/g, '_');
+      // Sanitizar nombre — evita caracteres conflictivos en Storage paths
+      const originalName = (file?.name || 'archivo')
+        .replace(/[\/\\?%*:|"<>]/g, '_')
+        .replace(/\s+/g, '_')
+        .slice(0, 200);
       const fileName = `${safeCategory}/${safeEntityId}/${timestamp}_${originalName}`; // relativo
 
       const storageRef = ref(storage, `${STORAGE_ROOT}/${fileName}`);

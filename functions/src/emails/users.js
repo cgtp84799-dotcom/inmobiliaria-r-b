@@ -1,58 +1,349 @@
-// src/emails/users.js
+// functions/src/emails/users.js
 // ─── Templates de email para el módulo de Usuarios ───────────────────────────
+//
+// AUDITORÍA (ronda notificaciones):
+// - welcomeEmail antes era genérico (asumía que el receptor era un cliente).
+//   Ahora diferencia por rol y muestra el mensaje + CTA correcto:
+//     • viewer  → Bienvenida al portal cliente
+//     • agent / member → Bienvenida al panel de gestión
+//     • admin   → Bienvenida al panel administrativo
+//
+// - Nuevo accessRequestNotificationEmail: cuando alguien pide acceso al
+//   sistema desde /solicitar-acceso, los admins reciben un email para
+//   actuar rápido (antes solo había notif in-app).
 
-const { BASE_URL, WHATSAPP_URL, GRADIENTS, SUPPORT_EMAIL } = require("./config");
+const { BASE_URL, WHATSAPP_URL, GRADIENTS, SUPPORT_EMAIL, FROM_NAME } = require("./config");
 const { escapeHtml, safe, fmtCOP }                         = require("./utils");
 const { htmlWrapper, infoRow, sectionCard, ctaButtons, noteBox } = require("./layout");
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Welcome — diferenciado por rol
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ROLE_CONFIG = {
+  viewer: {
+    title:        "¡Bienvenido a tu portal!",
+    intro:        "Tu cuenta en <strong style='color:#1f2937;'>Inmobiliaria Rincón Bedoya y Asociados</strong> ya está activa. Desde tu portal podrás seguir visitas, contratos, pagos, documentos y notificaciones en un solo lugar.",
+    services: [
+      ["Visitas",   "Solicitar, confirmar y consultar el estado de tus visitas"],
+      ["Contratos", "Revisar fechas, estados, etapas y documentos asociados"],
+      ["Pagos",     "Recibir recordatorios y confirmar pagos registrados"],
+      ["Favoritos", "Guardar propiedades y retomarlas cuando quieras"],
+    ],
+    ctaPrimary:   { label: "Ir a mi portal",   path: "/portal" },
+    ctaSecondary: { label: "Ver propiedades", path: "/catalogo" },
+    suggestion:   "Ingresa al portal y verifica que tu correo, teléfono y datos personales estén correctos para asegurar la entrega de futuras notificaciones.",
+    accent:       "#b8952a",
+    gradient:     GRADIENTS.dark,
+    emoji:        "🏠",
+  },
+  agent: {
+    title:        "¡Bienvenido al equipo!",
+    intro:        "Te damos la bienvenida al panel de gestión de <strong style='color:#1f2937;'>Inmobiliaria Rincón Bedoya y Asociados</strong>. Desde tu panel podrás gestionar propiedades, clientes, visitas y contratos.",
+    services: [
+      ["Propiedades", "Crear, editar y gestionar el catálogo asignado"],
+      ["Clientes",    "Registrar leads, dar seguimiento y administrar tu cartera"],
+      ["Visitas",     "Aprobar, agendar y dar seguimiento a las visitas"],
+      ["Contratos",   "Crear contratos, registrar pagos y avanzar etapas"],
+    ],
+    ctaPrimary:   { label: "Ir al panel",       path: "/dashboard" },
+    ctaSecondary: { label: "Ver propiedades",  path: "/propiedades" },
+    suggestion:   "Configura tu perfil con foto, datos de contacto y firma para que aparezcan correctamente en los emails que reciban tus clientes.",
+    accent:       "#1e40af",
+    gradient:     GRADIENTS.navy,
+    emoji:        "🏢",
+  },
+  admin: {
+    title:        "¡Bienvenido, administrador!",
+    intro:        "Tienes acceso completo al sistema de <strong style='color:#1f2937;'>Inmobiliaria Rincón Bedoya y Asociados</strong>. Desde aquí puedes gestionar usuarios, configurar la operación y supervisar todo el equipo.",
+    services: [
+      ["Dashboard",   "Métricas, KPIs, salud operativa y health score"],
+      ["Usuarios",    "Crear agentes, administradores y gestionar accesos"],
+      ["Solicitudes", "Aprobar nuevos accesos al portal cliente"],
+      ["Reportes",    "Exportar datos de propiedades, contratos y pagos"],
+    ],
+    ctaPrimary:   { label: "Ir al dashboard",   path: "/dashboard" },
+    ctaSecondary: { label: "Gestión de usuarios", path: "/usuarios" },
+    suggestion:   "Revisa las solicitudes de acceso pendientes y configura los emails y datos del equipo desde el módulo de Configuración.",
+    accent:       "#7c3aed",
+    gradient:     GRADIENTS.purple,
+    emoji:        "🛡️",
+  },
+};
+
+// member es alias de agent
+ROLE_CONFIG.member = ROLE_CONFIG.agent;
+
 /**
- * Email de bienvenida al CLIENTE cuando se crea su cuenta (role: "viewer").
- * @param {object} data - Datos del usuario (displayName, email, phone)
+ * Email de bienvenida personalizado por rol.
+ * @param {object} data - Datos del usuario (displayName, email, phone, role)
  */
 function welcomeEmail(data) {
-  const firstName = safe(String(data.displayName || "Cliente").split(" ")[0], "Cliente");
+  const firstName = safe(String(data.displayName || "Usuario").split(" ")[0], "Usuario");
+  const role      = String(data.role || "viewer").toLowerCase();
+  const cfg       = ROLE_CONFIG[role] || ROLE_CONFIG.viewer;
+
+  const servicesList = cfg.services
+    .map(([name, desc]) => infoRow(name, desc))
+    .join("");
+
   return {
-    subject: `¡Bienvenido a Inmobiliaria RyB, ${firstName}!`,
+    subject: `${role === "viewer" ? "Bienvenido a Inmobiliaria RyB" : "Bienvenido al equipo"}, ${firstName}`,
     html: htmlWrapper(
-      GRADIENTS.dark,
+      cfg.gradient,
       `
-      <div style="text-align:center;font-size:56px;margin-bottom:20px;">🏠</div>
-      <h1 class="title" style="text-align:center;color:#b8952a;">¡Bienvenido, ${escapeHtml(firstName)}!</h1>
+      <div style="text-align:center;font-size:56px;margin-bottom:20px;">${cfg.emoji}</div>
+      <h1 class="title" style="text-align:center;color:${cfg.accent};">${cfg.title.replace("administrador", escapeHtml(firstName))}</h1>
       <p class="subtitle" style="text-align:center;">
-        Tu cuenta en <strong style="color:#1f2937;">Inmobiliaria Rincón Bedoya y Asociados</strong> ya está activa.
-        Desde tu portal podrás seguir visitas, contratos, pagos, documentos y notificaciones en un solo lugar.
+        Hola <strong>${escapeHtml(firstName)}</strong>, ${cfg.intro}
       </p>
       ${sectionCard("Datos de tu cuenta", [
-        infoRow("Nombre",   safe(data.displayName, "Cliente"), "#1f2937"),
-        infoRow("Correo",   safe(data.email, "No disponible"), "#1e40af"),
-        infoRow("Teléfono", safe(data.phone, "No registrado"), "#166534"),
-        infoRow("Estado",   "Cuenta activa",                   "#166534"),
+        infoRow("Nombre",   safe(data.displayName, "Usuario"),    "#1f2937"),
+        infoRow("Correo",   safe(data.email, "No disponible"),   "#1e40af"),
+        infoRow("Teléfono", safe(data.phone, "No registrado"),   "#166534"),
+        infoRow("Rol",      role.toUpperCase(),                  cfg.accent),
+        infoRow("Estado",   "Cuenta activa",                     "#166534"),
       ], { bg: "#f8fbff", border: "#dbeafe" })}
-      ${sectionCard("Servicios disponibles", [
-        infoRow("Visitas",    "Solicitar, confirmar y consultar el estado de tus visitas"),
-        infoRow("Contratos",  "Revisar fechas, estados, etapas y documentos asociados"),
-        infoRow("Pagos",      "Recibir recordatorios y confirmar pagos registrados"),
-        infoRow("Favoritos",  "Guardar propiedades y retomarlas cuando quieras"),
-      ])}
+      ${sectionCard("Servicios disponibles", cfg.services.map(([name, desc]) => infoRow(name, desc)))}
       ${noteBox({
         bg: "#fffbeb", borderColor: "#f59e0b",
         title: "Sugerencia inicial",
-        body: "Ingresa al portal y verifica que tu correo, teléfono y datos personales estén correctos para asegurar la entrega de futuras notificaciones.",
+        body: cfg.suggestion,
       })}
       ${ctaButtons(
-        "Ir a mi portal",    `${BASE_URL}/portal`,
-        "Ver propiedades",   `${BASE_URL}/catalogo`,
-        { primaryBg: "linear-gradient(135deg,#b8952a,#d4a836)", secondaryColor: "#b8952a" }
+        cfg.ctaPrimary.label,   `${BASE_URL}${cfg.ctaPrimary.path}`,
+        cfg.ctaSecondary.label, `${BASE_URL}${cfg.ctaSecondary.path}`,
+        { primaryBg: `linear-gradient(135deg,${cfg.accent},${cfg.accent}cc)`, secondaryColor: cfg.accent }
       )}
       <div class="divider"></div>
       <p class="tip" style="text-align:center;">
         Si necesitas ayuda, escríbenos a
-        <a href="mailto:${SUPPORT_EMAIL}" style="color:#b8952a;font-weight:600;">${SUPPORT_EMAIL}</a>
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:${cfg.accent};font-weight:600;">${SUPPORT_EMAIL}</a>
         o por WhatsApp al
-        <a href="${WHATSAPP_URL}" style="color:#b8952a;font-weight:600;">310 596 8202</a>.
+        <a href="${WHATSAPP_URL}" style="color:${cfg.accent};font-weight:600;">310 596 8202</a>.
       </p>`
     ),
   };
 }
 
-module.exports = { welcomeEmail };
+// ═══════════════════════════════════════════════════════════════════════════
+//  Nueva solicitud de acceso — al admin
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Email enviado a admins cuando alguien envía formulario en /solicitar-acceso.
+ * @param {object} data - { name, email, phone, message }
+ * @param {string} requestId - ID del documento en accessRequests
+ */
+function accessRequestNotificationEmail(data, requestId) {
+  return {
+    subject: `Nueva solicitud de acceso · ${safe(data.name, "Usuario")}`,
+    html: htmlWrapper(GRADIENTS.amber, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">📨</div>
+      <h1 class="title" style="color:#92400e;text-align:center;">Nueva solicitud de acceso</h1>
+      <p class="subtitle" style="text-align:center;">
+        Una persona solicitó acceso al portal cliente.
+        Revisa los datos y aprueba o rechaza desde el panel.
+      </p>
+      ${sectionCard("Datos del solicitante", [
+        infoRow("Nombre",     safe(data.name, "No proporcionado"),   "#1f2937"),
+        infoRow("Correo",     safe(data.email, "No disponible"),    "#1e40af"),
+        infoRow("Teléfono",   safe(data.phone, "No registrado"),    "#166534"),
+        requestId ? infoRow("ID solicitud", requestId, "#6b7280") : "",
+      ], { bg: "#fffbeb", border: "#fde68a" })}
+      ${data.message ? sectionCard("Mensaje del solicitante", [
+        `<div style="font-size:14px;color:#3d3c38;line-height:1.7;padding:8px 0;">${escapeHtml(data.message)}</div>`,
+      ]) : ""}
+      ${noteBox({
+        bg: "#fef3c7", borderColor: "#d97706",
+        title: "Acción requerida",
+        body: "Atender solicitudes en menos de 24h aumenta la conversión a clientes activos. Puedes responder por WhatsApp o aprobar el acceso desde el módulo de Solicitudes.",
+      })}
+      ${ctaButtons(
+        "Ver solicitudes",        `${BASE_URL}/solicitudes`,
+        "Contactar por WhatsApp", WHATSAPP_URL,
+        { primaryBg: "linear-gradient(135deg,#92400e,#d97706)", secondaryColor: "#92400e" }
+      )}
+    `),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Solicitud de acceso APROBADA — al solicitante
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Auditoría: cuando el admin aprueba una solicitud en /solicitudes, antes
+// el solicitante NO se enteraba por email. Solo veía el cambio si volvía
+// al panel. Ahora recibe email con CTA al portal y, si aplica, sus credenciales.
+
+/**
+ * Email al solicitante cuando su solicitud de acceso es APROBADA.
+ * @param {object} data - { name, email, assignedRole, approvedBy }
+ */
+function accessRequestApprovedEmail(data) {
+  const role = String(data.assignedRole || "viewer").toLowerCase();
+  const cfg  = ROLE_CONFIG[role] || ROLE_CONFIG.viewer;
+  const firstName = safe(String(data.name || "").split(" ")[0], "");
+
+  return {
+    subject: `🎉 Tu acceso fue aprobado — ${FROM_NAME}`,
+    html: htmlWrapper(GRADIENTS.emerald, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">🎉</div>
+      <h1 class="title" style="color:#166534;text-align:center;">¡Tu acceso fue aprobado!</h1>
+      <p class="subtitle" style="text-align:center;">
+        ${firstName ? `Hola <strong style="color:#1f2937;">${escapeHtml(firstName)}</strong>, ` : ""}buenas noticias:
+        tu solicitud de acceso a <strong style="color:#1f2937;">${FROM_NAME}</strong> fue aprobada.
+        Ya puedes ingresar al portal con el correo que registraste.
+      </p>
+      ${sectionCard("Datos de tu acceso", [
+        infoRow("Correo",  safe(data.email, "No disponible"), "#1e40af"),
+        infoRow("Rol",     role.toUpperCase(),                cfg.accent),
+        infoRow("Estado",  "Activo",                          "#166534"),
+      ], { bg: "#f0fdf4", border: "#bbf7d0" })}
+      ${noteBox({
+        bg: "#dbeafe", borderColor: "#2563eb",
+        title: "Primer ingreso",
+        body: "Inicia sesión con el correo que registraste. Si aún no tienes contraseña, usa la opción <strong>\"¿Olvidaste tu contraseña?\"</strong> para crear una. Si te creamos una cuenta directamente, recibirás otro correo aparte con esos datos.",
+      })}
+      ${ctaButtons(
+        "Ingresar al portal", `${BASE_URL}/acceso-clientes`,
+        "💬 WhatsApp",        WHATSAPP_URL,
+        { primaryBg: "linear-gradient(135deg,#166534,#15803d)", secondaryColor: "#166534" }
+      )}
+      <div class="divider"></div>
+      <p class="tip" style="text-align:center;">
+        Si tienes dudas, escríbenos a
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#166534;font-weight:600;">${SUPPORT_EMAIL}</a>.
+      </p>
+    `),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Solicitud de acceso RECHAZADA — al solicitante
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Auditoría: igual que arriba, antes el solicitante quedaba en silencio
+// cuando la solicitud era rechazada. Ahora recibe un email cordial.
+
+function accessRequestRejectedEmail(data) {
+  const firstName = safe(String(data.name || "").split(" ")[0], "");
+  return {
+    subject: `Actualización sobre tu solicitud de acceso — ${FROM_NAME}`,
+    html: htmlWrapper(GRADIENTS.dark, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">📬</div>
+      <h1 class="title" style="color:#b8952a;text-align:center;">Solicitud revisada</h1>
+      <p class="subtitle" style="text-align:center;">
+        ${firstName ? `Hola <strong style="color:#1f2937;">${escapeHtml(firstName)}</strong>, ` : ""}gracias por tu interés en
+        <strong style="color:#1f2937;">${FROM_NAME}</strong>.
+        Tras revisar tu solicitud, no podemos otorgarte acceso al portal en este momento.
+      </p>
+      ${noteBox({
+        bg: "#fffbeb", borderColor: "#f59e0b",
+        title: "¿Qué puedes hacer?",
+        body: "• Si crees que se trata de un error, contáctanos por WhatsApp.<br/>• Puedes seguir explorando nuestras propiedades públicamente sin necesidad de cuenta.<br/>• Si quieres que te asignemos un asesor directo, escríbenos y con gusto te atendemos.",
+      })}
+      ${ctaButtons(
+        "💬 Escribirnos por WhatsApp", WHATSAPP_URL,
+        "Ver propiedades",             `${BASE_URL}/propiedades`,
+        { primaryBg: "linear-gradient(135deg,#b8952a,#d4a836)", secondaryColor: "#b8952a" }
+      )}
+      <div class="divider"></div>
+      <p class="tip" style="text-align:center;">
+        Lamentamos no poder ayudarte en este momento. Seguimos a tu disposición.
+      </p>
+    `),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Invitación manual al portal — al cliente (enviada por agente/admin)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Auditoría: ClientDetail.jsx tenía un template inline antiguo, dark-mode,
+// sin layout corporativo, hardcodeado. Ahora se centraliza aquí y se invoca
+// vía la extensión /mail desde el frontend (clientInviteEmail.html).
+
+function clientInviteEmail({ clientName, fromAgentName }) {
+  const firstName = safe(String(clientName || "").split(" ")[0], "Cliente");
+  return {
+    subject: `🏠 Tu portal personal está listo — ${FROM_NAME}`,
+    html: htmlWrapper(GRADIENTS.dark, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">🏠</div>
+      <h1 class="title" style="color:#b8952a;text-align:center;">Tu portal personal está listo</h1>
+      <p class="subtitle" style="text-align:center;">
+        Hola <strong style="color:#1f2937;">${escapeHtml(firstName)}</strong>,
+        ${fromAgentName ? `<strong>${escapeHtml(fromAgentName)}</strong> te ha habilitado` : "te hemos habilitado"}
+        un portal exclusivo en <strong>${FROM_NAME}</strong> para que gestiones tus propiedades favoritas, visitas y contratos en un solo lugar.
+      </p>
+      ${sectionCard("¿Qué puedes hacer en tu portal?", [
+        infoRow("Propiedades", "Guardar favoritos y comparar opciones"),
+        infoRow("Visitas",     "Solicitar, revisar y gestionar tus visitas"),
+        infoRow("Contratos",   "Consultar el estado, etapa y pagos"),
+        infoRow("Documentos",  "Descargar comprobantes y documentos firmados"),
+      ], { bg: "#f8fbff", border: "#dbeafe" })}
+      ${noteBox({
+        bg: "#fffbeb", borderColor: "#f59e0b",
+        title: "Cómo entrar",
+        body: "Ingresa con el correo en el que recibes este mensaje. Si es la primera vez, usa <strong>\"Crear contraseña\"</strong> en la pantalla de login. Cualquier duda, escríbenos por WhatsApp.",
+      })}
+      ${ctaButtons(
+        "Acceder al portal",  `${BASE_URL}/acceso-clientes`,
+        "💬 WhatsApp",        WHATSAPP_URL,
+        { primaryBg: "linear-gradient(135deg,#b8952a,#d4a836)", secondaryColor: "#b8952a" }
+      )}
+    `),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Solicitud de eliminación de cuenta — a admins
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Auditoría: profile.service.js .requestAccountDeletion crea un doc en
+// /accountDeletionRequests pero los admins NO recibían email. Quedaban
+// ciegos hasta abrir el panel.
+
+function accountDeletionRequestEmail(data, requestId) {
+  return {
+    subject: `[Admin] Solicitud de eliminación de cuenta · ${safe(data.email, "—")}`,
+    html: htmlWrapper(GRADIENTS.crimson, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">🗑️</div>
+      <h1 class="title" style="color:#991b1b;text-align:center;">Solicitud de eliminación de cuenta</h1>
+      <p class="subtitle" style="text-align:center;">
+        Un usuario solicitó eliminar permanentemente su cuenta. Revisa el caso antes de procesar.
+      </p>
+      ${sectionCard("Datos del solicitante", [
+        infoRow("Email", safe(data.email, "—"),  "#991b1b"),
+        infoRow("UID",   safe(data.uid,   "—"),  "#6b7280"),
+        requestId ? infoRow("ID solicitud", requestId, "#6b7280") : "",
+      ], { bg: "#fef2f2", border: "#fecaca" })}
+      ${data.reason ? sectionCard("Motivo declarado", [
+        `<div style="font-size:14px;color:#3d3c38;line-height:1.7;padding:8px 0;">${escapeHtml(data.reason)}</div>`,
+      ]) : noteBox({
+        bg: "#fef2f2", borderColor: "#dc2626",
+        title: "Sin motivo declarado",
+        body: "El usuario no especificó razón. Considera contactarlo antes de eliminar — puede tratarse de una decisión emocional reversible.",
+      })}
+      ${noteBox({
+        bg: "#fffbeb", borderColor: "#f59e0b",
+        title: "Acción requerida",
+        body: "Antes de eliminar verifica: contratos activos, visitas pendientes, pagos sin liquidar. Si todo está en orden, procede desde el módulo de Usuarios.",
+      })}
+      ${ctaButtons(
+        "Ver módulo de usuarios", `${BASE_URL}/usuarios`,
+        "Dashboard",              `${BASE_URL}/dashboard`,
+        { primaryBg: "linear-gradient(135deg,#991b1b,#b91c1c)", secondaryColor: "#991b1b" }
+      )}
+    `),
+  };
+}
+
+module.exports = {
+  welcomeEmail,
+  accessRequestNotificationEmail,
+  accessRequestApprovedEmail,
+  accessRequestRejectedEmail,
+  clientInviteEmail,
+  accountDeletionRequestEmail,
+};

@@ -60,8 +60,6 @@ Disallow: /perfil
 Disallow: /perfil/
 Disallow: /agentes
 Disallow: /agentes/
-Disallow: /chat
-Disallow: /chat/
 Disallow: /agendar-visita
 Disallow: /agendar-visita/
 

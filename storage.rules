@@ -1,0 +1,149 @@
+rules_version = '2';
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STORAGE RULES — Inmobiliaria Rincón Bedoya y Asociados
+//
+//  Modelo de autorización:
+//    • admin   → lectura/escritura total
+//    • member  → CRUD sobre imágenes de propiedades y documentos
+//    • viewer  → solo lectura de assets públicos y su propia carpeta
+//    • anon    → solo lectura de catálogo público y assets
+//
+//  IMPORTANTE:
+//    - Storage usa request.auth.uid (no email) como identificador.
+//    - El rol se obtiene leyendo el doc /users/{email} en Firestore.
+//    - Validamos tipo MIME y tamaño máximo por upload.
+// ══════════════════════════════════════════════════════════════════════════
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function authEmail() {
+      return request.auth.token.email;
+    }
+
+    function getUserRole() {
+      return firestore.get(
+        /databases/(default)/documents/users/$(authEmail())
+      ).data.role;
+    }
+
+    function hasRole(roles) {
+      return isSignedIn()
+          && firestore.exists(/databases/(default)/documents/users/$(authEmail()))
+          && getUserRole() in roles;
+    }
+
+    function isAdmin()    { return hasRole(['admin']); }
+    function canOperate() { return hasRole(['admin', 'member']); }
+
+    function isOwnerFolder(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Validaciones de contenido
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isDocument() {
+      return request.resource.contentType.matches('application/pdf')
+          || request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('application/msword')
+          || request.resource.contentType.matches(
+               'application/vnd.openxmlformats-officedocument.*'
+             );
+    }
+
+    function maxSize(mb) {
+      return request.resource.size < mb * 1024 * 1024;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PROPIEDADES — Imágenes de catálogo (público)
+    // ══════════════════════════════════════════════════════════════════════
+    match /properties/{propertyId}/{allPaths=**} {
+      allow read:  if true;                                  // catálogo público
+      allow write: if canOperate() && isImage() && maxSize(10);
+      allow delete: if canOperate();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DOCUMENTOS DE CONTRATOS
+    // ══════════════════════════════════════════════════════════════════════
+    match /contracts/{contractId}/{allPaths=**} {
+      // Solo staff interno puede leer/escribir docs contractuales
+      allow read:   if canOperate();
+      allow write:  if canOperate() && isDocument() && maxSize(20);
+      allow delete: if canOperate();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // AVATARS DE USUARIOS
+    // Ruta: /avatars/{uid}/foto.jpg
+    // ══════════════════════════════════════════════════════════════════════
+    match /avatars/{userId}/{fileName} {
+      allow read:   if true;
+      allow write:  if isOwnerFolder(userId) && isImage() && maxSize(5);
+      allow delete: if isOwnerFolder(userId) || isAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DOCUMENTOS DE CLIENTES (subida por el propio cliente en portal)
+    // Ruta: /clients/{uid}/...
+    // ══════════════════════════════════════════════════════════════════════
+    match /clients/{userId}/{allPaths=**} {
+      allow read:   if isOwnerFolder(userId) || canOperate();
+      allow write:  if (isOwnerFolder(userId) || canOperate())
+                    && isDocument() && maxSize(10);
+      allow delete: if isOwnerFolder(userId) || isAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ASSETS PÚBLICOS (logos, og-images, etc.)
+    // ══════════════════════════════════════════════════════════════════════
+    match /public/{allPaths=**} {
+      allow read:  if true;
+      allow write: if isAdmin() && maxSize(5);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DOCUMENTOS GENERALES (módulo /documents)
+    // Ruta: /documents/{category}/{entityId}/...
+    //
+    // AUDITORÍA: el module documents/services/document.service.js usa
+    // STORAGE_ROOT = 'documents' pero antes no había regla explícita para
+    // ese path → caía en default deny y la subida fallaba en producción.
+    // ══════════════════════════════════════════════════════════════════════
+    match /documents/{allPaths=**} {
+      // Lectura: staff siempre; cliente firmado (viewer) puede leer si
+      // la URL de descarga es legítima — Firebase ya gestiona el token.
+      allow read:   if isSignedIn();
+      allow write:  if canOperate() && isDocument() && maxSize(20);
+      allow delete: if canOperate();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CHAT — adjuntos en conversaciones
+    // ══════════════════════════════════════════════════════════════════════
+    match /chat/{conversationId}/{allPaths=**} {
+      // Solo miembros del staff pueden ver/subir adjuntos
+      allow read:  if canOperate();
+      allow write: if canOperate() && maxSize(25);
+      allow delete: if isAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DEFAULT DENY — todo lo no declarado arriba queda bloqueado
+    // ══════════════════════════════════════════════════════════════════════
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

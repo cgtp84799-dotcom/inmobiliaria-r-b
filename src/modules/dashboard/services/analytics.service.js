@@ -19,7 +19,12 @@ export const analyticsService = {
   async getGeneralStats() {
     try {
       // ── Conteos totales con getCountFromServer (1 read cada uno) ──────────
-      // getCountFromServer no descarga documentos — solo cuenta.
+      // ★ FIX (auditoría):
+      //   - contratos: el campo es `statusGeneral`, no `status`. Estados reales:
+      //     vigente / borrador / pausado / vencido / finalizado / cancelado.
+      //     "pendingsignature" no existe → usamos 'borrador' como pendiente.
+      //   - clientes: el campo es `estado`, no `status`. Y `lead` corresponde
+      //     a `tipoCliente == 'lead'` (el campo de tipología, no de estado).
       const [
         totalPropsSnap,
         totalClientsSnap,
@@ -38,15 +43,13 @@ export const analyticsService = {
         getCountFromServer(query(collection(db, "properties"), where("status", "==", "disponible"))),
         getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["vendida", "sold"]))),
         getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["arrendada", "rented"]))),
-        getCountFromServer(query(collection(db, "clients"),    where("status", "!=",  "inactive"))),
-        getCountFromServer(query(collection(db, "clients"),    where("status", "==",  "lead"))),
-        getCountFromServer(query(collection(db, "contracts"),  where("status", "!=",  "completed"))),
-        getCountFromServer(query(collection(db, "contracts"),  where("status", "==",  "pendingsignature"))),
+        getCountFromServer(query(collection(db, "clients"),    where("estado", "in", ["activo", "active"]))),
+        getCountFromServer(query(collection(db, "clients"),    where("tipoCliente", "==", "lead"))),
+        getCountFromServer(query(collection(db, "contracts"),  where("statusGeneral", "in", ["vigente", "active", "activo"]))),
+        getCountFromServer(query(collection(db, "contracts"),  where("statusGeneral", "==", "borrador"))),
       ]);
 
       // ── Valor total: solo necesitamos los precios — limit a 500 ──────────
-      // Para el valor total exacto necesitamos los datos, pero limitamos a 500
-      // documentos para no descargar toda la colección en colecciones grandes.
       const pricesSnap = await getDocs(
         query(collection(db, "properties"), limit(500))
       );
@@ -72,7 +75,6 @@ export const analyticsService = {
       console.error("Error obteniendo estadísticas:", error);
 
       // Fallback al método original si getCountFromServer falla
-      // (por ejemplo, en emulador local que no lo soporte)
       try {
         const [properties, clients, contracts] = await Promise.all([
           getDocs(query(collection(db, "properties"), limit(200))),
@@ -84,17 +86,22 @@ export const analyticsService = {
         const clientsData    = clients.docs.map(doc => doc.data());
         const contractsData  = contracts.docs.map(doc => doc.data());
 
+        const isActiveContract = (c) => {
+          const s = String(c.statusGeneral || c.status || '').toLowerCase();
+          return s === 'vigente' || s === 'active' || s === 'activo';
+        };
+
         return {
           totalProperties:     properties.size,
           availableProperties: propertiesData.filter(p => p.status === "disponible").length,
           soldProperties:      propertiesData.filter(p => ["vendida","sold"].includes(p.status)).length,
           rentedProperties:    propertiesData.filter(p => ["arrendada","rented"].includes(p.status)).length,
           totalClients:        clients.size,
-          activeClients:       clientsData.filter(c => c.status !== "inactive").length,
-          leads:               clientsData.filter(c => c.status === "lead").length,
+          activeClients:       clientsData.filter(c => ['activo', 'active'].includes(c.estado)).length,
+          leads:               clientsData.filter(c => c.tipoCliente === "lead").length,
           totalContracts:      contracts.size,
-          activeContracts:     contractsData.filter(c => c.status !== "completed").length,
-          pendingContracts:    contractsData.filter(c => c.status === "pendingsignature").length,
+          activeContracts:     contractsData.filter(isActiveContract).length,
+          pendingContracts:    contractsData.filter(c => (c.statusGeneral || c.status) === "borrador").length,
           totalValue:          propertiesData.reduce((sum, p) => sum + (Number(p.price) || 0), 0),
         };
       } catch (fallbackError) {
