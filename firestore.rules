@@ -189,7 +189,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       // Cada usuario puede leerse a sí mismo; staff puede leer todos
-      allow read:   if canRead() || isOwner(userId);
+      allow read:   if isAdmin() || isOwner(userId);
       // Solo el propio usuario puede crear su doc (al registrarse)
       allow create: if isSignedIn() && userId == authEmail();
       // Admin puede editar todo; usuario solo sus campos permitidos

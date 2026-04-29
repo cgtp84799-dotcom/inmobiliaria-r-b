@@ -7,7 +7,7 @@
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import {
   setupEnv, teardownEnv,
-  asAdmin, asMember, asViewer, asAnon,
+  asAdmin, asMember, asViewer, asAnon, asUser,
   seedUser,
   assertFails, assertSucceeds,
   doc, addDoc, collection, serverTimestamp,
@@ -51,12 +51,13 @@ describe('/mail — staff', () => {
 
 describe('/mail — cliente', () => {
   it('✅ Cliente puede encolar email A SÍ MISMO (to == authEmail)', async () => {
-    await assertSucceeds(addDoc(collection(asViewer(env).firestore(), 'mail'),
-      buildClientMailToSelf()));
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertSucceeds(addDoc(collection(clientCtx.firestore(), 'mail'), buildClientMailToSelf()));
   });
 
   it('🚫 Cliente NO puede encolar email a tercero (vector de spam)', async () => {
-    await assertFails(addDoc(collection(asViewer(env).firestore(), 'mail'), {
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(addDoc(collection(clientCtx.firestore(), 'mail'), {
       to: 'victima@x.com',
       message: { subject: 'spam', html: '<p>spam</p>' },
       createdAt: serverTimestamp(),
@@ -64,28 +65,32 @@ describe('/mail — cliente', () => {
   });
 
   it('🚫 Cliente NO puede setear "from" (suplantación)', async () => {
-    await assertFails(addDoc(collection(asViewer(env).firestore(), 'mail'), {
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(addDoc(collection(clientCtx.firestore(), 'mail'), {
       ...buildClientMailToSelf(),
       from: 'admin@ryb.com',
     }));
   });
 
   it('🚫 Cliente NO puede setear "replyTo" (suplantación)', async () => {
-    await assertFails(addDoc(collection(asViewer(env).firestore(), 'mail'), {
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(addDoc(collection(clientCtx.firestore(), 'mail'), {
       ...buildClientMailToSelf(),
       replyTo: 'admin@ryb.com',
     }));
   });
 
   it('🚫 Cliente NO puede setear "bcc" (vector de spam masivo oculto)', async () => {
-    await assertFails(addDoc(collection(asViewer(env).firestore(), 'mail'), {
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(addDoc(collection(clientCtx.firestore(), 'mail'), {
       ...buildClientMailToSelf(),
       bcc: ['victima1@x.com', 'victima2@x.com'],
     }));
   });
 
   it('🚫 Cliente NO puede setear "cc"', async () => {
-    await assertFails(addDoc(collection(asViewer(env).firestore(), 'mail'), {
+    const clientCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(addDoc(collection(clientCtx.firestore(), 'mail'), {
       ...buildClientMailToSelf(),
       cc: 'otro@x.com',
     }));

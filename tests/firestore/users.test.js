@@ -28,12 +28,12 @@ describe('/users — lectura', () => {
   });
 
   it('✅ Usuario puede leer su propio doc', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertSucceeds(getDoc(doc(db, 'users', 'cliente@ryb.com')));
   });
 
   it('🚫 Viewer no puede leer doc de otro usuario', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertFails(getDoc(doc(db, 'users', 'otro@ryb.com')));
   });
 
@@ -76,7 +76,7 @@ describe('/users — actualización', () => {
   });
 
   it('✅ Usuario puede actualizar campos permitidos (displayName, phone, photoURL)', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertSucceeds(updateDoc(doc(db, 'users', 'cliente@ryb.com'), {
       displayName: 'Nuevo Nombre',
       phone: '+57 300 0000000',
@@ -85,21 +85,21 @@ describe('/users — actualización', () => {
   });
 
   it('🚫 Usuario NO puede cambiar su propio role (escalación de privilegios)', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertFails(updateDoc(doc(db, 'users', 'cliente@ryb.com'), {
       role: 'admin',
     }));
   });
 
   it('🚫 Usuario NO puede cambiar su propio status', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertFails(updateDoc(doc(db, 'users', 'cliente@ryb.com'), {
       status: 'admin',
     }));
   });
 
   it('🚫 Usuario no puede modificar doc de otro', async () => {
-    const db = asViewer(env).firestore();
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
     await assertFails(updateDoc(doc(db, 'users', 'otro@ryb.com'), {
       displayName: 'hack',
     }));
