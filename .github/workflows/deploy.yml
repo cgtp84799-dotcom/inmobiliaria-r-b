@@ -35,7 +35,7 @@
 #   # VITE_FUNCTIONS_BASE_URL
 # ─────────────────────────────────────────────────────────────
 
-name: Deploy to Firebase Hosting
+name: CI and Deploy Firebase
 
 on:
   push:
@@ -50,11 +50,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── 1. Lint + Build ──────────────────────────────────────────
-  build:
-    name: Lint & Build
+  ci-deploy:
+    name: Lint Test Build Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -66,11 +65,18 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      - name: Install client deps
+        run: npm ci
+
+      - name: Install functions deps
+        working-directory: functions
         run: npm ci
 
       - name: Lint
         run: npm run lint
+
+      - name: Test
+        run: npm test
 
       - name: Build
         env:
@@ -91,115 +97,28 @@ jobs:
           VITE_WA_NUMBER:                    ${{ secrets.VITE_WA_NUMBER }}
           VITE_FUNCTIONS_BASE_URL:           ${{ secrets.VITE_FUNCTIONS_BASE_URL }}
         run: npm run build
-
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 1
-
-  # ── 2. Deploy (solo en push a main, no en PRs) ───────────────
-  deploy:
-    name: Deploy to Firebase
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken:              ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId:              inmobiliaria-ryb-y-asociados
-          target:                 production
-          channelId:              live
-
-  # ── 3. Deploy Rules + Indexes (solo si cambiaron) ────────────
-  # ★ FIX (auditoría): antes el workflow solo desplegaba hosting. Si
-  # alguien modificaba firestore.rules / storage.rules / indexes y hacía
-  # push, las rules viejas seguían activas hasta correr firebase deploy
-  # manualmente — un riesgo serio si una rule corregía un bug de seguridad.
-  deploy-rules:
-    name: Deploy Rules & Indexes
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
       - name: Install Firebase CLI
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm install -g firebase-tools
 
       - name: Authenticate to Google Cloud
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy Firestore rules + indexes + Storage rules
-        run: |
-          firebase deploy \
-            --only firestore:rules,firestore:indexes,storage:rules \
-            --project inmobiliaria-ryb-y-asociados \
-            --non-interactive
+      - name: Deploy Firestore rules
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: firebase deploy --only firestore:rules --project inmobiliaria-ryb-y-asociados --non-interactive
 
-  # ── 4. Deploy Cloud Functions (solo si cambiaron) ────────────
-  # NOTA: El paso de Functions es OPCIONAL — si no quieres redeploy
-  # automático en cada push, comenta este job y deploya manualmente
-  # con `firebase deploy --only functions`. Las Functions tienen secrets
-  # (GMAIL_USER, GMAIL_PASS) que deben estar configurados en Firebase
-  # antes de cualquier deploy: `firebase functions:secrets:set GMAIL_USER`.
-  deploy-functions:
-    name: Deploy Cloud Functions
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: functions/package-lock.json
-
-      - name: Install functions deps
-        working-directory: functions
-        run: npm ci
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Deploy Storage rules
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: firebase deploy --only storage:rules --project inmobiliaria-ryb-y-asociados --non-interactive
 
       - name: Deploy Functions
-        run: |
-          firebase deploy \
-            --only functions \
-            --project inmobiliaria-ryb-y-asociados \
-            --non-interactive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: firebase deploy --only functions --project inmobiliaria-ryb-y-asociados --non-interactive
+
+      - name: Deploy Hosting
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: firebase deploy --only hosting:production --project inmobiliaria-ryb-y-asociados --non-interactive

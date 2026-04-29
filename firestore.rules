@@ -1,3 +1,4 @@
+// FIX [SEGURIDAD]: cierre de exposición por rol viewer en contratos/visitas/documentos/mail y catálogo público limitado a status='published'.
 rules_version = '2';
 
 service cloud.firestore {
@@ -222,8 +223,8 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /properties/{propertyId} {
-      // Catálogo público — cualquiera puede leer
-      allow read:           if true;
+      // Catálogo público — solo propiedades publicadas
+      allow read:           if resource.data.status == 'published';
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
     }
@@ -261,30 +262,30 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/contracts/$(contractId)).data.clientEmail == authEmail();
       }
 
-      allow read:           if canRead() || isContractOwner();
+      allow read:           if canOperate() || isContractOwner();
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
 
       match /milestones/{milestoneId} {
-        allow read:           if canRead() || isContractOwnerByParent();
+        allow read:           if canOperate() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /payments/{paymentId} {
-        allow read:           if canRead() || isContractOwnerByParent();
+        allow read:           if canOperate() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /documents/{documentId} {
-        allow read:           if canRead() || isContractOwnerByParent();
+        allow read:           if canOperate() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if canOperate();
       }
 
       match /history/{historyId} {
-        allow read:           if canRead() || isContractOwnerByParent();
+        allow read:           if canOperate() || isContractOwnerByParent();
         allow create:         if canOperate();
         allow update, delete: if isAdmin();
       }
@@ -300,7 +301,7 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /documents/{documentId} {
-      allow read:           if canRead() || isDocumentOwner();
+      allow read:           if canOperate();
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
     }
@@ -323,7 +324,7 @@ service cloud.firestore {
     match /visits/{visitId} {
       allow create: if validVisit();
 
-      allow read: if canRead() || isVisitOwner();
+      allow read: if canOperate() || isVisitOwner();
 
       allow update: if canOperate()
                     || (
@@ -393,9 +394,9 @@ service cloud.firestore {
 
     match /mail/{mailId} {
       allow create: if canOperate() || isSafeClientMail();
-      allow read:   if isAdmin();
+      allow read:   if false;
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
 
     // ════════════════════════════════════════════════════════════════════════

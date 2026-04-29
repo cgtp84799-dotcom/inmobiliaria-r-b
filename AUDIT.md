@@ -9,6 +9,57 @@ Documento vivo. Registra hallazgos, correcciones aplicadas y pendientes.
 
 ---
 
+## [2026-04-29] Hallazgo: RBAC sobreexpuesto en Firestore Rules
+**Severidad:** 🔴 CRÍTICO
+**Archivo:** `firestore.rules`
+**Problema:** `viewer` heredaba lectura amplia en `/contracts`, `/visits`, `/documents` y catálogo público permitía leer cualquier estado.
+**Corrección aplicada:** lectura de contratos/subcolecciones restringida a `admin/member` o dueño cliente; `/visits` lectura solo staff o dueño; `/documents` solo staff; `/properties` lectura pública solo cuando `status == 'published'`; `/mail` sin lectura/escritura directa por clientes.
+**Tests:** `tests/firestore/contracts.test.js`, `tests/firestore/visits.test.js`, `tests/firestore/mail.test.js`
+
+## [2026-04-29] Hallazgo: Storage Rules permisivas en MIME y tamaños
+**Severidad:** 🔴 CRÍTICO
+**Archivo:** `storage.rules`
+**Problema:** validación de MIME amplia (`image/*`) y límites inconsistentes; rutas de documentos permitían tamaños menores a política objetivo.
+**Corrección aplicada:** imágenes limitadas a `image/jpeg|png|webp|avif`; documentos con PDF/Office; límites de 10MB (imágenes) y 25MB (documentos); escritura en rutas críticas restringida a `admin/member`.
+**Tests:** `npm test` (suite completa)
+
+## [2026-04-29] Hallazgo: Workflow CI sin orden de despliegue exigido
+**Severidad:** 🟠 IMPORTANTE
+**Archivo:** `.github/workflows/deploy.yml`
+**Problema:** el flujo no garantizaba orden secuencial estricto con tests y deploy en cadena.
+**Corrección aplicada:** workflow unificado con orden: `npm ci` → `functions npm ci` → `lint` → `test` → `build` → deploy `firestore:rules` → `storage:rules` → `functions` → `hosting`.
+**Tests:** `npm test`
+
+## [2026-04-29] Hallazgo: errores silenciosos y doble-submit en UI
+**Severidad:** 🟠 IMPORTANTE
+**Archivo:** `src/modules/public/pages/CatalogPage.jsx`, `src/modules/public/pages/LocationPage.jsx`, `src/modules/public/pages/PropertyDetailPage.jsx`, `src/modules/visits/hooks/useVisits.js`, `src/modules/contracts/hooks/useContracts.js`
+**Problema:** cargas con `catch` sin feedback visible y acciones mutativas sin guard de concurrencia.
+**Corrección aplicada:** `toast.error` en fallos de carga pública y guard `inFlight` para evitar dobles envíos en acciones críticas.
+**Tests:** `npm test`
+
+## [2026-04-29] Hallazgo: brecha de accesibilidad de movimiento reducido y cobertura utilitaria
+**Severidad:** 🟡 MENOR
+**Archivo:** `src/shared/hooks/useReducedMotion.js`, `src/App.jsx`, `tests/utils/formatCurrency.test.js`, `tests/utils/formatDate.test.js`, `tests/functions/http-handlers.test.js`
+**Problema:** no existía hook para `prefers-reduced-motion`; faltaban tests de utilidades de formato y documentación de known-issue adicional.
+**Corrección aplicada:** hook `useReducedMotion` creado e integrado; rutas públicas movidas a `React.lazy`; tests agregados para `formatCurrency`, `formatDate`, y `@known-issue` de `redirectToCustomDomain` sin rewrite dedicado.
+**Tests:** `tests/utils/formatCurrency.test.js`, `tests/utils/formatDate.test.js`, `tests/functions/http-handlers.test.js`
+
+## [2026-04-29] Hallazgo: SEO de sitemap no alineado a prioridades objetivo
+**Severidad:** 🟠 IMPORTANTE
+**Archivo:** `functions/src/sitemap.js`, `src/modules/public/pages/HomePage.jsx`
+**Problema:** sitemap incluía estados públicos distintos de `published` y prioridades/frecuencias no alineadas a estrategia SEO local; Home no explicitaba `WebSite/SearchAction` en schema de página.
+**Corrección aplicada:** sitemap limitado a `status == 'published'`; prioridades fijadas (`home=1.0`, ciudad/tipo=`0.9`, propiedad=`0.8`, legales=`0.6`) y `changefreq` ajustado; schema `WebSite + SearchAction` agregado en Home.
+**Tests:** `npm test`
+
+## [2026-04-29] Hallazgo: código muerto y logs de debug en cliente
+**Severidad:** 🟡 MENOR
+**Archivo:** `src/shared/components/UI/OptimizedImage.jsx`, `src/core/components/NotificationCenter.jsx`, `src/modules/users/services/user.service.js`, `src/modules/users/utils/syncUsers.js`
+**Problema:** componente sin uso y `console.log` de debug en runtime.
+**Corrección aplicada:** eliminado componente no referenciado y removidos logs informativos, manteniendo `console.error` para fallos reales.
+**Tests:** `npm test`
+
+---
+
 ## ✅ Correcciones aplicadas en esta iteración
 
 ### 🔴 Críticas (seguridad / bloqueantes)

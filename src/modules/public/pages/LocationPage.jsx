@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: feedback visible en errores de carga y respeto de reduced motion.
 // src/modules/public/pages/LocationPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Página de zona/ciudad editorial — misma lógica de SEO y slugs,
@@ -17,6 +18,7 @@ import {
   buildZoneSeoParagraphs,
 } from "../../../shared/components/SEO";
 import { useRelatedLinks } from "../../../shared/hooks/useSeo";
+import { useReducedMotion } from "../../../shared/hooks/useReducedMotion";
 import { findCity, findDepartment } from "../../../core/config/geography.config";
 import { motion } from "framer-motion";
 import {
@@ -31,6 +33,7 @@ import {
 import propertyService from "../../properties/services/property.service";
 import PropertyCard from "../components/PropertyCard";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
+import toast from "react-hot-toast";
 
 const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME = "Inmobiliaria Rincón Bedoya y Asociados";
@@ -287,6 +290,7 @@ const LocationPage = () => {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const reducedMotion = useReducedMotion();
 
   const ITEMS_PER_PAGE = 9;
 
@@ -406,6 +410,7 @@ const LocationPage = () => {
         setCurrentPage(1);
       } catch (err) {
         console.error("LocationPage: error cargando propiedades:", err);
+        toast.error("No se pudo cargar la zona solicitada.");
         setProperties([]);
       } finally {
         setLoading(false);
@@ -540,8 +545,8 @@ const schemaItemsHydrated = paginated.slice(0, 20).map((p) => ({
 
           <motion.div
             initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="mt-6 max-w-3xl"
           >
             <span className="eyebrow">

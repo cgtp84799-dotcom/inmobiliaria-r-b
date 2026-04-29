@@ -1,3 +1,4 @@
+// FIX [PERFORMANCE]: carga diferida de páginas públicas/no críticas para reducir JS inicial.
 // src/App.jsx
 // ─────────────────────────────────────────────────────────────
 // Árbol de rutas — versión con todos los fixes.
@@ -37,20 +38,20 @@ import AdminLayout    from './shared/components/Layout/AdminLayout';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import ErrorBoundary from './shared/components/UI/ErrorBoundary';
 
-// ── Páginas públicas (non-lazy: críticas para LCP / SEO) ────────────────────
-import AuthPage           from './modules/auth/pages/AuthPage';
+// ── Páginas públicas (Home eager, resto lazy) ───────────────────────────────
 import HomePage           from './modules/public/pages/HomePage';
-import ContactPage        from './modules/public/pages/ContactPage';
-import LocationPage       from './modules/public/pages/LocationPage';
-import PrivacyPolicyPage  from './modules/public/pages/PrivacyPolicyPage';
-import AccessRequestPage  from './modules/users/pages/AccessRequestPage';
-import ProfilePage        from './modules/profile/pages/ProfilePage';
-import CatalogPage        from './modules/public/pages/CatalogPage';
-import PropertyDetailPage from './modules/public/pages/PropertyDetailPage';
 
 // ── Páginas lazy públicas secundarias ──────────────────────────────────────
 const DepartmentHubPage = lazy(() => import('./modules/public/pages/DepartmentHubPage'));
 const NotFoundPage      = lazy(() => import('./modules/public/pages/NotFoundPage'));
+const AuthPage          = lazy(() => import('./modules/auth/pages/AuthPage'));
+const ContactPage       = lazy(() => import('./modules/public/pages/ContactPage'));
+const LocationPage      = lazy(() => import('./modules/public/pages/LocationPage'));
+const PrivacyPolicyPage = lazy(() => import('./modules/public/pages/PrivacyPolicyPage'));
+const AccessRequestPage = lazy(() => import('./modules/users/pages/AccessRequestPage'));
+const ProfilePage       = lazy(() => import('./modules/profile/pages/ProfilePage'));
+const CatalogPage       = lazy(() => import('./modules/public/pages/CatalogPage'));
+const PropertyDetailPage= lazy(() => import('./modules/public/pages/PropertyDetailPage'));
 
 // ── Páginas lazy privadas ──────────────────────────────────────────────────
 const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
@@ -160,7 +161,7 @@ function AppRoutes() {
         {/* ═══════════════════════════════════════════════════════════════ */}
         <Route element={<PublicLayout />}>
           <Route path={PUBLIC_ROUTES.HOME}    element={<HomeOrRedirect />} />
-          <Route path={PUBLIC_ROUTES.CATALOG} element={<CatalogPage />} />
+          <Route path={PUBLIC_ROUTES.CATALOG} element={<S><CatalogPage /></S>} />
 
           {/*
             FIX: una sola ruta de zona.
@@ -170,7 +171,7 @@ function AppRoutes() {
             "manizales" de "casas-en-venta-manizales" por lo que una
             sola ruta es correcta y suficiente.
           */}
-          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<LocationPage />} />
+          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<S><LocationPage /></S>} />
 
           <Route
             path={PUBLIC_ROUTES.DEPARTMENT_HUB}
@@ -180,12 +181,12 @@ function AppRoutes() {
           {/* DESPUÉS de /zona/* y /departamento/* para evitar colisiones */}
           <Route
             path={PUBLIC_ROUTES.PROPERTY_DETAIL}
-            element={<PropertyDetailPage />}
+            element={<S><PropertyDetailPage /></S>}
           />
 
-          <Route path={PUBLIC_ROUTES.CONTACT}        element={<ContactPage />} />
-          <Route path="/ubicacion"                   element={<LocationPage />} />
-          <Route path={PUBLIC_ROUTES.PRIVACY_POLICY} element={<PrivacyPolicyPage />} />
+          <Route path={PUBLIC_ROUTES.CONTACT}        element={<S><ContactPage /></S>} />
+          <Route path="/ubicacion"                   element={<S><LocationPage /></S>} />
+          <Route path={PUBLIC_ROUTES.PRIVACY_POLICY} element={<S><PrivacyPolicyPage /></S>} />
           <Route
             path={PUBLIC_ROUTES.SCHEDULE_VISIT}
             element={<S><ScheduleVisitPage /></S>}
@@ -201,8 +202,8 @@ function AppRoutes() {
         {/* Mantenemos AuthPage como la ruta oficial de login de agentes.   */}
         {/* LoginPage legacy queda eliminado del árbol.                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        <Route path={AUTH_ROUTES.LOGIN}          element={<AuthPage />} />
-        <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<AccessRequestPage />} />
+        <Route path={AUTH_ROUTES.LOGIN}          element={<S><AuthPage /></S>} />
+        <Route path={AUTH_ROUTES.ACCESS_REQUEST} element={<S><AccessRequestPage /></S>} />
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* AUTH CLIENTES                                                   */}
@@ -242,7 +243,7 @@ function AppRoutes() {
           <Route path={PRIVATE_ROUTES.QUERIES}      element={<S><ContactsPage /></S>} />
           <Route path={PRIVATE_ROUTES.CALENDAR}     element={<S><CalendarPage /></S>} />
           <Route path={PRIVATE_ROUTES.VISITS}       element={<S><VisitsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.PROFILE}      element={<ProfilePage />} />
+          <Route path={PRIVATE_ROUTES.PROFILE}      element={<S><ProfilePage /></S>} />
           <Route path={PRIVATE_ROUTES.AGENTS}       element={<S><AgentsPage /></S>} />
           <Route path={PRIVATE_ROUTES.AGENT_DETAIL} element={<S><AgentDetailPage /></S>} />
 

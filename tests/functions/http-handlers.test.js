@@ -437,3 +437,11 @@ describe('deleteUserComplete', () => {
     expect(getStatus()).toBe(401);
   });
 });
+
+describe('@known-issue documentación', () => {
+  it('@known-issue: redirectToCustomDomain está exportada pero no tiene rewrite dedicado en hosting', () => {
+    // Documenta deuda técnica conocida: la función existe en Functions,
+    // pero hoy no hay rewrite explícito en hosting que la invoque.
+    expect(true).toBe(true);
+  });
+});

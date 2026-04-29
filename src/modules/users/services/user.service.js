@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: limpieza de logs de debug en cliente para reducir ruido en producción.
 // src/modules/users/services/user.service.js
 //
 // ═══════════════════════════════════════════════════════════════════
@@ -103,7 +104,6 @@ class UserService {
     }
 
     const url = `${CF_BASE_URL}/${functionName}`;
-    console.log(`[userService] Calling CF: ${url}`);
 
     const res = await fetch(url, {
       method:  'POST',
@@ -270,7 +270,6 @@ class UserService {
     try {
       await this._callCloudFunction('deleteUserComplete', { userId: email });
       cfSuccess = true;
-      console.log(`[userService] deleteUserComplete OK para ${email}`);
     } catch (cfErr) {
       console.warn('[userService] Cloud Function deleteUserComplete falló:', cfErr.message);
     }
@@ -293,7 +292,6 @@ class UserService {
         const snap = await getDocs(q);
         if (!snap.empty) {
           await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
-          console.log(`[userService] Eliminado doc /clients para ${email}`);
         }
       } catch (clientErr) {
         console.warn('[userService] Error eliminando /clients:', clientErr.message);

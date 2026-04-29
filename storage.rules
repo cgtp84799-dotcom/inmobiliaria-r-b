@@ -1,3 +1,4 @@
+// FIX [SEGURIDAD]: MIME estricto, límites 10MB/25MB y escritura limitada a admin/member.
 rules_version = '2';
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -49,13 +50,19 @@ service firebase.storage {
 
     // Validaciones de contenido
     function isImage() {
-      return request.resource.contentType.matches('image/.*');
+      return request.resource.contentType in [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/avif'
+      ];
     }
 
     function isDocument() {
       return request.resource.contentType.matches('application/pdf')
-          || request.resource.contentType.matches('image/.*')
           || request.resource.contentType.matches('application/msword')
+          || request.resource.contentType.matches('application/vnd.ms-excel')
+          || request.resource.contentType.matches('application/vnd.ms-powerpoint')
           || request.resource.contentType.matches(
                'application/vnd.openxmlformats-officedocument.*'
              );
@@ -80,7 +87,7 @@ service firebase.storage {
     match /contracts/{contractId}/{allPaths=**} {
       // Solo staff interno puede leer/escribir docs contractuales
       allow read:   if canOperate();
-      allow write:  if canOperate() && isDocument() && maxSize(20);
+      allow write:  if canOperate() && isDocument() && maxSize(25);
       allow delete: if canOperate();
     }
 
@@ -90,8 +97,8 @@ service firebase.storage {
     // ══════════════════════════════════════════════════════════════════════
     match /avatars/{userId}/{fileName} {
       allow read:   if true;
-      allow write:  if isOwnerFolder(userId) && isImage() && maxSize(5);
-      allow delete: if isOwnerFolder(userId) || isAdmin();
+      allow write:  if canOperate() && isImage() && maxSize(10);
+      allow delete: if canOperate();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -99,10 +106,9 @@ service firebase.storage {
     // Ruta: /clients/{uid}/...
     // ══════════════════════════════════════════════════════════════════════
     match /clients/{userId}/{allPaths=**} {
-      allow read:   if isOwnerFolder(userId) || canOperate();
-      allow write:  if (isOwnerFolder(userId) || canOperate())
-                    && isDocument() && maxSize(10);
-      allow delete: if isOwnerFolder(userId) || isAdmin();
+      allow read:   if canOperate();
+      allow write:  if canOperate() && isDocument() && maxSize(25);
+      allow delete: if canOperate();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -125,7 +131,7 @@ service firebase.storage {
       // Lectura: staff siempre; cliente firmado (viewer) puede leer si
       // la URL de descarga es legítima — Firebase ya gestiona el token.
       allow read:   if isSignedIn();
-      allow write:  if canOperate() && isDocument() && maxSize(20);
+      allow write:  if canOperate() && isDocument() && maxSize(25);
       allow delete: if canOperate();
     }
 

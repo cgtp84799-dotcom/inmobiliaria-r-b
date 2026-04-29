@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: remueve logs de debug en runtime, conserva errores operativos.
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBell, FaTimes, FaCheckDouble, FaComments, FaHome, FaVideo } from 'react-icons/fa';
@@ -28,9 +29,9 @@ const NotificationCenter = () => {
     try {
       const audio = new Audio('/notification-sound.mp3');
       audio.volume = 0.5;
-      audio.play().catch(() => console.log('No se pudo reproducir sonido'));
+      audio.play().catch(() => {});
     } catch (e) {
-      console.log('Error reproduciendo sonido:', e);
+      console.error('Error reproduciendo sonido:', e);
     }
   };
 
@@ -64,8 +65,6 @@ const NotificationCenter = () => {
       .then((payload) => {
         if (!mounted) return;
 
-        console.log('📬 Nueva notificación:', payload);
-
         toast.success(payload.notification?.title || 'Nueva notificación', {
           duration: 5000
         });
@@ -73,7 +72,7 @@ const NotificationCenter = () => {
         loadNotifications();
         playNotificationSound();
       })
-      .catch((err) => console.log('Error escuchando mensajes:', err));
+      .catch((err) => console.error('Error escuchando mensajes:', err));
 
     return () => {
       mounted = false;
