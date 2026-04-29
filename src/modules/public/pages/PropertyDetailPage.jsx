@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: feedback visible al fallar carga y animaciones adaptadas a reduced motion.
 // src/modules/public/pages/PropertyDetailPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Detalle editorial — Inmobiliaria Rincón Bedoya & Asociados
@@ -29,6 +30,7 @@ import PropertyContactForm from "../components/PropertyContactForm";
 import PropertyMap from "../../properties/components/PropertyMap";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
 import { useFavorites } from "../../clients/hooks/useFavorites";
+import { useReducedMotion } from "../../../shared/hooks/useReducedMotion";
 
 /* ═══════════════════════════════════════════════════════════ */
 /*  CONSTANTS                                                   */
@@ -208,6 +210,7 @@ const PropertyDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
+  const reducedMotion = useReducedMotion();
 
   const loadProperty = async () => {
     setLoading(true);
@@ -217,6 +220,7 @@ const PropertyDetailPage = () => {
       setProperty(data || null);
     } catch (err) {
       console.error("Error cargando propiedad:", err);
+      toast.error("No se pudo cargar esta propiedad.");
       setProperty(null);
     } finally {
       setLoading(false);
@@ -563,7 +567,7 @@ const PropertyDetailPage = () => {
         {/* ═══ Toolbar superior ═══ */}
         <motion.div
           initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8"
         >
           <Link to="/catalogo" className="detail-back-link">

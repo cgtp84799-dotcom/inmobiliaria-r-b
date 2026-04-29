@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: guard anti doble-submit para acciones de contrato concurrentes.
 // src/modules/contracts/hooks/useContracts.js
 //
 // Hook para la página de administración de contratos.
@@ -6,7 +7,7 @@
 // - counts agrupados por status y por businessStage
 // - acciones: updateStatus, updateBusinessStage, remove
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { contractService } from '../services/contract.service';
 import {
   CONTRACT_STATUS,
@@ -21,6 +22,17 @@ export function useContracts() {
   const [contracts, setContracts] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
+  const inFlightRef = useRef(new Set());
+
+  const withGuard = useCallback(async (key, action) => {
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    try {
+      await action();
+    } finally {
+      inFlightRef.current.delete(key);
+    }
+  }, []);
 
   // Filtros
   const [search,         setSearch]         = useState('');
@@ -80,10 +92,10 @@ export function useContracts() {
   [contracts]);
 
   const updateStatus = useCallback(async (id, newStatus, notes = '', actorEmail = '') => {
-    try {
+    await withGuard(`status:${id}`, async () => {
       await contractService.updateStatus(id, newStatus, notes, actorEmail);
       toast.success(`Estado: ${getStatusLabel(newStatus)}`);
-    } catch (e) {
+    }).catch((e) => {
       console.error('[useContracts.updateStatus]', e);
       // ★ FIX (auditoría): si el error proviene de la validación de
       // transiciones, mostrar el mensaje real en vez de uno genérico.
@@ -91,28 +103,28 @@ export function useContracts() {
         ? e.message
         : 'Error al actualizar el estado';
       toast.error(msg);
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   const updateBusinessStage = useCallback(async (id, newStage, opts = {}) => {
-    try {
+    await withGuard(`stage:${id}`, async () => {
       await contractService.updateBusinessStage(id, newStage, opts);
       toast.success('Etapa actualizada');
-    } catch (e) {
+    }).catch((e) => {
       console.error('[useContracts.updateBusinessStage]', e);
       toast.error('Error al actualizar la etapa');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   const remove = useCallback(async (id) => {
-    try {
+    await withGuard(`remove:${id}`, async () => {
       await contractService.deleteContract(id);
       toast.success('Contrato eliminado');
-    } catch (e) {
+    }).catch((e) => {
       console.error('[useContracts.remove]', e);
       toast.error('Error al eliminar el contrato');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   return {
     contracts, filtered, loading, error,

@@ -65,25 +65,29 @@ describe('/notifications', () => {
   });
 
   it('✅ Owner puede leer su notificación', async () => {
-    await assertSucceeds(getDoc(doc(asViewer(env).firestore(), 'notifications', 'n-1')));
+    const ownerCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertSucceeds(getDoc(doc(ownerCtx.firestore(), 'notifications', 'n-1')));
   });
 
   it('🚫 No-owner no puede leer notificación ajena', async () => {
-    await assertFails(getDoc(doc(asViewer(env).firestore(), 'notifications', 'n-2')));
+    const ownerCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(getDoc(doc(ownerCtx.firestore(), 'notifications', 'n-2')));
   });
 
   it('✅ Owner puede marcar como leída (campos read, readAt)', async () => {
-    await assertSucceeds(updateDoc(doc(asViewer(env).firestore(), 'notifications', 'n-1'), {
+    const ownerCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertSucceeds(updateDoc(doc(ownerCtx.firestore(), 'notifications', 'n-1'), {
       read: true,
       readAt: new Date(),
     }));
   });
 
   it('🚫 Owner no puede cambiar campos no permitidos (e.g. userId, title)', async () => {
-    await assertFails(updateDoc(doc(asViewer(env).firestore(), 'notifications', 'n-1'), {
+    const ownerCtx = asUser(env, 'cliente@ryb.com', 'uid-cliente');
+    await assertFails(updateDoc(doc(ownerCtx.firestore(), 'notifications', 'n-1'), {
       userId: 'admin@ryb.com',
     }));
-    await assertFails(updateDoc(doc(asViewer(env).firestore(), 'notifications', 'n-1'), {
+    await assertFails(updateDoc(doc(ownerCtx.firestore(), 'notifications', 'n-1'), {
       title: 'hackeado',
     }));
   });

@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: elimina logs informativos de sincronización en cliente.
 import { db } from '../../../core/config/firebase.config';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 
@@ -12,8 +13,6 @@ export async function syncUserToFirestore(authUser, defaultRole = 'viewer') {
 
     // Si NO existe en Firestore, créalo
     if (!userDoc.exists()) {
-      console.log(`✅ Sincronizando usuario ${authUser.email} a Firestore...`);
-      
       await setDoc(userRef, {
         uid: authUser.uid,
         email: authUser.email,
@@ -25,7 +24,6 @@ export async function syncUserToFirestore(authUser, defaultRole = 'viewer') {
         updatedAt: Timestamp.now()
       });
 
-      console.log(`✅ Usuario ${authUser.email} sincronizado exitosamente`);
       return true;
     }
 

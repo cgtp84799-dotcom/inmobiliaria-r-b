@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: evita doble ejecución concurrente de acciones críticas (approve/reject/complete/reschedule/remove).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
 import { useAuth } from '../../../core/contexts/AuthContext';
@@ -11,6 +12,17 @@ export function useVisits() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const isMounted = useRef(true);
+  const inFlightRef = useRef(new Set());
+
+  const withGuard = useCallback(async (key, action) => {
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    try {
+      await action();
+    } finally {
+      inFlightRef.current.delete(key);
+    }
+  }, []);
 
   useEffect(() => {
     // Esperar a que userData esté cargado (puede ser null durante el primer render)
@@ -94,7 +106,7 @@ export function useVisits() {
   );
 
   const approve = useCallback(async (visit, adminNotes = '', agentData = {}) => {
-    try {
+    await withGuard(`approve:${visit?.id ?? 'unknown'}`, async () => {
       let finalAgentData = agentData;
       // Si es member y no se seleccionó agente explícito, se auto-asigna
       if (isMember && !agentData.agentId && currentUser) {
@@ -106,47 +118,47 @@ export function useVisits() {
       }
       await visitService.approveVisit(visit, adminNotes, finalAgentData);
       toast.success('Visita aprobada ✅');
-    } catch (e) {
+    }).catch((e) => {
       console.error(e);
       toast.error('Error al aprobar la visita');
-    }
-  }, [currentUser, isMember]);
+    });
+  }, [currentUser, isMember, withGuard]);
 
   const reject = useCallback(async (visit, adminNotes = '') => {
-    try {
+    await withGuard(`reject:${visit?.id ?? 'unknown'}`, async () => {
       await visitService.rejectVisit(visit, adminNotes);
       toast.success('Visita rechazada');
-    } catch {
+    }).catch(() => {
       toast.error('Error al rechazar la visita');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   const complete = useCallback(async (visitId, adminNotes = '') => {
-    try {
+    await withGuard(`complete:${visitId ?? 'unknown'}`, async () => {
       await visitService.completeVisit(visitId, adminNotes);
       toast.success('Visita marcada como completada 🏁');
-    } catch {
+    }).catch(() => {
       toast.error('Error al completar la visita');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   const reschedule = useCallback(async (visit, proposedDate, proposedTime, adminNotes = '') => {
-    try {
+    await withGuard(`reschedule:${visit?.id ?? 'unknown'}`, async () => {
       await visitService.rescheduleVisit(visit, proposedDate, proposedTime, adminNotes);
       toast.success('Nueva fecha enviada al cliente 📅');
-    } catch {
+    }).catch(() => {
       toast.error('Error al proponer nueva fecha');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   const remove = useCallback(async (visitId) => {
-    try {
+    await withGuard(`remove:${visitId ?? 'unknown'}`, async () => {
       await visitService.deleteVisit(visitId);
       toast.success('Visita eliminada');
-    } catch {
+    }).catch(() => {
       toast.error('Error al eliminar la visita');
-    }
-  }, []);
+    });
+  }, [withGuard]);
 
   return { visits, loading, error, counts, approve, reject, complete, reschedule, remove };
 }

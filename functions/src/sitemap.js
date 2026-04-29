@@ -1,3 +1,4 @@
+// FIX [SEO]: sitemap ajustado a status published, prioridades y frecuencias objetivo para indexación inmobiliaria.
 // functions/src/sitemap.js
 // ═══════════════════════════════════════════════════════════════════════════
 //  Sitemap engine — Inmobiliaria Rincón Bedoya y Asociados
@@ -21,9 +22,7 @@ const admin = require("firebase-admin");
 const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const PAGE_SIZE = 5000;              // URLs por sub-sitemap de propiedades
 const CACHE_SECONDS = 1800;          // 30 min en CDN
-const PUBLIC_STATUS = new Set([
-  "", "disponible", "reservada", "published", "active", "available",
-]);
+const PUBLIC_STATUS = new Set(["published"]);
 
 // ─── Cobertura nacional para landing pages estratégicas ────────────────────
 // Estas son las ciudades/departamentos para los que siempre existe una URL,
@@ -336,8 +335,8 @@ function buildStaticUrls() {
     },
     {
       loc: `${BASE_URL}/catalogo`,
-      priority: "0.95",
-      changefreq: "daily",
+      priority: "0.9",
+      changefreq: "weekly",
       lastmod: now,
     },
     {
@@ -348,8 +347,8 @@ function buildStaticUrls() {
     },
     {
       loc: `${BASE_URL}/politica-privacidad`,
-      priority: "0.3",
-      changefreq: "yearly",
+      priority: "0.6",
+      changefreq: "monthly",
       lastmod: now,
     },
   ];
@@ -358,7 +357,7 @@ function buildStaticUrls() {
   for (const dep of NATIONAL_DEPARTMENTS) {
     urls.push({
       loc: `${BASE_URL}/propiedades/departamento/${dep.slug}`,
-      priority: "0.7",
+      priority: "0.9",
       changefreq: "weekly",
       lastmod: now,
     });
@@ -368,8 +367,8 @@ function buildStaticUrls() {
   for (const combo of TYPE_TRANSACTION_COMBOS) {
     urls.push({
       loc: `${BASE_URL}/propiedades/zona/${combo.type}-en-${combo.tx}-colombia`,
-      priority: combo.priority,
-      changefreq: "daily",
+      priority: "0.9",
+      changefreq: "weekly",
       lastmod: now,
     });
   }
@@ -384,8 +383,8 @@ function buildStaticUrls() {
     for (const city of priorityCities) {
       urls.push({
         loc: `${BASE_URL}/propiedades/zona/${combo.type}-en-${combo.tx}-${city}`,
-        priority: "0.75",
-        changefreq: "daily",
+        priority: "0.9",
+        changefreq: "weekly",
         lastmod: now,
       });
     }
@@ -398,8 +397,8 @@ function buildCityFallbackUrls() {
   const now = nowIso();
   return NATIONAL_CITIES.map((city) => ({
     loc: `${BASE_URL}/propiedades/zona/${city}`,
-    priority: "0.7",
-    changefreq: "daily",
+    priority: "0.9",
+    changefreq: "weekly",
     lastmod: now,
   }));
 }
@@ -421,14 +420,9 @@ async function fetchPublicProperties() {
     const lastmod = toLastMod(data.updatedAt || data.createdAt);
     const images = extractPropertyImages(data, BASE_URL);
 
-    // Priority calculado según si tiene precio, imágenes, etc.
-    let priority = "0.7";
-    if (images.length >= 3 && data.price) priority = "0.85";
-    if (images.length >= 5 && data.price && data.description) priority = "0.9";
-
     propertyUrls.push({
       loc,
-      priority,
+      priority: "0.8",
       changefreq: "weekly",
       lastmod,
       images,
@@ -438,8 +432,8 @@ async function fetchPublicProperties() {
     if (cityPath && !cityLandingMap.has(cityPath)) {
       cityLandingMap.set(cityPath, {
         loc: `${BASE_URL}${cityPath}`,
-        priority: "0.85",
-        changefreq: "daily",
+        priority: "0.9",
+        changefreq: "weekly",
         lastmod,
       });
     }
@@ -448,8 +442,8 @@ async function fetchPublicProperties() {
     if (typeCityPath && !typeCityLandingMap.has(typeCityPath)) {
       typeCityLandingMap.set(typeCityPath, {
         loc: `${BASE_URL}${typeCityPath}`,
-        priority: "0.85",
-        changefreq: "daily",
+        priority: "0.9",
+        changefreq: "weekly",
         lastmod,
       });
     }

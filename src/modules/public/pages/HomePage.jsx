@@ -1,3 +1,4 @@
+// FIX [SEO]: incluye WebSite+SearchAction explícito en Home para rich results de búsqueda.
 // src/modules/public/pages/HomePage.jsx
 // ─────────────────────────────────────────────────────────────
 // Home editorial — Inmobiliaria Rincón Bedoya & Asociados
@@ -176,6 +177,16 @@ const HomePage = () => {
         keywords="inmobiliaria colombia, casas en venta colombia, apartamentos en arriendo, fincas en venta, inmobiliaria con abogados, saneamiento predial, avalúos certificados, inmobiliaria caldas, inmobiliaria región cafetera"
         structuredData={[
           buildLocalBusinessSchema(),
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            url: "https://inmobiliaria-ryb-y-asociados.com",
+            potentialAction: {
+              "@type": "SearchAction",
+              target: "https://inmobiliaria-ryb-y-asociados.com/catalogo?q={search_term_string}",
+              "query-input": "required name=search_term_string",
+            },
+          },
           buildFaqSchema(HOMEPAGE_FAQS),
         ]}
       />

@@ -1,3 +1,4 @@
+// FIX [CALIDAD]: feedback visible en errores de carga y animaciones respetan reduced motion.
 // src/modules/public/pages/CatalogPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Catálogo editorial — Inmobiliaria Rincón Bedoya & Asociados
@@ -25,6 +26,7 @@ import {
   CATALOG_FAQS,
 } from "../../../shared/components/SEO";
 import { useCanonical, useRelatedLinks } from "../../../shared/hooks/useSeo";
+import { useReducedMotion } from "../../../shared/hooks/useReducedMotion";
 import {
   FaSearch, FaFilter, FaMapMarkerAlt, FaTimes, FaTimesCircle,
   FaChevronLeft, FaChevronRight, FaChevronDown, FaSlidersH,
@@ -36,6 +38,7 @@ import PropertyCard from "../components/PropertyCard";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
 import { useFavorites } from "../../clients/hooks/useFavorites";
 import { PUBLIC_ROUTES } from "../../../core/config/routes.config";
+import toast from "react-hot-toast";
 
 /* ─── Helpers ─────────────────────────────────────────────── */
 
@@ -124,6 +127,7 @@ const CatalogPage = () => {
   const [sortBy, setSortBy]         = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
+  const reducedMotion = useReducedMotion();
 
   // Favoritos
   useFavorites();
@@ -160,6 +164,7 @@ const CatalogPage = () => {
       setProperties(data);
     } catch (err) {
       console.error("Error cargando propiedades", err);
+      toast.error("No se pudo cargar el catálogo. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -443,8 +448,8 @@ return (
 
           <motion.div
             initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="mt-6 max-w-3xl"
           >
             <span className="eyebrow">
