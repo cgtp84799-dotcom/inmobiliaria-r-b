@@ -88,7 +88,11 @@ service cloud.firestore {
     function userSelfAllowedFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'displayName', 'phone', 'photoURL', 'updatedAt', 'lastSeen',
-        'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled'
+        'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled',
+        // ★ FIX (auditoría): staff (admin/member) guarda favoritos en su
+        // propio doc /users/{email} en vez de /clients (evita aparecer como
+        // cliente fantasma en el panel).
+        'favorites',
       ]);
     }
 
@@ -233,7 +237,10 @@ service cloud.firestore {
       allow create: if canOperate() || isClientOwnerByRequest();
       allow update: if canOperate()
                     || (isClientOwnerByResource() && clientAllowedUpdateFields());
-      allow delete: if isAdmin();
+      // ★ FIX (auditoría — duplicados): permitir al cliente borrar duplicados
+      // de SU propio email. Esto soporta el flow de auto-fusión en
+      // resolveClientByEmail. El admin sigue pudiendo borrar cualquiera.
+      allow delete: if isAdmin() || isClientOwnerByResource();
 
       match /history/{historyId} {
         allow read:   if canRead() || isClientOwnerByResource();
@@ -248,30 +255,36 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /contracts/{contractId} {
+      function isContractOwnerByParent() {
+        return isSignedIn()
+            && exists(/databases/$(database)/documents/contracts/$(contractId))
+            && get(/databases/$(database)/documents/contracts/$(contractId)).data.clientEmail == authEmail();
+      }
+
       allow read:           if canRead() || isContractOwner();
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
 
       match /milestones/{milestoneId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /payments/{paymentId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if isAdmin();
       }
 
       match /documents/{documentId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create, update: if canOperate();
         allow delete:         if canOperate();
       }
 
       match /history/{historyId} {
-        allow read:           if canRead() || isContractOwner();
+        allow read:           if canRead() || isContractOwnerByParent();
         allow create:         if canOperate();
         allow update, delete: if isAdmin();
       }
@@ -453,27 +466,30 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read:   if isAdmin() || isConversationParticipant();
+      // Chat aislado: ningún usuario, ni siquiera admin, puede leer/escribir
+      // conversaciones donde no esté incluido en participants[].
+      allow read:   if isConversationParticipant();
       allow create: if canOperate() && isCreatingAsParticipant();
-      // Al actualizar no se puede cambiar la lista de participantes si no eres admin
-      allow update: if isAdmin()
-                    || (isConversationParticipant()
-                        && request.resource.data.participants == resource.data.participants);
-      allow delete: if isAdmin();
+      // Al actualizar no se puede cambiar la lista de participantes si no eres admin participante.
+      allow update: if isConversationParticipant()
+                    && (isAdmin()
+                        || request.resource.data.participants == resource.data.participants);
+      allow delete: if isConversationParticipant() && isAdmin();
 
       match /messages/{messageId} {
         // Se lee/escribe solo si eres participante de la conversación padre
         function isParentParticipant() {
           return isSignedIn()
-              && authEmail() in get(
-                   /databases/$(database)/documents/conversations/$(conversationId)
-                 ).data.participants;
+              && exists(/databases/$(database)/documents/conversations/$(conversationId))
+              && get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants is list
+              && authEmail() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         }
-        allow read:   if isAdmin() || isParentParticipant();
+        allow read:   if isParentParticipant();
         allow create: if isParentParticipant() && validChatMessage();
-        allow update: if (isParentParticipant() && authEmail() == resource.data.senderEmail)
-                      || isAdmin();
-        allow delete: if isAdmin() || (isParentParticipant() && authEmail() == resource.data.senderEmail);
+        allow update: if isParentParticipant()
+                      && (authEmail() == resource.data.senderEmail || isAdmin());
+        allow delete: if isParentParticipant()
+                      && (authEmail() == resource.data.senderEmail || isAdmin());
       }
     }
 

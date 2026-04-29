@@ -26,8 +26,23 @@ import toast from 'react-hot-toast';
 const googleProvider = new GoogleAuthProvider();
 
 
+// ★ FIX (auditoría — duplicación de cliente al completar/omitir onboarding):
+// Antes esta función buscaba con `email == email` (sin normalizar), pero el
+// portal busca con `email == norm(email)` (lowercase + trim). Si el usuario
+// se registra con "Pedro@Mail.com" pero el portal lo busca como "pedro@mail.com",
+// no encuentra → crea otro doc → DUPLICADO.
+//
+// SOLUCIÓN:
+//   1. Normalizar siempre el email a lowercase antes de buscar Y de crear.
+//   2. Si no encontramos por normalizado, también buscar por original
+//      (compatibilidad con docs antiguos sin normalizar).
+//   3. Si tras todo eso no existe, recién crear con email normalizado.
 async function ensureClientDocs(user, extra = {}) {
-  const email = user.email;
+  const rawEmail = user.email || '';
+  const email = String(rawEmail).toLowerCase().trim();
+  if (!email) return;
+
+  // /users — ID es el email, ya lo normalizamos
   const uRef = doc(db, 'users', email);
   const uSnap = await getDoc(uRef);
   if (uSnap.exists()) {
@@ -43,13 +58,27 @@ async function ensureClientDocs(user, extra = {}) {
       favorites: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
   }
-  const q = query(collection(db, 'clients'), where('email', '==', email));
-  if ((await getDocs(q)).empty) {
+
+  // /clients — buscar por email normalizado y por original (legacy)
+  const q1 = query(collection(db, 'clients'), where('email', '==', email));
+  let found = !((await getDocs(q1)).empty);
+  if (!found && rawEmail !== email) {
+    const q2 = query(collection(db, 'clients'), where('email', '==', rawEmail));
+    found = !((await getDocs(q2)).empty);
+  }
+  if (!found) {
     await addDoc(collection(db, 'clients'), {
       nombre: extra.displayName ?? user.displayName ?? email.split('@')[0],
-      email, telefono: extra.phone ?? '', tipoCliente: 'portal',
-      estado: 'activo', notas: '', favorites: [], agentId: null,
-      createdViaPortal: true, onboardingDone: false, createdAt: serverTimestamp(),
+      email, // siempre normalizado
+      telefono: extra.phone ?? '',
+      tipoCliente: 'portal',
+      estado: 'activo',
+      notas: '',
+      favorites: [],
+      agentId: null,
+      createdViaPortal: true,
+      onboardingDone: false,
+      createdAt: serverTimestamp(),
     });
   }
 }

@@ -36,9 +36,25 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   async function handleFinish() {
     setSaving(true);
     try {
+      // ★ FIX (auditoría — duplicación reportada): antes de actualizar el doc,
+      // forzamos un resolveClientByEmail que dedupera duplicados creados por
+      // race conditions previas. Esto garantiza que escribimos en EL doc real,
+      // no en uno fantasma que el panel mostraría como cliente separado.
+      const { resolveClientByEmail } = await import('../services/client.portal.service');
+      const email = currentUser?.email || auth.currentUser?.email;
+      let realClientId = clientId;
+      if (email) {
+        try {
+          const resolved = await resolveClientByEmail(email);
+          realClientId = resolved.id;
+        } catch (e) {
+          console.warn('[WelcomeModal] resolveClientByEmail falló, usando clientId del prop:', e?.message);
+        }
+      }
+
       // Actualizar documento de cliente
-      if (clientId) {
-        await updateDoc(doc(db, 'clients', clientId), {
+      if (realClientId) {
+        await updateDoc(doc(db, 'clients', realClientId), {
           nombre:           form.nombre.trim() || clientData?.nombre,
           telefono:         form.telefono.trim(),
           ubicacionInteres: form.ubicacionInteres.trim(),
@@ -57,7 +73,6 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
       }
 
       // Actualizar users/{email}
-      const email = currentUser?.email || authUser?.email;
       if (email) {
         await updateDoc(doc(db, 'users', email), {
           displayName: form.nombre.trim() || currentUser?.displayName,
@@ -77,14 +92,25 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   }
 
   async function handleSkip() {
-    if (clientId) {
-      try {
-        await updateDoc(doc(db, 'clients', clientId), {
+    // ★ FIX (auditoría — duplicación reportada): igual que handleFinish,
+    // forzamos dedup antes de marcar onboardingDone.
+    try {
+      const { resolveClientByEmail } = await import('../services/client.portal.service');
+      const email = currentUser?.email || auth.currentUser?.email;
+      let realClientId = clientId;
+      if (email) {
+        try {
+          const resolved = await resolveClientByEmail(email);
+          realClientId = resolved.id;
+        } catch { /* fallback al clientId del prop */ }
+      }
+      if (realClientId) {
+        await updateDoc(doc(db, 'clients', realClientId), {
           onboardingDone: true,
           updatedAt: serverTimestamp(),
         });
-      } catch { /* silencioso */ }
-    }
+      }
+    } catch { /* silencioso — no bloquear UX */ }
     onDone();
   }
 

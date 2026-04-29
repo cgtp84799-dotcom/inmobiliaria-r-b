@@ -41,18 +41,35 @@ const ref = (id) => doc(db, COLLECTION, id);
 // ─────────────────────────────────────────────────────────────────────────────
 // EMAIL VÍA EXTENSIÓN "Trigger Email from Firestore"
 // Escribe en /mail → la extensión ext-firestore-send-email lo procesa y envía
+//
+// ★ FIX (auditoría): el frontend reportaba que emails de visita aprobada/
+// rechazada/reagendada no llegaban. Causas posibles:
+//   1. Las reglas Firestore rechazaban el doc (ya corregido).
+//   2. La extensión no está instalada o mal configurada (acción externa).
+//   3. El doc se crea pero queda con delivery.state = "ERROR".
+// Para diagnosticar el caso (3) loggeamos el id del mail creado y agregamos
+// un campo `meta.source` que ayuda a auditar desde Firebase Console.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function sendMail(to, subject, html) {
-  if (!to) return;
+async function sendMail(to, subject, html, source = 'visit.service') {
+  if (!to) {
+    console.warn('[sendMail] sin destinatario, abortado');
+    return null;
+  }
   try {
-    await addDoc(collection(db, 'mail'), {
+    const ref = await addDoc(collection(db, 'mail'), {
       to,
       message: { subject, html },
       createdAt: serverTimestamp(),
     });
+    // Log de éxito — facilita rastreo en Firebase Console
+    console.info(`[sendMail] ${source} → ${to} · doc=${ref.id} · subject="${subject.slice(0, 60)}"`);
+    return ref.id;
   } catch (e) {
-    console.warn('sendMail:', e.message);
+    // Log explícito — antes era warn silencioso. Si una rule rechaza, esto
+    // ahora se ve en la consola del navegador y en Sentry/log aggregator.
+    console.error(`[sendMail] ERROR ${source} → ${to}:`, e.code, e.message);
+    return null;
   }
 }
 
@@ -238,6 +255,22 @@ function tplRescheduledClient({ clientName, propertyName, proposedDate, proposed
 
 async function upsertClientAndHistory(visit, agentData, approvedByEmail) {
   try {
+    // ★ FIX (auditoría): si el clientEmail corresponde a un staff (admin/
+    // member), NO creamos doc en /clients — antes esto generaba clientes
+    // fantasma con email de admin/agente.
+    if (visit.clientEmail) {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', visit.clientEmail));
+        if (userSnap.exists()) {
+          const role = userSnap.data().role;
+          if (role === 'admin' || role === 'member') {
+            console.warn('[upsertClientAndHistory] clientEmail pertenece a staff — no se crea /clients');
+            return;
+          }
+        }
+      } catch (_) { /* si falla la lectura, seguimos con el flujo normal */ }
+    }
+
     const snap = await getDocs(
       query(collection(db, 'clients'), where('email', '==', visit.clientEmail)),
     );
@@ -464,19 +497,12 @@ export const visitService = {
       }).catch(() => {});
     }
 
-    // ── Email vía extensión /mail ────────────────────────────────────────────
-    await sendMail(
-      visit.clientEmail,
-      `Visita confirmada — ${visit.propertyName} · R&B Inmobiliaria`,
-      tplApprovedClient({ clientName: visit.clientName, propertyName: visit.propertyName, requestedDate: visit.requestedDate, requestedTime: visit.requestedTime, agentName, adminNotes }),
-    );
-    if (agentEmail) {
-      await sendMail(
-        agentEmail,
-        `Nueva visita asignada — ${visit.propertyName} · R&B Inmobiliaria`,
-        tplApprovedAgent({ agentName, agentEmail, clientName: visit.clientName, clientEmail: visit.clientEmail, clientPhone: visit.clientPhone, propertyName: visit.propertyName, requestedDate: visit.requestedDate, requestedTime: visit.requestedTime, adminNotes, approvedByEmail }),
-      );
-    }
+    // ── Email ────────────────────────────────────────────────────────────────
+    // ★ FIX (auditoría — usuario reportó emails no llegan):
+    // Antes el frontend enviaba el email vía la extensión /mail. Ahora el
+    // trigger backend `onVisitStatusChanged` lo hace al detectar el cambio
+    // de status — más confiable y sin depender de la extensión.
+    // El frontend solo crea notif in-app.
   },
 
   // ── RECHAZAR visita ───────────────────────────────────────────────────────
@@ -491,13 +517,7 @@ export const visitService = {
         type:     NOTIF_TYPES.VISIT_REJECTED,
         relatedId: visit.id,
       }).catch(() => {});
-
-      // Email vía extensión /mail
-      await sendMail(
-        visit.clientEmail,
-        `Actualización sobre tu visita a "${visit.propertyName}" · R&B Inmobiliaria`,
-        tplRejectedClient({ clientName: visit.clientName, propertyName: visit.propertyName, adminNotes }),
-      );
+      // ★ Email lo envía el trigger backend onVisitStatusChanged.
     }
   },
 
@@ -549,13 +569,7 @@ export const visitService = {
         type:     NOTIF_TYPES.VISIT_RESCHEDULED,
         relatedId: visitId,
       }).catch(() => {});
-
-      // Email vía extensión /mail
-      await sendMail(
-        clientEmail,
-        `Nueva fecha propuesta para tu visita a "${propName}" · R&B Inmobiliaria`,
-        tplRescheduledClient({ clientName, propertyName: propName, proposedDate, proposedTime, originalDate: origDate, originalTime: origTime, adminNotes }),
-      );
+      // ★ Email lo envía el trigger backend onVisitStatusChanged.
     }
   },
 

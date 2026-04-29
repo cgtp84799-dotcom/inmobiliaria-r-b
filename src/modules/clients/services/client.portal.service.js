@@ -52,29 +52,99 @@ export async function resolveClientByEmail(email) {
 
   // Buscar tanto por email normalizado como por el original (compatibilidad
   // con docs antiguos que se crearon antes de la normalización).
-  const q1 = query(collection(db, CLIENTS_COL), where('email', '==', normalized));
-  const snap1 = await getDocs(q1);
+  async function findAll() {
+    const q1 = query(collection(db, CLIENTS_COL), where('email', '==', normalized));
+    const snap1 = await getDocs(q1);
+    let docs = snap1.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  let docs = snap1.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  if (docs.length === 0 && normalized !== email) {
-    // Fallback: buscar por el email original (con mayúsculas)
-    const q2 = query(collection(db, CLIENTS_COL), where('email', '==', email));
-    const snap2 = await getDocs(q2);
-    docs = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (normalized !== email) {
+      // También buscar por email original
+      const q2 = query(collection(db, CLIENTS_COL), where('email', '==', email));
+      const snap2 = await getDocs(q2);
+      const extra = snap2.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((d) => !docs.some((existing) => existing.id === d.id));
+      docs = [...docs, ...extra];
+    }
+    return docs;
   }
 
-  if (docs.length > 0) {
-    // Preferir el que tenga onboardingDone definido (creado por este servicio)
-    const withOnboarding = docs.find((d) => d.onboardingDone !== undefined);
-    const chosen = withOnboarding ?? docs[0];
+  let docs = await findAll();
 
+  // ★ FIX (auditoría): si la query no devolvió nada pero el doc puede haber
+  // sido creado hace milisegundos por ClientAuthPage.ensureClientDocs,
+  // esperar y reintentar UNA VEZ. Esto evita que dos llamadas concurrentes
+  // creen dos docs distintos para el mismo email.
+  if (docs.length === 0) {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    docs = await findAll();
+  }
+
+  // ★ FIX (auditoría — duplicación reportada por usuario):
+  // Si encontramos MÁS de un doc para el mismo email, esto significa que
+  // hubo race condition previa (ClientAuthPage + useClientPortal + useFavorites
+  // creando docs en paralelo). Fusionamos: elegir el "mejor" candidato
+  // y borrar los duplicados. Esto sana el panel para próximos accesos.
+  if (docs.length > 1) {
+    console.warn(`[resolveClientByEmail] ${docs.length} docs para email "${normalized}" — fusionando.`);
+
+    // Heurística para elegir el mejor:
+    //   1. El que tenga onboardingDone === true (perfil completado)
+    //   2. El que tenga más datos llenos (nombre, teléfono, etc.)
+    //   3. El más antiguo (createdAt) — tiene más historial
+    const score = (d) => {
+      let s = 0;
+      if (d.onboardingDone === true) s += 1000;
+      if (d.nombre && d.nombre !== normalized.split('@')[0]) s += 50;
+      if (d.telefono) s += 30;
+      if ((d.favorites || []).length > 0) s += 20 * d.favorites.length;
+      if (d.tipoCliente && d.tipoCliente !== 'portal') s += 10;
+      // Penalizar docs muy nuevos (recién creados por race) — preferir el viejo
+      const created = d.createdAt?.toDate?.()?.getTime?.() ?? d.createdAt?.seconds ?? 0;
+      if (created) s += 100; // doc con createdAt resuelto es preferible
+      return s;
+    };
+
+    docs.sort((a, b) => score(b) - score(a));
+    const chosen = docs[0];
+    const losers = docs.slice(1);
+
+    // Combinar favoritos de TODOS los docs en el chosen — para no perder
+    // los corazones que el cliente dio antes de la fusión.
+    const allFavorites = new Set(chosen.favorites || []);
+    losers.forEach((l) => (l.favorites || []).forEach((f) => allFavorites.add(f)));
+
+    try {
+      // Patch del chosen con los favoritos consolidados
+      if (allFavorites.size !== (chosen.favorites || []).length) {
+        await updateDoc(doc(db, CLIENTS_COL, chosen.id), {
+          favorites: Array.from(allFavorites),
+          email: normalized, // normalizar de paso
+          updatedAt: serverTimestamp(),
+        });
+        chosen.favorites = Array.from(allFavorites);
+      }
+      // Borrar los duplicados (en background — no bloquear la UI)
+      Promise.allSettled(
+        losers.map((l) => deleteDoc(doc(db, CLIENTS_COL, l.id)))
+      ).then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed) console.warn(`[resolveClientByEmail] ${failed} duplicados no se pudieron borrar (revisar rules).`);
+      });
+    } catch (err) {
+      console.warn('[resolveClientByEmail] dedup error:', err.message);
+    }
+
+    return { id: chosen.id, ...chosen, email: normalized };
+  }
+
+  if (docs.length === 1) {
+    const chosen = docs[0];
     // Si encontramos un doc con email no normalizado, lo normalizamos en background
     if (chosen.email !== normalized) {
       updateDoc(doc(db, CLIENTS_COL, chosen.id), { email: normalized })
         .catch(() => { /* silencioso */ });
     }
-
     return { id: chosen.id, ...chosen };
   }
 

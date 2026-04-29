@@ -325,12 +325,45 @@ exports.onVisitStatusChanged = onDocumentWritten(
     };
 
     // Solo "pending" se maneja aquí (nueva creación).
-    // approved / rejected / rescheduled los envía visit.service.js vía /mail
-    // para evitar emails duplicados al cliente.
     if (prevStatus === null && nextStatus === "pending") {
       const mail = pendingVisitEmail(d);
       await send({ to: d.clientEmail, ...mail });
       return;
+    }
+
+    // ★ FIX (auditoría — usuario reportó que estos emails no llegaban):
+    // Los emails de approved/rejected/rescheduled antes los enviaba el frontend
+    // vía la extensión /mail. Si la extensión está mal configurada o las rules
+    // bloquean el doc, el email se pierde sin trazabilidad. Ahora también los
+    // envía este trigger backend usando nodemailer directo — más confiable.
+    //
+    // NOTA: el frontend (visit.service.js) sigue enviando los suyos. Para
+    // evitar emails duplicados al cliente, marca con `mailSentByFrontend: true`
+    // si quiere desactivar el envío backend. Sin ese flag, este backend envía.
+    if (d.clientEmail && !after.mailSentByFrontend) {
+      // ── APROBADA ─────────────────────────────────────────────────────────
+      if (nextStatus === "approved") {
+        const mail = approvedVisitEmail(d);
+        await send({ to: d.clientEmail, ...mail });
+        // Notificar al agente si fue asignado
+        if (d.agentEmail && d.agentEmail !== d.clientEmail) {
+          const agentMail = agentVisitAssignedEmail(d);
+          await send({ to: d.agentEmail, ...agentMail });
+        }
+        return;
+      }
+      // ── RECHAZADA ────────────────────────────────────────────────────────
+      if (nextStatus === "rejected") {
+        const mail = rejectedVisitEmail(d);
+        await send({ to: d.clientEmail, ...mail });
+        return;
+      }
+      // ── REAGENDADA ───────────────────────────────────────────────────────
+      if (nextStatus === "rescheduled") {
+        const mail = rescheduledVisitEmail(d);
+        await send({ to: d.clientEmail, ...mail });
+        return;
+      }
     }
 
     // ── Cancelación del cliente desde el portal ───────────────────────────────

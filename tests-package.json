@@ -1,0 +1,20 @@
+{
+  "_README": "Este archivo es REFERENCIA. Copia el bloque 'scripts' a tu package.json existente y luego corre el comando 'install' que está más abajo. NO sobreescribas tu package.json.",
+
+  "scripts_a_añadir_en_tu_package_json": {
+    "test": "vitest run --no-coverage",
+    "test:watch": "vitest",
+    "test:rules": "vitest run tests/firestore --no-coverage",
+    "test:functions": "vitest run tests/functions --no-coverage",
+    "test:frontend": "vitest run tests/frontend --no-coverage",
+    "test:validators": "vitest run tests/validators --no-coverage",
+    "test:fast": "vitest run tests/validators tests/functions tests/frontend --no-coverage",
+    "emulator": "firebase emulators:start --only firestore --project demo-ryb-test"
+  },
+
+  "comando_de_instalacion_powershell": "npm install --save-dev --legacy-peer-deps vitest@^4 @firebase/rules-unit-testing@^5 firebase-tools@^14 jsdom@^25 @testing-library/react@^16 @testing-library/dom@^10 @testing-library/jest-dom@^6",
+
+  "comando_de_instalacion_cmd_una_linea": "npm install --save-dev --legacy-peer-deps vitest@^4 @firebase/rules-unit-testing@^5 firebase-tools@^14 jsdom@^25 @testing-library/react@^16 @testing-library/dom@^10 @testing-library/jest-dom@^6",
+
+  "_NOTA_": "Si tu projecto YA usa firebase-tools, omítelo de la lista. Si firebase 12 ya está como dep (lo está, en tu package.json original), no lo agregues como devDep."
+}

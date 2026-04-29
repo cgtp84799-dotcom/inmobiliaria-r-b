@@ -27,15 +27,20 @@
 // CAMBIO v2: toggleFavorite acepta onUnauthenticated como segundo argumento.
 // Cuando no hay sesión activa, llama esa función en lugar del toast.error,
 // permitiendo que PropertyCard muestre un modal de acceso.
+//
+// ★ CAMBIO v3 (auditoría): si el usuario es admin/member (staff), NO se crea
+// doc en /clients — el staff puede dar like a propiedades pero esos favoritos
+// se almacenan en su propio doc /users/{email}, NO en /clients. Antes, cuando
+// un admin daba corazón a una propiedad, aparecía como cliente en el panel.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   doc, updateDoc, arrayUnion, arrayRemove,
-  collection, query, where, getDocs, onSnapshot,
-  addDoc, serverTimestamp,
+  onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
+import { USER_ROLES } from '../../users/types/user.types';
 import toast from 'react-hot-toast';
 
 export function useFavorites() {
@@ -44,6 +49,13 @@ export function useFavorites() {
   const [clientId,  setClientId]  = useState(null);
   const [loading,   setLoading]   = useState(true);
   const clientIdRef = useRef(null);
+  // ★ Para staff (admin/member) los favoritos viven en /users/{email}.docId
+  // y se identifica con un flag distinto.
+  const isStaff = currentUser?.role === USER_ROLES.ADMIN
+               || currentUser?.role === USER_ROLES.MEMBER;
+  const storageMode = isStaff ? 'user' : 'client';
+  const storageModeRef = useRef(storageMode);
+  storageModeRef.current = storageMode;
 
   useEffect(() => {
     if (!currentUser?.email) {
@@ -60,38 +72,36 @@ export function useFavorites() {
 
     async function resolveAndSubscribe() {
       try {
-        const q    = query(collection(db, 'clients'), where('email', '==', currentUser.email));
-        const snap = await getDocs(q);
-
-        if (cancelled) return;
-
-        let id;
-
-        if (!snap.empty) {
-          // Usar el primer doc que coincida (el mismo que usa resolveClientByEmail)
-          id = snap.docs[0].id;
-        } else {
-          // Crear doc con los MISMOS campos que resolveClientByEmail
-          // Esto garantiza que si useFavorites crea el doc, el portal lo trate
-          // como cliente nuevo (muestra WelcomeModal) y los favoritos coincidan
-          const newRef = await addDoc(collection(db, 'clients'), {
-            email:            currentUser.email,
-            nombre:           currentUser.displayName || currentUser.email.split('@')[0],
-            telefono:         currentUser.phoneNumber || '',
-            tipoCliente:      'portal',
-            estado:           'activo',
-            notas:            '',
-            favorites:        [],
-            ubicacionInteres: '',
-            presupuesto:      '',
-            tipoPropiedad:    '',
-            agentId:          null,
-            createdViaPortal: true,
-            onboardingDone:   false,   // ← CRÍTICO: igual que resolveClientByEmail
-            createdAt:        serverTimestamp(),
-          });
-          id = newRef.id;
+        // ★ FIX (auditoría): para staff, los favoritos viven en /users/{email}.
+        // No se crea doc en /clients para evitar que admins/agentes aparezcan
+        // como clientes en el panel.
+        if (isStaff) {
+          const userRef = doc(db, 'users', currentUser.email);
+          unsubClient = onSnapshot(
+            userRef,
+            (docSnap) => {
+              if (cancelled) return;
+              if (docSnap.exists()) {
+                setFavorites(docSnap.data().favorites ?? []);
+              }
+              // Para staff, el "id" del store es el email mismo
+              setClientId(currentUser.email);
+              clientIdRef.current = currentUser.email;
+              setLoading(false);
+            },
+            () => setLoading(false)
+          );
+          return;
         }
+
+        // Flujo cliente (viewer):
+        // ★ FIX (auditoría — duplicación): antes este hook hacía su propia
+        // query+addDoc paralela a resolveClientByEmail → race condition →
+        // duplicados. Ahora delegamos al servicio canónico que ya tiene
+        // dedup automático y delay anti-race.
+        const { resolveClientByEmail } = await import('../services/client.portal.service');
+        const data = await resolveClientByEmail(currentUser.email);
+        const id = data.id;
 
         if (cancelled) return;
 
@@ -127,7 +137,7 @@ export function useFavorites() {
       cancelled = true;
       if (unsubClient) unsubClient();
     };
-  }, [currentUser?.email]);
+  }, [currentUser?.email, isStaff]);
 
   const isFavorite = useCallback(
     (propertyId) => favorites.includes(propertyId),
@@ -141,6 +151,10 @@ export function useFavorites() {
    *   de lo contrario muestra un toast genérico.
    * - Si hay sesión pero no clientId: muestra toast de error.
    * - Si todo está bien: hace el toggle optimista en Firestore.
+   *
+   * ★ FIX (auditoría): para staff (admin/member), escribe en /users/{email}
+   * NO en /clients — antes el corazón creaba un /clients fantasma con el
+   * email del staff que aparecía en el panel como cliente real.
    */
   const toggleFavorite = useCallback(async (propertyId, onUnauthenticated) => {
     if (!currentUser?.email) {
@@ -154,7 +168,7 @@ export function useFavorites() {
 
     const id = clientIdRef.current;
     if (!id) {
-      toast.error('Perfil de cliente no encontrado');
+      toast.error('Perfil no encontrado');
       return;
     }
 
@@ -165,8 +179,11 @@ export function useFavorites() {
       isNowFav ? prev.filter((i) => i !== propertyId) : [...prev, propertyId]
     );
 
+    // Determinar la colección destino según el storageMode
+    const targetCollection = storageModeRef.current === 'user' ? 'users' : 'clients';
+
     try {
-      await updateDoc(doc(db, 'clients', id), {
+      await updateDoc(doc(db, targetCollection, id), {
         favorites: isNowFav ? arrayRemove(propertyId) : arrayUnion(propertyId),
         updatedAt: serverTimestamp(),
       });
