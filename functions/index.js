@@ -63,6 +63,9 @@ const {
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const { ymd, diffDays, fmtDate, parseDate, statusLabel, stageLabel } = require("./src/emails/utils");
 
+// ─── Rate Limiter ───────────────────────────────────────────────────────────
+const { writeRateLimit, readRateLimit, authRateLimit } = require("./src/utils/rateLimiter");
+
 // ─── Opciones globales ────────────────────────────────────────────────────────
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
@@ -162,6 +165,18 @@ async function sendMail(transporter, gmailUser, { to, subject, html }, tag = "")
 // FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
+  // ★ FIX (auditoría): Rate limiting para operaciones de escritura
+  const { rateLimiter } = require('./src/utils/rateLimiter');
+  const rateKey = req.headers.authorization 
+    ? `user:${req.headers.authorization}` 
+    : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
+  const rateCheck = rateLimiter.check(rateKey, 20, 60000);
+  res.set('X-RateLimit-Limit', 20);
+  res.set('X-RateLimit-Remaining', rateCheck.remaining);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Too many requests. Intenta de nuevo más tarde.' });
+  }
+
   try {
     if (handlePreflight(req, res)) return;
     setCorsHeaders(req, res);
@@ -198,9 +213,21 @@ exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 2: createUserByAdmin  (v2 HTTP)
+// FUNCIÓN 2: createUserByAdmin  (v2 HTTP) — CON RATE LIMITING
 // ═════════════════════════════════════════════════════════════════════════════
 exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
+  // ★ FIX (auditoría): Rate limiting para operaciones de escritura
+  const { rateLimiter } = require('./src/utils/rateLimiter');
+  const rateKey = req.headers.authorization 
+    ? `user:${req.headers.authorization}` 
+    : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
+  const rateCheck = rateLimiter.check(rateKey, 20, 60000);
+  res.set('X-RateLimit-Limit', 20);
+  res.set('X-RateLimit-Remaining', rateCheck.remaining);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Too many requests. Intenta de nuevo más tarde.' });
+  }
+
   try {
     if (handlePreflight(req, res)) return;
     setCorsHeaders(req, res);
@@ -269,9 +296,21 @@ exports.redirectToCustomDomain = onRequest({ cors: true }, (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 4: generateSitemap  (v2 HTTP)
+// FUNCIÓN 4: generateSitemap  (v2 HTTP) — CON RATE LIMITING (lectura)
 // ═════════════════════════════════════════════════════════════════════════════
-exports.generateSitemap = onRequest({ cors: true }, handleSitemapRequest);
+exports.generateSitemap = onRequest({ cors: true }, async (req, res) => {
+  // ★ FIX (auditoría): Rate limiting para operaciones de lectura (200 req/min)
+  const { rateLimiter } = require('./src/utils/rateLimiter');
+  const rateKey = `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
+  const rateCheck = rateLimiter.check(rateKey, 200, 60000);
+  res.set('X-RateLimit-Limit', 200);
+  res.set('X-RateLimit-Remaining', rateCheck.remaining);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Too many requests. Intenta de nuevo más tarde.' });
+  }
+
+  return handleSitemapRequest(req, res);
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN 5: serveApp — Prerender para crawlers, SPA para usuarios
