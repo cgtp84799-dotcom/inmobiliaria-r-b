@@ -1,25 +1,11 @@
-// FIX [CALIDAD]: limpieza de logs de debug en cliente para reducir ruido en producción.
 // src/modules/users/services/user.service.js
 //
-// ═══════════════════════════════════════════════════════════════════
-// AUDITORÍA - FIXES APLICADOS:
+// Servicio de gestión de usuarios. Las operaciones admin (crear / eliminar)
+// se delegan a Cloud Functions para usar Firebase Admin SDK; las
+// operaciones del propio usuario actualizan directamente Firestore.
 //
-//   1. ★ FIX CRÍTICO (previo): createUser() ya NO usa
-//      createUserWithEmailAndPassword como fallback.
-//
-//   2. ★ FIX CRÍTICO (previo): deleteUser() tiene protección contra
-//      auto-eliminación.
-//
-//   3. ★ FIX NUEVO: CF_BASE_URL ahora se construye correctamente.
-//      Con Firebase Functions v2, la URL puede ser:
-//        - En algunos proyectos: https://us-central1-PROJECT.cloudfunctions.net/FUNCTION
-//        - En otros (gen2 run): https://FUNCTION-HASH-uc.a.run.app
-//      Para máxima compatibilidad, usamos la variable de entorno
-//      VITE_FUNCTIONS_BASE_URL si está definida.
-//      Si no, construimos la URL estándar de v2 con el projectId.
-//
-//   4. ★ FIX: Mejor manejo de errores HTTP con mensajes claros.
-// ═══════════════════════════════════════════════════════════════════
+// CF_BASE_URL: usa VITE_FUNCTIONS_BASE_URL si está definida; si no
+// construye la URL estándar de Functions v2 con el projectId.
 
 import { auth, db } from '../../../core/config/firebase.config';
 import {
@@ -147,13 +133,18 @@ class UserService {
     if (!role)     throw new Error('Rol requerido');
 
     try {
+      // status: si el modal pasa uno explícito (pending/active/...), se
+      // respeta. Si no llega nada, default es 'pending' para que el
+      // backend dispare el flujo de "configura tu contraseña" + welcome
+      // diferido. Antes el default forzado era 'active' lo que provocaba
+      // que el welcome llegara antes de que el usuario configurara clave.
       const result = await this._callCloudFunction('createUserByAdmin', {
         email,
         password,
         displayName,
         phone,
         role,
-        status: status || 'active',
+        status: status || 'pending',
       });
 
       return {
@@ -162,7 +153,7 @@ class UserService {
         displayName,
         phone,
         role,
-        status: status || 'active',
+        status: result.result?.status || status || 'pending',
         uid: result.result?.uid,
       };
 
@@ -230,14 +221,10 @@ class UserService {
 
   async deleteUser(email, userRole = null) {
     if (!email) throw new Error('Email requerido');
-
-    // ★ PROTECCIÓN: No eliminar al usuario actualmente logueado
     const currentEmail = auth.currentUser?.email;
     if (currentEmail && currentEmail.toLowerCase() === email.toLowerCase()) {
       throw new Error('No puedes eliminar tu propia cuenta desde aquí.');
     }
-
-    // ★ FIX (auditoría): si el usuario es agente (admin/member), verificar
     // que no tenga contratos activos. Antes podías borrar a un agente con
     // contratos vigentes → los emails de cobranza iban a buzón inexistente.
     const normalizedEmail = email.toLowerCase().trim();

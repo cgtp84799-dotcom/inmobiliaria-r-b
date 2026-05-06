@@ -75,7 +75,7 @@ const NotificationList = ({ notifications, onClose }) => {
           <div
             key={notification.id}
             onClick={() => handleClick(notification)}
-            className={`p-4 border-b border-primary/10 hover:bg-white/5 cursor-pointer transition ${
+            className={`p-4 border-b border-primary/10 hover:bg-[var(--color-surface)]/5 cursor-pointer transition ${
               !notification.read ? 'bg-primary/5' : ''
             }`}
           >

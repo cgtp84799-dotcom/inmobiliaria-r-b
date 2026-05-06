@@ -171,3 +171,6 @@ firebase emulators:start --only firestore
 # Ver qué variables Vite está inyectando realmente
 npm run build -- --debug | grep VITE_
 ```
+
+Y de ahora en adelante, cada vez que hagas cambios en el código, el flujo siempre es:
+npm run build → npm run copy:index → firebase deploy --only hosting:production,functions:serveApp → recachear URLs cambiadas

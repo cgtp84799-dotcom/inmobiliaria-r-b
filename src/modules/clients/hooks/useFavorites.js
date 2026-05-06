@@ -28,7 +28,6 @@
 // Cuando no hay sesión activa, llama esa función en lugar del toast.error,
 // permitiendo que PropertyCard muestre un modal de acceso.
 //
-// ★ CAMBIO v3 (auditoría): si el usuario es admin/member (staff), NO se crea
 // doc en /clients — el staff puede dar like a propiedades pero esos favoritos
 // se almacenan en su propio doc /users/{email}, NO en /clients. Antes, cuando
 // un admin daba corazón a una propiedad, aparecía como cliente en el panel.
@@ -49,7 +48,6 @@ export function useFavorites() {
   const [clientId,  setClientId]  = useState(null);
   const [loading,   setLoading]   = useState(true);
   const clientIdRef = useRef(null);
-  // ★ Para staff (admin/member) los favoritos viven en /users/{email}.docId
   // y se identifica con un flag distinto.
   const isStaff = currentUser?.role === USER_ROLES.ADMIN
                || currentUser?.role === USER_ROLES.MEMBER;
@@ -72,7 +70,6 @@ export function useFavorites() {
 
     async function resolveAndSubscribe() {
       try {
-        // ★ FIX (auditoría): para staff, los favoritos viven en /users/{email}.
         // No se crea doc en /clients para evitar que admins/agentes aparezcan
         // como clientes en el panel.
         if (isStaff) {
@@ -95,7 +92,6 @@ export function useFavorites() {
         }
 
         // Flujo cliente (viewer):
-        // ★ FIX (auditoría — duplicación): antes este hook hacía su propia
         // query+addDoc paralela a resolveClientByEmail → race condition →
         // duplicados. Ahora delegamos al servicio canónico que ya tiene
         // dedup automático y delay anti-race.
@@ -152,9 +148,8 @@ export function useFavorites() {
    * - Si hay sesión pero no clientId: muestra toast de error.
    * - Si todo está bien: hace el toggle optimista en Firestore.
    *
-   * ★ FIX (auditoría): para staff (admin/member), escribe en /users/{email}
-   * NO en /clients — antes el corazón creaba un /clients fantasma con el
-   * email del staff que aparecía en el panel como cliente real.
+   * Para staff (admin/member) los favoritos se guardan en /users/{email}
+   * en lugar de /clients, para evitar crear documentos /clients fantasma.
    */
   const toggleFavorite = useCallback(async (propertyId, onUnauthenticated) => {
     if (!currentUser?.email) {

@@ -127,7 +127,6 @@ export function buildZoneSeoParagraphs({
   const city = cityLabel || "la región cafetera";
   const dept = cityDepartment ? `, ${cityDepartment}` : "";
   const whatPlural = typeLabelPlural || "propiedades";
-  const what = typeLabel || "propiedad";
   const verb = transactionVerb || "en venta y arriendo";
   const tx = transactionLabel || "compra, venta o arriendo";
 

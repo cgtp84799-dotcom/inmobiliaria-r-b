@@ -10,7 +10,7 @@
 //  - Subir/eliminar documentos
 //  - Marcar milestones como completados
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaFileContract, FaUser, FaBuilding, FaCalendarAlt, FaMoneyBillWave,
@@ -65,6 +65,25 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
   const { currentUser } = useAuth();
   const [tab, setTab] = useState('info');
 
+  // Ref del header sticky para posicionar la barra de tabs justo debajo,
+  // independientemente del tamaño real del header (que cambia según badges,
+  // alertas de vencimiento, etc.).
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(96);
+
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.contentRect.height;
+        // +1 para evitar gap visible entre header y tabs
+        setHeaderHeight(Math.ceil(h) + 1);
+      }
+    });
+    ro.observe(headerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   // estados de acción
   const [changingStatus, setChangingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -80,25 +99,35 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
 
   if (!contract) return null;
 
-  const statusGeneral = contract.statusGeneral || contract.status;
-  const days = daysUntil(contract.endDate);
-  const isExpiringSoon =
-    statusGeneral === CONTRACT_STATUS.ACTIVE &&
-    days !== null && days >= 0 && days <= 30;
-  const isExpired = days !== null && days < 0;
-
-  const financial = contract.financial || null;
-  const baseValue = financial?.baseValue ?? contract.value ?? 0;
-  const currency = contract.currency || financial?.currency || 'COP';
-
-  const sequence = getStageSequenceByContract({
-    type: contract.type, operationMode: contract.operationMode,
-  });
-  const currentStage = resolveContractBusinessStage(contract);
-  const currentIdx = sequence.indexOf(currentStage);
-  const nextStage = currentIdx >= 0 && currentIdx < sequence.length - 1
-    ? sequence[currentIdx + 1]
-    : null;
+  // ── Cálculos derivados (memoizados) ──────────────────────────────────────
+  const {
+    statusGeneral, days, isExpiringSoon, isExpired,
+    financial, baseValue, currency,
+    sequence, currentStage, currentIdx, nextStage,
+  } = useMemo(() => {
+    const sg = contract.statusGeneral || contract.status;
+    const d = daysUntil(contract.endDate);
+    const fin = contract.financial || null;
+    const seq = getStageSequenceByContract({
+      type: contract.type, operationMode: contract.operationMode,
+    });
+    const cur = resolveContractBusinessStage(contract);
+    const idx = seq.indexOf(cur);
+    return {
+      statusGeneral: sg,
+      days: d,
+      isExpiringSoon:
+        sg === CONTRACT_STATUS.ACTIVE && d !== null && d >= 0 && d <= 30,
+      isExpired: d !== null && d < 0,
+      financial: fin,
+      baseValue: fin?.baseValue ?? contract.value ?? 0,
+      currency: contract.currency || fin?.currency || 'COP',
+      sequence: seq,
+      currentStage: cur,
+      currentIdx: idx,
+      nextStage: idx >= 0 && idx < seq.length - 1 ? seq[idx + 1] : null,
+    };
+  }, [contract]);
 
   // ── Acciones ─────────────────────────────────────────────────────────────
 
@@ -194,98 +223,208 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-4 h-full">
+      className="flex flex-col h-full">
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-primary/15 rounded-xl flex items-center justify-center flex-shrink-0">
-            <FaFileContract className="text-primary" size={16} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <ContractTypeBadge type={contract.type} />
-              <ContractStatusBadge status={statusGeneral} />
+      {/* ─── HEADER STICKY ──────────────────────────────────────────
+          Layout en 3 zonas verticales:
+            1. Header (badges + meta) — sticky top-0
+            2. Alertas (vencimiento) — inline
+            3. Tabs — sticky justo debajo del header
+          Esto resuelve el bug donde los tabs se perdían al hacer scroll.
+      */}
+      <div
+        ref={headerRef}
+        className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-3 border-b"
+        style={{
+          background: 'var(--color-bg)',
+          borderColor: 'var(--color-border)',
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: 'var(--color-gold)',
+              }}
+            >
+              <FaFileContract size={16} />
             </div>
-            <p className="text-slate-400 text-xs mt-1">
-              Creado {formatShort(contract.createdAt)}
-              {contract.createdBy && ` · ${contract.createdBy}`}
-            </p>
-            <div className="mt-0.5 space-y-0.5">
-              <p className="text-slate-500 text-[11px]">
-                Etapa: <span className="text-emerald-400 font-semibold">{getStageLabel(currentStage)}</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <ContractTypeBadge type={contract.type} />
+                <ContractStatusBadge status={statusGeneral} />
+              </div>
+              <p
+                className="text-xs mt-1 truncate"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Creado {formatShort(contract.createdAt)}
+                {contract.createdBy && ` · ${contract.createdBy}`}
               </p>
-              {contract.operationMode && (
-                <p className="text-slate-500 text-[11px]">
-                  Modalidad: <span className="text-slate-300">{getOperationModeLabel(contract.operationMode)}</span>
+              <div className="mt-0.5 space-y-0.5">
+                <p
+                  className="text-[11px]"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  Etapa:{' '}
+                  <span className="text-emerald-500 font-semibold">
+                    {getStageLabel(currentStage)}
+                  </span>
                 </p>
-              )}
+                {contract.operationMode && (
+                  <p
+                    className="text-[11px]"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
+                    Modalidad:{' '}
+                    <span style={{ color: 'var(--color-text)' }}>
+                      {getOperationModeLabel(contract.operationMode)}
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg transition-colors flex-shrink-0"
+              style={{
+                color: 'var(--color-text-muted)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--color-row-hover)';
+                e.currentTarget.style.color = 'var(--color-text)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--color-text-muted)';
+              }}
+              aria-label="Cerrar"
+            >
+              <FaTimes size={14} />
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0">
-            <FaTimes size={14} />
-          </button>
-        )}
       </div>
 
-      {/* Alertas vencimiento */}
-      {isExpiringSoon && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
-          <FaExclamationTriangle className="text-yellow-400 flex-shrink-0" size={12} />
-          <p className="text-yellow-300 text-xs font-semibold">
-            Vence en {days} día{days !== 1 ? 's' : ''} — {formatShort(contract.endDate)}
-          </p>
-        </div>
-      )}
-      {isExpired && statusGeneral !== CONTRACT_STATUS.CANCELLED && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <FaExclamationTriangle className="text-red-400 flex-shrink-0" size={12} />
-          <p className="text-red-300 text-xs font-semibold">
-            Vencido hace {Math.abs(days)} día{Math.abs(days) !== 1 ? 's' : ''}
-          </p>
+      {/* ─── ALERTAS DE VENCIMIENTO (inline, no sticky) ──────────── */}
+      {(isExpiringSoon || (isExpired && statusGeneral !== CONTRACT_STATUS.CANCELLED)) && (
+        <div className="pt-3 space-y-2">
+          {isExpiringSoon && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+              <FaExclamationTriangle className="text-yellow-500 flex-shrink-0" size={12} />
+              <p className="text-yellow-600 dark:text-yellow-300 text-xs font-semibold">
+                Vence en {days} día{days !== 1 ? 's' : ''} — {formatShort(contract.endDate)}
+              </p>
+            </div>
+          )}
+          {isExpired && statusGeneral !== CONTRACT_STATUS.CANCELLED && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <FaExclamationTriangle className="text-red-500 flex-shrink-0" size={12} />
+              <p className="text-red-600 dark:text-red-300 text-xs font-semibold">
+                Vencido hace {Math.abs(days)} día{Math.abs(days) !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="-mx-2 px-2 flex gap-1 bg-slate-900 rounded-xl p-1 overflow-x-auto" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`whitespace-nowrap py-2 px-3 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0
-              ${tab === key ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
-            <Icon size={12} /> {label}
-          </button>
-        ))}
+      {/* ─── TABS STICKY ────────────────────────────────────────────
+          • Sticky justo debajo del header (top: ~96px del header sticky).
+          • Indicador animado con layoutId para transición suave entre tabs.
+          • Scroll horizontal en móvil sin scrollbar visible.
+          • Active tab usa color-inner-card para diferenciarse del fondo.
+      */}
+      <div
+        className="sticky z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-3 border-b"
+        style={{
+          top: `${headerHeight}px`,
+          background: 'var(--color-bg)',
+          borderColor: 'var(--color-border)',
+        }}
+      >
+        <div
+          className="flex gap-1 rounded-xl p-1 overflow-x-auto portal-tabs__scroll"
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            scrollbarWidth: 'none',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          role="tablist"
+        >
+          {TABS.map(({ key, label, icon: Icon }) => {
+            const isActive = tab === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setTab(key)}
+                className="relative whitespace-nowrap py-2 px-3 sm:px-4 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                style={{
+                  color: isActive
+                    ? 'var(--color-text)'
+                    : 'var(--color-text-muted)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.color = 'var(--color-text)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.color = 'var(--color-text-muted)';
+                }}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="contract-tab-pill"
+                    className="absolute inset-0 rounded-lg"
+                    style={{
+                      background: 'var(--color-inner-card)',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                    }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <span className="relative flex items-center gap-1.5">
+                  <Icon size={12} /> {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {/* ─── CONTENIDO TABS ─────────────────────────────────────── */}
+      <div className="pt-4 flex-1">
       <AnimatePresence mode="wait">
         {/* INFO */}
         {tab === 'info' && (
           <motion.div key="info" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col gap-3 flex-1">
 
-            <section className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-              <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Propiedad</p>
+            <section className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+              <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Propiedad</p>
               <div className="flex items-center gap-2">
-                <FaBuilding className="text-slate-500" size={12} />
-                <span className="text-slate-200 text-sm font-semibold">{contract.propertyName}</span>
+                <FaBuilding className="text-[var(--color-text-muted)]" size={12} />
+                <span className="text-[var(--color-text)] text-sm font-semibold">{contract.propertyName}</span>
               </div>
               {contract.propertyAddress && (
-                <p className="text-slate-400 text-xs pl-5 mt-0.5">{contract.propertyAddress}</p>
+                <p className="text-[var(--color-text-muted)] text-xs pl-5 mt-0.5">{contract.propertyAddress}</p>
               )}
             </section>
 
-            <section className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-              <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Cliente</p>
+            <section className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+              <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Cliente</p>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <FaUser className="text-slate-500" size={12} />
-                    <span className="text-slate-200 text-sm font-semibold">{contract.clientName}</span>
+                    <FaUser className="text-[var(--color-text-muted)]" size={12} />
+                    <span className="text-[var(--color-text)] text-sm font-semibold">{contract.clientName}</span>
                   </div>
-                  <p className="text-slate-400 text-xs pl-5 mt-0.5">{contract.clientEmail}</p>
+                  <p className="text-[var(--color-text-muted)] text-xs pl-5 mt-0.5">{contract.clientEmail}</p>
                 </div>
                 <div className="flex gap-2">
                   {contract.clientPhone && (
@@ -306,38 +445,38 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
             </section>
 
             {contract.agentName && (
-              <section className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Agente</p>
+              <section className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Agente</p>
                 <div className="flex items-center gap-2">
-                  <FaUserTie className="text-slate-500" size={12} />
-                  <span className="text-slate-200 text-sm font-semibold">{contract.agentName}</span>
+                  <FaUserTie className="text-[var(--color-text-muted)]" size={12} />
+                  <span className="text-[var(--color-text)] text-sm font-semibold">{contract.agentName}</span>
                 </div>
                 {contract.agentEmail && (
-                  <p className="text-slate-400 text-xs pl-5 mt-0.5">{contract.agentEmail}</p>
+                  <p className="text-[var(--color-text-muted)] text-xs pl-5 mt-0.5">{contract.agentEmail}</p>
                 )}
               </section>
             )}
 
             <section className="grid grid-cols-2 gap-3">
-              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
                 <div className="flex items-center gap-2 mb-1">
-                  <FaCalendarAlt className="text-slate-500" size={11} />
-                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Vigencia</p>
+                  <FaCalendarAlt className="text-[var(--color-text-muted)]" size={11} />
+                  <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider">Vigencia</p>
                 </div>
-                <p className="text-slate-200 text-sm">{formatShort(contract.startDate) ?? '—'}</p>
+                <p className="text-[var(--color-text)] text-sm">{formatShort(contract.startDate) ?? '—'}</p>
                 {contract.endDate && (
-                  <p className={`text-xs mt-0.5 ${isExpiringSoon ? 'text-yellow-400 font-semibold' : 'text-slate-400'}`}>
+                  <p className={`text-xs mt-0.5 ${isExpiringSoon ? 'text-yellow-400 font-semibold' : 'text-[var(--color-text-muted)]'}`}>
                     hasta {formatShort(contract.endDate)}
                   </p>
                 )}
               </div>
-              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
                 <div className="flex items-center gap-2 mb-1">
-                  <FaMoneyBillWave className="text-slate-500" size={11} />
-                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Valor</p>
+                  <FaMoneyBillWave className="text-[var(--color-text-muted)]" size={11} />
+                  <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider">Valor</p>
                 </div>
-                <p className="text-slate-200 text-sm font-bold">{formatCOP(baseValue)}</p>
-                <p className="text-slate-500 text-xs">
+                <p className="text-[var(--color-text)] text-sm font-bold">{formatCOP(baseValue)}</p>
+                <p className="text-[var(--color-text-muted)] text-xs">
                   {currency}{contract.type === 'arriendo' ? ' · mensual' : ''}
                 </p>
               </div>
@@ -345,29 +484,29 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
 
             {/* Resumen de pagos (arriendo) */}
             {paymentsSummary && (
-              <section className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Pagos</p>
+              <section className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Pagos</p>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
                     <p className="text-emerald-400 text-lg font-bold">{paymentsSummary.paid}</p>
-                    <p className="text-slate-500 text-[10px]">Pagados</p>
+                    <p className="text-[var(--color-text-muted)] text-[10px]">Pagados</p>
                   </div>
                   <div>
-                    <p className="text-slate-300 text-lg font-bold">{paymentsSummary.total - paymentsSummary.paid - paymentsSummary.late}</p>
-                    <p className="text-slate-500 text-[10px]">Pendientes</p>
+                    <p className="text-[var(--color-text)] text-lg font-bold">{paymentsSummary.total - paymentsSummary.paid - paymentsSummary.late}</p>
+                    <p className="text-[var(--color-text-muted)] text-[10px]">Pendientes</p>
                   </div>
                   <div>
                     <p className="text-red-400 text-lg font-bold">{paymentsSummary.late}</p>
-                    <p className="text-slate-500 text-[10px]">Vencidos</p>
+                    <p className="text-[var(--color-text-muted)] text-[10px]">Vencidos</p>
                   </div>
                 </div>
               </section>
             )}
 
             {contract.notes && (
-              <section className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Notas</p>
-                <p className="text-slate-300 text-sm leading-relaxed">{contract.notes}</p>
+              <section className="p-4 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-2">Notas</p>
+                <p className="text-[var(--color-text)] text-sm leading-relaxed">{contract.notes}</p>
               </section>
             )}
 
@@ -404,18 +543,18 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
                 </button>
               )}
 
-              <div className="border border-slate-800 rounded-xl overflow-hidden">
+              <div className="border border-[var(--color-border)] rounded-xl overflow-hidden">
                 <button onClick={() => setChangingStatus((v) => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-900 hover:bg-slate-800 transition-colors">
-                  <span className="text-slate-300 text-sm font-semibold flex items-center gap-2">
+                  className="w-full flex items-center justify-between px-4 py-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface)] transition-colors">
+                  <span className="text-[var(--color-text)] text-sm font-semibold flex items-center gap-2">
                     <FaEdit size={12} /> Cambiar estado general
                   </span>
-                  <span className="text-slate-500 text-xs">{changingStatus ? '▲' : '▼'}</span>
+                  <span className="text-[var(--color-text-muted)] text-xs">{changingStatus ? '▲' : '▼'}</span>
                 </button>
                 {changingStatus && (
-                  <div className="p-4 bg-slate-950 space-y-3">
+                  <div className="p-4 bg-[var(--color-bg)] space-y-3">
                     <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none transition-colors">
+                      className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none transition-colors">
                       <option value="">Seleccionar nuevo estado...</option>
                       {Object.entries(CONTRACT_STATUS_LABELS)
                         .filter(([val]) => val !== statusGeneral)
@@ -423,7 +562,7 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
                     </select>
                     <textarea value={statusNotes} onChange={(e) => setStatusNotes(e.target.value)}
                       placeholder="Motivo del cambio (opcional)..." rows={2}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-primary outline-none transition-colors resize-none" />
+                      className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder-slate-500 focus:border-primary outline-none transition-colors resize-none" />
                     <button onClick={handleStatusChange} disabled={!newStatus || saving}
                       className="w-full py-2 rounded-xl font-semibold text-sm bg-primary text-slate-950 hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
                       {saving ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : 'Confirmar cambio'}
@@ -444,11 +583,11 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
                   </p>
                   <div className="flex border-t border-red-500/20">
                     <button onClick={() => setConfirmDelete(false)} disabled={deleting}
-                      className="flex-1 py-2.5 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                      className="flex-1 py-2.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors">
                       Cancelar
                     </button>
                     <button onClick={handleDeleteConfirm} disabled={deleting}
-                      className="flex-1 py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60">
+                      className="flex-1 py-2.5 text-xs font-bold text-[var(--color-text)] bg-red-600 hover:bg-red-500 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60">
                       {deleting ? <><FaSpinner className="animate-spin" size={10} /> Eliminando...</>
                                  : <><FaCheck size={10} /> Sí, eliminar</>}
                     </button>
@@ -470,7 +609,7 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
           <motion.div key="payments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col gap-3">
             {payments.length === 0 ? (
-              <div className="py-8 text-center text-slate-500">
+              <div className="py-8 text-center text-[var(--color-text-muted)]">
                 <FaCoins size={28} className="mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Sin pagos registrados</p>
                 <p className="text-xs mt-1">Los pagos se generan automáticamente al firmar un arriendo.</p>
@@ -483,11 +622,11 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
                     <div key={p.id} className={`p-3 rounded-xl border ${colors.border} ${colors.bg}`}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-slate-200 text-sm font-semibold truncate">{p.label}</p>
-                          <p className="text-slate-500 text-[11px]">Vence {formatShort(p.dueDate)}</p>
+                          <p className="text-[var(--color-text)] text-sm font-semibold truncate">{p.label}</p>
+                          <p className="text-[var(--color-text-muted)] text-[11px]">Vence {formatShort(p.dueDate)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-slate-200 text-sm font-bold">{formatCOP(p.amount)}</p>
+                          <p className="text-[var(--color-text)] text-sm font-bold">{formatCOP(p.amount)}</p>
                           <span className={`text-[10px] font-semibold ${colors.text}`}>
                             {PAYMENT_STATUS_LABELS[p.status]}
                           </span>
@@ -525,19 +664,19 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
           <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-col gap-3 flex-1">
             {history.length === 0 ? (
-              <div className="py-8 text-center text-slate-500">
+              <div className="py-8 text-center text-[var(--color-text-muted)]">
                 <FaHistory size={28} className="mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Sin historial de cambios</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {history.map((h) => (
-                  <div key={h.id} className="flex gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
-                    <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <FaHistory className="text-slate-500" size={10} />
+                  <div key={h.id} className="flex gap-3 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                    <div className="w-7 h-7 rounded-full bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <FaHistory className="text-[var(--color-text-muted)]" size={10} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-slate-200 text-xs font-semibold">
+                      <p className="text-[var(--color-text)] text-xs font-semibold">
                         {h.action === 'status_change'
                           ? `Estado: ${CONTRACT_STATUS_LABELS[h.from] ?? h.from} → ${CONTRACT_STATUS_LABELS[h.to] ?? h.to}`
                           : h.action === 'stage_change'
@@ -548,8 +687,8 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
                           ? 'Contrato creado'
                           : h.action}
                       </p>
-                      {h.notes && <p className="text-slate-400 text-xs mt-0.5 italic">"{h.notes}"</p>}
-                      <p className="text-slate-600 text-xs mt-1">{h.by} · {formatShort(h.createdAt)}</p>
+                      {h.notes && <p className="text-[var(--color-text-muted)] text-xs mt-0.5 italic">"{h.notes}"</p>}
+                      <p className="text-[var(--color-text-faint)] text-xs mt-1">{h.by} · {formatShort(h.createdAt)}</p>
                     </div>
                   </div>
                 ))}
@@ -558,6 +697,7 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -604,11 +744,11 @@ function StagesPane({ contract, milestones, currentStage, currentUser, onUpdated
           </p>
           <div className="flex gap-2">
             <button onClick={() => setPendingStage(null)} disabled={changing}
-              className="flex-1 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+              className="flex-1 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] rounded-lg transition-colors">
               Cancelar
             </button>
             <button onClick={confirmStageChange} disabled={changing}
-              className="flex-1 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60">
+              className="flex-1 py-2 text-xs font-bold text-[var(--color-text)] bg-primary hover:bg-primary/80 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60">
               {changing ? <><FaSpinner className="animate-spin" size={10} /> Cambiando...</>
                         : <><FaCheck size={10} /> Confirmar</>}
             </button>
@@ -619,11 +759,11 @@ function StagesPane({ contract, milestones, currentStage, currentUser, onUpdated
       <ContractTimeline contract={contract} onStageClick={handleStageClick} />
 
       {milestones.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-800">
-          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-3">Hitos</p>
+        <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+          <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-3">Hitos</p>
           <div className="space-y-2">
             {milestones.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+              <div key={m.id} className="flex items-center gap-3 p-2.5 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
                 <button onClick={() => milestoneService.markDone(contract.id, m.id, currentUser?.email)
                   .then(() => toast.success('Hito completado'))
                   .catch(() => toast.error('Error'))}
@@ -633,15 +773,15 @@ function StagesPane({ contract, milestones, currentStage, currentUser, onUpdated
                       ? 'bg-emerald-500/20 border-emerald-500 cursor-default'
                       : m.status === MILESTONE_STATUS.CURRENT
                       ? 'border-primary hover:bg-primary/10'
-                      : 'border-slate-700 hover:border-slate-500'}`}>
+                      : 'border-[var(--color-border)] hover:border-slate-500'}`}>
                   {m.status === MILESTONE_STATUS.DONE && <FaCheck className="text-emerald-400" size={9} />}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-semibold ${m.status === MILESTONE_STATUS.DONE ? 'text-emerald-400 line-through' : 'text-slate-200'}`}>
+                  <p className={`text-xs font-semibold ${m.status === MILESTONE_STATUS.DONE ? 'text-emerald-400 line-through' : 'text-[var(--color-text)]'}`}>
                     {m.label || getStageLabel(m.key)}
                   </p>
                   {m.completedAt && (
-                    <p className="text-slate-600 text-[10px]">
+                    <p className="text-[var(--color-text-faint)] text-[10px]">
                       Completado {formatShort(m.completedAt)} {m.doneBy && `· ${m.doneBy}`}
                     </p>
                   )}
@@ -693,15 +833,15 @@ function DocumentsPane({ contract, documents, actorEmail }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="flex flex-col gap-3">
-      <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+      <div className="p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] space-y-2">
         <select value={kind} onChange={(e) => setKind(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-primary outline-none">
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text)] focus:border-primary outline-none">
           {Object.entries(DOCUMENT_KIND_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
         </select>
         <label className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg cursor-pointer text-xs font-semibold
-          ${uploading ? 'bg-slate-800 text-slate-500' : 'bg-primary/15 text-primary hover:bg-primary/25'}`}>
+          ${uploading ? 'bg-[var(--color-surface)] text-[var(--color-text-muted)]' : 'bg-primary/15 text-primary hover:bg-primary/25'}`}>
           {uploading ? <FaSpinner className="animate-spin" size={11} /> : <FaUpload size={11} />}
           {uploading ? 'Subiendo...' : 'Subir documento'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
@@ -709,20 +849,20 @@ function DocumentsPane({ contract, documents, actorEmail }) {
       </div>
 
       {documents.length === 0 ? (
-        <div className="py-8 text-center text-slate-500">
+        <div className="py-8 text-center text-[var(--color-text-muted)]">
           <FaFolderOpen size={28} className="mx-auto mb-2 opacity-30" />
           <p className="text-sm">Sin documentos cargados</p>
         </div>
       ) : (
         <div className="space-y-2">
           {documents.map((d) => (
-            <div key={d.id} className="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+            <div key={d.id} className="flex items-center gap-3 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
               <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
                 <FaFileContract className="text-blue-400" size={12} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-slate-200 text-xs font-semibold truncate">{d.label || d.filename}</p>
-                <p className="text-slate-500 text-[10px]">
+                <p className="text-[var(--color-text)] text-xs font-semibold truncate">{d.label || d.filename}</p>
+                <p className="text-[var(--color-text-muted)] text-[10px]">
                   {DOCUMENT_KIND_LABELS[d.kind] || d.kind} · {formatShort(d.createdAt)}
                 </p>
               </div>
@@ -733,11 +873,11 @@ function DocumentsPane({ contract, documents, actorEmail }) {
               {confirmDeleteDocId === d.id ? (
                 <div className="flex gap-1">
                   <button onClick={() => handleDelete(d.id)}
-                    className="p-2 rounded-lg bg-red-600 hover:bg-red-500 text-white" title="Confirmar">
+                    className="p-2 rounded-lg bg-red-600 hover:bg-red-500 text-[var(--color-text)]" title="Confirmar">
                     <FaCheck size={11} />
                   </button>
                   <button onClick={() => setConfirmDeleteDocId(null)}
-                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400" title="Cancelar">
+                    className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text-muted)]" title="Cancelar">
                     <FaTimes size={11} />
                   </button>
                 </div>

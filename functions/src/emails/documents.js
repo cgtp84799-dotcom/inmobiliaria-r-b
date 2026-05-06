@@ -1,10 +1,8 @@
 // functions/src/emails/documents.js
-// ─── Templates de email para el módulo de Documentos ─────────────────────────
+// Templates de email para el módulo de Documentos.
 //
-// AUDITORÍA: cuando el agente sube un documento al contrato (subcollection
-// /contracts/{id}/documents), el cliente NO se enteraba — ni email, ni notif.
-// El cliente tenía que entrar al portal y revisar manualmente. Ahora se le
-// avisa por email al cliente y por notif in-app.
+// Cuando el agente sube un documento a la subcolección
+// /contracts/{id}/documents, se notifica al cliente por email + in-app.
 
 const { BASE_URL, WHATSAPP_URL, GRADIENTS } = require("./config");
 const { escapeHtml, safe, fmtDateTime, contractTypeLabel } = require("./utils");

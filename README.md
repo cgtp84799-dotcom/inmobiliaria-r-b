@@ -48,7 +48,7 @@ La aplicación quedará en `http://localhost:5173`.
 
 ## 🔧 Variables de entorno
 
-Todas viven en `.env.local` (nunca commitear). Ver `.env.example` para la lista completa y cómo obtener cada valor.
+Todas viven en `.env.local` (nunca commitear). Ver `.env.example` para la lista completa.
 
 **Imprescindibles para arrancar:**
 
@@ -73,6 +73,8 @@ npm run lint:fix          # ESLint + autofix
 npm run deploy            # Build + deploy de Hosting (target: production)
 npm run deploy:functions  # Deploy solo de Cloud Functions
 npm run deploy:rules      # Deploy solo de Firestore + Storage rules
+npm test                  # Vitest (sin coverage)
+npm run test:watch        # Vitest en modo watch
 ```
 
 Desde `functions/` también hay scripts propios (`npm run serve`, `npm run deploy`, etc.).
@@ -84,16 +86,25 @@ Desde `functions/` también hay scripts propios (`npm run serve`, `npm run deplo
 ```
 inmobiliaria-r-b/
 ├── .github/workflows/     # CI/CD (lint + build + deploy)
+├── docs/                  # Auditoría, planes, módulo agents (histórico)
 ├── functions/             # Cloud Functions v2 (Node 22)
 │   ├── src/
 │   │   ├── emails/        # Builders de plantillas de email
 │   │   ├── prerender.js   # SSR mínimo para crawlers
 │   │   ├── sitemap.js     # Sitemap dinámico (XML)
+│   │   ├── site.config.js # SITE_URL, contactos, logos (CJS)
+│   │   ├── utils/         # rateLimiter, helpers
 │   │   └── visitEmails.js
 │   └── index.js           # Entry point — exporta todas las funciones
 ├── public/                # Assets estáticos + SW + analytics.js + schema-ld.json
 ├── src/
-│   ├── core/              # Firebase config, AuthContext, ThemeContext, rutas
+│   ├── core/
+│   │   ├── config/
+│   │   │   ├── firebase.config.js
+│   │   │   ├── routes.config.js
+│   │   │   └── site.config.js  # SITE_URL, contactos, logos (ESM)
+│   │   ├── contexts/      # AuthContext, ThemeContext
+│   │   └── services/      # notificationService
 │   ├── modules/           # Feature-based (agents, auth, clients, contracts, ...)
 │   │   └── <feature>/
 │   │       ├── components/
@@ -104,12 +115,23 @@ inmobiliaria-r-b/
 │   ├── shared/            # Layouts, UI, SEO, utils compartidos
 │   ├── App.jsx            # Router principal
 │   └── main.jsx           # Entry point de React
+├── tests/                 # Tests (Firestore rules, validators, frontend)
 ├── firebase.json          # Hosting, Functions, headers, redirects, CSP
-├── firestore.rules        # Reglas de seguridad de Firestore (VERIFICAR antes de deploy)
+├── firestore.rules        # Reglas de seguridad de Firestore
 ├── firestore.indexes.json # Índices compuestos para queries
 ├── storage.rules          # Reglas de seguridad de Cloud Storage
+├── MIGRATION.md           # Cambios aplicados en la auditoría 2026-05
 └── vite.config.js         # Build config (chunks, terser, etc.)
 ```
+
+### Configuración del sitio centralizada
+
+Cualquier referencia al dominio, número de WhatsApp, email de contacto o ruta de logo se hace mediante:
+
+- **Cliente:** `import { SITE_URL, WA_NUMBER, LOGO_DARK, LOGO_LIGHT } from '@/core/config/site.config'`
+- **Cloud Functions:** `const { SITE_URL, ... } = require('./site.config')`
+
+No volver a poner literales `https://inmobiliaria-ryb-y-asociados.com` en archivos nuevos. Cambiar de dominio = cambiar **un solo archivo**.
 
 ### Sistema de roles
 
@@ -119,7 +141,24 @@ inmobiliaria-r-b/
 | `member` | Panel interno operativo (sin usuarios)       | `users/{email}` |
 | `viewer` | Portal de clientes — solo sus propios datos   | `users/{email}` |
 
-**Nota técnica:** `users` usa el email como ID de documento. Eso está identificado como deuda técnica (ver `AUDIT.md`); la migración a `users/{uid}` está pendiente y requiere coordinación de datos en producción.
+**Nota técnica:** `users` usa el email como ID de documento. Eso está identificado como deuda técnica (ver `docs/AUDIT.md`); la migración a `users/{uid}` está pendiente.
+
+### Status de propiedad (enum canónico)
+
+Definido en `src/modules/properties/types/property.types.js`:
+
+| Valor | Significado |
+|---|---|
+| `published` | Visible en el catálogo público (default operativo). |
+| `reserved`  | Visible pero marcada como reservada. |
+| `sold`      | Vendida — no se muestra en catálogo público. |
+| `rented`    | Arrendada — no se muestra en catálogo público. |
+| `draft`     | Borrador — solo visible en panel admin. |
+| `inactive`  | Inactiva — solo visible en panel admin. |
+
+Los datos legacy en español (`disponible`, `reservada`, `vendida`, `arrendada`) se aceptan en lectura mediante `normalizePropertyStatus()` y `isPublicStatus()`. Toda escritura nueva debe usar el enum en inglés.
+
+**Las Firestore Rules solo permiten lectura pública si `status == 'published'`.** Si necesitas exponer otro estado al público, ajustar también las rules.
 
 ---
 
@@ -128,19 +167,20 @@ inmobiliaria-r-b/
 ### Capas activas
 
 1. **Firestore Rules** (`firestore.rules`): modelo RBAC + validación de campos en creación/update + whitelist para colecciones públicas (contactos, solicitudes de visita, solicitudes de acceso). Chat aislado por array de `participants`.
-2. **Storage Rules** (`storage.rules`): CRUD restringido por rol + validación de tipo MIME + límites de tamaño.
-3. **App Check** (reCAPTCHA v3): bloquea tráfico de bots y apps no autorizadas a Firestore/Storage.
+2. **Storage Rules** (`storage.rules`): CRUD restringido por rol + validación de tipo MIME + límites de tamaño (10 MB imágenes / 25 MB documentos).
+3. **App Check** (reCAPTCHA v3): bloquea tráfico de bots y apps no autorizadas a Firestore/Storage. El debug token solo se activa cuando el hostname es claramente local.
 4. **Content Security Policy** estricta en `firebase.json` — sin `unsafe-inline` en scripts.
-5. **Cloud Functions** usan `verifyIdToken(token, checkRevoked=true)` para detectar sesiones revocadas en tiempo real.
+5. **CORS whitelist** explícita en Cloud Functions (no se acepta `*`).
+6. **Cloud Functions** usan `verifyIdToken(token, checkRevoked=true)` para detectar sesiones revocadas en tiempo real.
 
 ### Antes de un deploy
 
 ```bash
-# Auditar reglas
+# Auditar reglas con emulador
 firebase emulators:start --only firestore,storage,auth
 
-# Testear reglas con el playground
-# Firebase Console → Firestore → Rules → Playground
+# Tests
+npm test
 
 # Deploy seguro en orden
 npm run deploy:rules      # 1. Reglas primero
@@ -164,7 +204,21 @@ Sitemaps dinámicos servidos por `functions/src/sitemap.js` en:
 
 ## 🧪 Testing
 
-**Estado actual:** sin suite de tests. Deuda técnica identificada — especialmente crítica para los flujos de contratos y pagos. Planificado: Vitest + React Testing Library + Firebase Emulator Suite.
+Tests con Vitest + `@firebase/rules-unit-testing` para reglas. Distribuidos en:
+
+- `tests/firestore/` — Reglas de Firestore (clients, contracts, visits, mail, ...).
+- `tests/functions/` — HTTP handlers y validators.
+- `tests/frontend/` — Componentes y hooks (AuthContext, ProtectedRoute, ...).
+- `tests/utils/` — formatCurrency, formatDate.
+- `tests/validators/` — validators compartidos.
+
+```bash
+npm test                  # Todos los tests
+npm run test:rules        # Solo Firestore rules
+npm run test:fast         # Validators + functions + frontend (sin emulador)
+```
+
+Cobertura priorizada: rules y validators. **Pendiente:** tests de servicios críticos (`contract.service.js`, payment triggers, `property.service.js`).
 
 ---
 
@@ -178,6 +232,17 @@ CI/CD vía GitHub Actions (`.github/workflows/deploy.yml`):
 **Secrets requeridos en el repo** (ver cabecera de `deploy.yml` para la lista completa):
 - `FIREBASE_SERVICE_ACCOUNT` (JSON service account)
 - Todas las variables `VITE_*` que necesita el build.
+
+---
+
+## 📚 Documentación adicional
+
+- `docs/AUDIT.md` — Auditoría de seguridad y calidad (vivo).
+- `docs/AUDIT-PLAN.md` — Plan de mitigación.
+- `docs/AGENTS_MODULE.md` — Documentación del módulo de agentes.
+- `docs/README-FIXES-V2.md` — Bitácora de fixes de la v2.
+- `docs/README-TESTS.md` — Guía detallada de tests.
+- `MIGRATION.md` — Cambios de la auditoría 2026-05 y cómo aplicarlos.
 
 ---
 

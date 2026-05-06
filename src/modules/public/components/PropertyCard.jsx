@@ -20,8 +20,7 @@ import {
 } from "react-icons/fa";
 import { useFavorites } from "../../clients/hooks/useFavorites";
 import { PUBLIC_ROUTES } from "../../../core/config/routes.config";
-
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 
 const AVAILABLE_STATUSES = new Set(["disponible", "published", "active", "available"]);
 const RESERVED_STATUSES  = new Set(["reservada", "reserved"]);
@@ -340,7 +339,7 @@ const PropertyCard = ({ property }) => {
             fetchPriority="auto"
             referrerPolicy="no-referrer"
             onError={(e) => {
-              e.currentTarget.src = "/logo-ryb.png";
+              e.currentTarget.src = "/logo-light.png";
               e.currentTarget.onerror = null;
             }}
           />

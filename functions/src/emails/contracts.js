@@ -1,22 +1,16 @@
 // functions/src/emails/contracts.js
-// ─── Templates de email para el módulo de Contratos ──────────────────────────
+// Templates de email para el módulo de Contratos.
 //
-// AUDITORÍA (ronda contratos):
-// - Antes existía un único builder genérico `contractUpdatedEmail` que se
-//   disparaba para CUALQUIER cambio de estado o etapa. El cliente recibía el
-//   mismo email visual para "Cuota inicial pagada" que para "Canon en mora".
-//   Mal UX, baja accionabilidad.
+// Cada etapa del ciclo de venta/arriendo tiene su propio builder con copy,
+// color, emoji y CTA contextual. El backend (functions/index.js) decide
+// cuál disparar según `after.businessStage`.
 //
-// - Ahora cada etapa relevante del ciclo de venta y arriendo tiene su propio
-//   builder con copy, color, emoji y CTA contextual. El backend (functions/
-//   index.js) decide cuál disparar según `after.businessStage`.
+// Diferenciación visual:
+//   • VENTA    → gradient navy    + emoji 🏠 / 📜 / 🔑
+//   • ARRIENDO → gradient emerald + emoji 🏘️ / 💰 / ⏰
 //
-// - Diferenciación visual:
-//     • VENTA  → gradient navy + emoji 🏠 / 📜 / 🔑
-//     • ARRIENDO → gradient emerald + emoji 🏘️ / 💰 / ⏰
-//
-// - El builder genérico `contractUpdatedEmail` se conserva como fallback para
-//   etapas no mapeadas (ej. cancelado, pausado, draft).
+// `contractUpdatedEmail` es el fallback genérico para etapas no mapeadas
+// (cancelado, pausado, draft).
 
 const { BASE_URL, WHATSAPP_URL, GRADIENTS } = require("./config");
 const {

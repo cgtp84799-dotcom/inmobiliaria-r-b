@@ -70,8 +70,6 @@ export async function resolveClientByEmail(email) {
   }
 
   let docs = await findAll();
-
-  // ★ FIX (auditoría): si la query no devolvió nada pero el doc puede haber
   // sido creado hace milisegundos por ClientAuthPage.ensureClientDocs,
   // esperar y reintentar UNA VEZ. Esto evita que dos llamadas concurrentes
   // creen dos docs distintos para el mismo email.
@@ -79,8 +77,6 @@ export async function resolveClientByEmail(email) {
     await new Promise((resolve) => setTimeout(resolve, 350));
     docs = await findAll();
   }
-
-  // ★ FIX (auditoría — duplicación reportada por usuario):
   // Si encontramos MÁS de un doc para el mismo email, esto significa que
   // hubo race condition previa (ClientAuthPage + useClientPortal + useFavorites
   // creando docs en paralelo). Fusionamos: elegir el "mejor" candidato

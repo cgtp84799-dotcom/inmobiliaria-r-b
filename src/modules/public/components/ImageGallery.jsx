@@ -40,8 +40,8 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
 
   if (!images || images.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl h-72 sm:h-96 flex items-center justify-center">
-        <p className="text-slate-500 text-sm sm:text-base">Sin imágenes disponibles</p>
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl h-72 sm:h-96 flex items-center justify-center">
+        <p className="text-[var(--color-text-muted)] text-sm sm:text-base">Sin imágenes disponibles</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
             ))}
           </Swiper>
 
-          <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4 z-10 px-2.5 sm:px-3 py-1 bg-black/70 backdrop-blur-sm text-white rounded-full text-xs sm:text-sm font-semibold">
+          <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4 z-10 px-2.5 sm:px-3 py-1 bg-black/70 backdrop-blur-sm text-[var(--color-text)] rounded-full text-xs sm:text-sm font-semibold">
             {activeIndex + 1} / {images.length}
           </div>
         </div>
@@ -140,7 +140,7 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
                   className={`w-full h-full object-cover rounded-lg cursor-pointer border-2 transition-all ${
                     index === activeIndex
                       ? "border-primary scale-[1.02]"
-                      : "border-slate-700 hover:border-primary/50"
+                      : "border-[var(--color-border)] hover:border-primary/50"
                   }`}
                   loading="lazy"
                   decoding="async"
@@ -170,7 +170,7 @@ const ImageGallery = ({ images, propertyTitle = "Propiedad" }) => {
           >
             <button
               onClick={() => setShowLightbox(false)}
-              className="absolute top-3 sm:top-4 right-3 sm:right-4 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition z-50"
+              className="absolute top-3 sm:top-4 right-3 sm:right-4 p-3 bg-[var(--color-surface)]/10 hover:bg-[var(--color-surface)]/20 text-[var(--color-text)] rounded-full transition z-50"
               aria-label="Cerrar galería"
             >
               <FaTimes size={22} />

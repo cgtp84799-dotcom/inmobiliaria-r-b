@@ -51,7 +51,7 @@ export default function SecuritySection({ saving, onChangePassword, onSendReset 
 
   const PasswordInput = ({ id, field, label, required }) => (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-2">
+      <label htmlFor={id} className="block text-sm font-medium text-[var(--color-text)] mb-2">
         {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="relative">
@@ -65,14 +65,14 @@ export default function SecuritySection({ saving, onChangePassword, onSendReset 
           }}
           aria-invalid={!!errors[field]}
           aria-describedby={errors[field] ? `${id}-error` : undefined}
-          className={`w-full bg-slate-800 border rounded-xl py-3 px-4 pr-12 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
-            errors[field] ? 'border-red-500' : 'border-slate-700'
+          className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 pr-12 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
+            errors[field] ? 'border-red-500' : 'border-[var(--color-border)]'
           }`}
         />
         <button
           type="button"
           onClick={() => toggleShow(field)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-light transition-colors"
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-light transition-colors"
           aria-label={show[field] ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         >
           {show[field] ? <FaEyeSlash /> : <FaEye />}
@@ -87,8 +87,8 @@ export default function SecuritySection({ saving, onChangePassword, onSendReset 
   );
 
   return (
-    <section aria-labelledby="security-heading" className="card-soft p-6 border border-slate-800">
-      <h2 id="security-heading" className="text-lg font-bold text-white mb-5 flex items-center gap-2">
+    <section aria-labelledby="security-heading" className="card-soft p-6 border border-[var(--color-border)]">
+      <h2 id="security-heading" className="text-lg font-bold text-[var(--color-text)] mb-5 flex items-center gap-2">
         <FaLock className="text-primary" />
         Seguridad
       </h2>
@@ -105,12 +105,12 @@ export default function SecuritySection({ saving, onChangePassword, onSendReset 
                 <div
                   key={i}
                   className={`h-1.5 flex-1 rounded-full transition-all ${
-                    i <= strength ? STRENGTH_COLORS[strength] : 'bg-slate-700'
+                    i <= strength ? STRENGTH_COLORS[strength] : 'bg-[var(--color-input-bg)]'
                   }`}
                 />
               ))}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--color-text-muted)]">
               Fortaleza:{' '}
               <span className={`font-semibold text-${['', 'red', 'yellow', 'blue', 'green'][strength]}-400`}>
                 {STRENGTH_LABELS[strength]}
@@ -134,7 +134,7 @@ export default function SecuritySection({ saving, onChangePassword, onSendReset 
           <button
             type="button"
             onClick={onSendReset}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition-all"
+            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text)] rounded-xl font-semibold transition-all"
           >
             <FaEnvelope className="text-primary" />
             Enviar enlace por email

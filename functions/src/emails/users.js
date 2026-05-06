@@ -1,16 +1,13 @@
 // functions/src/emails/users.js
-// ─── Templates de email para el módulo de Usuarios ───────────────────────────
+// Templates de email para el módulo de Usuarios.
 //
-// AUDITORÍA (ronda notificaciones):
-// - welcomeEmail antes era genérico (asumía que el receptor era un cliente).
-//   Ahora diferencia por rol y muestra el mensaje + CTA correcto:
-//     • viewer  → Bienvenida al portal cliente
-//     • agent / member → Bienvenida al panel de gestión
-//     • admin   → Bienvenida al panel administrativo
+// welcomeEmail diferencia por rol y muestra el mensaje + CTA correcto:
+//   • viewer        → Bienvenida al portal cliente
+//   • agent/member  → Bienvenida al panel de gestión
+//   • admin         → Bienvenida al panel administrativo
 //
-// - Nuevo accessRequestNotificationEmail: cuando alguien pide acceso al
-//   sistema desde /solicitar-acceso, los admins reciben un email para
-//   actuar rápido (antes solo había notif in-app).
+// accessRequestNotificationEmail notifica a admins cuando alguien pide
+// acceso al sistema desde /solicitar-acceso.
 
 const { BASE_URL, WHATSAPP_URL, GRADIENTS, SUPPORT_EMAIL, FROM_NAME } = require("./config");
 const { escapeHtml, safe, fmtCOP }                         = require("./utils");
@@ -339,6 +336,112 @@ function accountDeletionRequestEmail(data, requestId) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Verificación de email (link custom — reemplaza Firebase Auth template)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Email enviado al cliente justo después del registro. Reemplaza el correo
+// de verificación de Firebase Auth (que NO se puede personalizar). Usa el
+// layout corporativo y un CTA con link único.
+//
+// El welcome NO se envía aquí — solo después de que el cliente haga click
+// en este link y la CF confirmEmailVerification dispare onUserUpdated.
+
+function emailVerificationLinkEmail({ displayName, email, verifyUrl, ttlHours }) {
+  const firstName = safe(String(displayName || "").split(" ")[0], "");
+  return {
+    subject: `Confirma tu correo · ${FROM_NAME}`,
+    html: htmlWrapper(GRADIENTS.dark, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">✉️</div>
+      <h1 class="title" style="color:#b8952a;text-align:center;">Confirma tu correo</h1>
+      <p class="subtitle" style="text-align:center;">
+        ${firstName ? `Hola <strong style="color:#1f2937;">${escapeHtml(firstName)}</strong>, gracias` : "Gracias"} por registrarte en
+        <strong style="color:#1f2937;">${FROM_NAME}</strong>.
+        Para activar tu cuenta y entrar al portal, confirma este correo
+        haciendo click en el botón.
+      </p>
+      ${ctaButtons(
+        "✓ Confirmar mi correo", verifyUrl,
+        "", "",
+        { primaryBg: "linear-gradient(135deg,#b8952a,#d4a836)" }
+      )}
+      ${noteBox({
+        bg: "#fffbeb", borderColor: "#f59e0b",
+        title: "Importante",
+        body: `Este enlace es válido por <strong>${ttlHours} horas</strong> y solo puede usarse una vez. Si no fuiste tú quien se registró, ignora este mensaje — la cuenta no se activará sin esta confirmación.`,
+      })}
+      <div class="divider"></div>
+      <p class="tip" style="text-align:center;">
+        ¿No te funciona el botón? Copia y pega este enlace en tu navegador:<br/>
+        <a href="${verifyUrl}" style="color:#b8952a;word-break:break-all;font-size:12px;">${verifyUrl}</a>
+      </p>
+      <p class="tip" style="text-align:center;margin-top:18px;">
+        Si tienes dudas, escríbenos a
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#b8952a;font-weight:600;">${SUPPORT_EMAIL}</a>
+        o por WhatsApp al
+        <a href="${WHATSAPP_URL}" style="color:#b8952a;font-weight:600;">310 596 8202</a>.
+      </p>
+    `),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Configuración de contraseña — staff recién creado por admin
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Email enviado a un usuario interno (admin/member/agent) cuando un
+// administrador acaba de crear su cuenta. NO es el welcome — es el paso
+// previo: el usuario debe configurar su contraseña antes de poder entrar.
+// El welcome del equipo se manda DESPUÉS, cuando el usuario inicia sesión
+// por primera vez (status pasa de pending a active y onUserUpdated lo
+// dispara).
+//
+// Usa generatePasswordResetLink de Admin SDK por debajo, no el email
+// nativo de Firebase (cuya plantilla no puede personalizarse).
+
+function staffPasswordSetupEmail({ displayName, email, role, setupLink }) {
+  const firstName = safe(String(displayName || "").split(" ")[0], "");
+  const roleKey = String(role || "member").toLowerCase();
+  const cfg = ROLE_CONFIG[roleKey] || ROLE_CONFIG.agent;
+
+  return {
+    subject: `Configura tu acceso al panel · ${FROM_NAME}`,
+    html: htmlWrapper(cfg.gradient, `
+      <div style="text-align:center;font-size:56px;margin-bottom:18px;">🔐</div>
+      <h1 class="title" style="color:${cfg.accent};text-align:center;">Configura tu contraseña</h1>
+      <p class="subtitle" style="text-align:center;">
+        ${firstName ? `Hola <strong style="color:#1f2937;">${escapeHtml(firstName)}</strong>, ` : ""}un administrador
+        creó una cuenta para ti en <strong style="color:#1f2937;">${FROM_NAME}</strong>.
+        Antes de poder entrar al panel, configura tu contraseña haciendo click en el botón.
+      </p>
+      ${sectionCard("Datos de tu cuenta", [
+        infoRow("Correo", safe(email, "—"), "#1e40af"),
+        infoRow("Rol",    roleKey.toUpperCase(), cfg.accent),
+        infoRow("Estado", "Pendiente de activación", "#92400e"),
+      ], { bg: "#f8fbff", border: "#dbeafe" })}
+      ${ctaButtons(
+        "Configurar mi contraseña", setupLink,
+        "", "",
+        { primaryBg: `linear-gradient(135deg,${cfg.accent},${cfg.accent}cc)` }
+      )}
+      ${noteBox({
+        bg: "#fffbeb", borderColor: "#f59e0b",
+        title: "Cómo funciona",
+        body: "Al hacer click crearás tu contraseña personal. Tras configurarla, podrás iniciar sesión en el panel y recibirás un correo de bienvenida con la información del equipo. Si no fuiste tú quien debía recibir esto, contacta al administrador.",
+      })}
+      <div class="divider"></div>
+      <p class="tip" style="text-align:center;">
+        ¿No te funciona el botón? Copia y pega este enlace en tu navegador:<br/>
+        <a href="${setupLink}" style="color:${cfg.accent};word-break:break-all;font-size:12px;">${setupLink}</a>
+      </p>
+      <p class="tip" style="text-align:center;margin-top:18px;">
+        Si tienes dudas, escríbenos a
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:${cfg.accent};font-weight:600;">${SUPPORT_EMAIL}</a>.
+      </p>
+    `),
+  };
+}
+
 module.exports = {
   welcomeEmail,
   accessRequestNotificationEmail,
@@ -346,4 +449,6 @@ module.exports = {
   accessRequestRejectedEmail,
   clientInviteEmail,
   accountDeletionRequestEmail,
+  emailVerificationLinkEmail,
+  staffPasswordSetupEmail,
 };

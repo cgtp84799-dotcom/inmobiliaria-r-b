@@ -89,10 +89,10 @@ function RentInfo({ contract }) {
       </div>
 
       {canon > 0 && (
-        <div className="flex items-center justify-between p-3 bg-slate-900/60 border border-slate-800 rounded-xl">
+        <div className="flex items-center justify-between p-3 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-xl">
           <div className="flex items-center gap-2">
             <FaMoneyBillWave className="text-amber-400 text-xs" />
-            <span className="text-slate-400 text-xs">Cánon mensual</span>
+            <span className="text-[var(--color-text-muted)] text-xs">Cánon mensual</span>
           </div>
           <span className="text-amber-400 font-bold text-sm">{formatCOP(canon)} / mes</span>
         </div>
@@ -104,15 +104,15 @@ function RentInfo({ contract }) {
             <p className="text-emerald-400 text-lg font-bold">{paidCount}</p>
             <p className="text-emerald-300/70 text-[10px]">Pagados</p>
           </div>
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-2.5 text-center">
-            <p className="text-slate-300 text-lg font-bold">{totalCount - paidCount - latePayments.length}</p>
-            <p className="text-slate-500 text-[10px]">Pendientes</p>
+          <div className="bg-[var(--color-surface)]/60 border border-[var(--color-border)]/40 rounded-xl p-2.5 text-center">
+            <p className="text-[var(--color-text)] text-lg font-bold">{totalCount - paidCount - latePayments.length}</p>
+            <p className="text-[var(--color-text-muted)] text-[10px]">Pendientes</p>
           </div>
-          <div className={`${latePayments.length > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-slate-800/60 border-slate-700/40'} border rounded-xl p-2.5 text-center`}>
-            <p className={`text-lg font-bold ${latePayments.length > 0 ? 'text-red-400' : 'text-slate-300'}`}>
+          <div className={`${latePayments.length > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-[var(--color-surface)]/60 border-[var(--color-border)]/40'} border rounded-xl p-2.5 text-center`}>
+            <p className={`text-lg font-bold ${latePayments.length > 0 ? 'text-red-400' : 'text-[var(--color-text)]'}`}>
               {latePayments.length}
             </p>
-            <p className="text-slate-500 text-[10px]">Vencidos</p>
+            <p className="text-[var(--color-text-muted)] text-[10px]">Vencidos</p>
           </div>
         </div>
       )}
@@ -123,7 +123,7 @@ function RentInfo({ contract }) {
             <FaCoins className="text-blue-400 text-xs" />
             <div>
               <p className="text-blue-300 text-xs font-semibold">Próximo pago</p>
-              <p className="text-slate-500 text-[11px]">{fmtDateShort(nextPayment.dueDate)} · {formatCOP(nextPayment.amount)}</p>
+              <p className="text-[var(--color-text-muted)] text-[11px]">{fmtDateShort(nextPayment.dueDate)} · {formatCOP(nextPayment.amount)}</p>
             </div>
           </div>
           {daysToNext !== null && (
@@ -135,15 +135,15 @@ function RentInfo({ contract }) {
       )}
 
       {totalMonths && (
-        <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+        <div className="p-3 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-xl space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Período del contrato</span>
-            <span className="text-slate-300 font-semibold">{totalMonths} meses</span>
+            <span className="text-[var(--color-text-muted)]">Período del contrato</span>
+            <span className="text-[var(--color-text)] font-semibold">{totalMonths} meses</span>
           </div>
-          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${elapsedPct}%` }} />
           </div>
-          <div className="flex justify-between text-[10px] text-slate-500">
+          <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]">
             <span>{fmtDateShort(contract.startDate)}</span>
             <span className="text-emerald-400">{elapsedPct}% transcurrido</span>
             <span>{fmtDateShort(contract.endDate)}</span>
@@ -152,9 +152,9 @@ function RentInfo({ contract }) {
       )}
 
       {isExpired && (
-        <div className="flex items-center gap-2 p-3 bg-slate-700/30 border border-slate-700/40 rounded-xl">
-          <FaClock className="text-slate-500 text-xs" />
-          <p className="text-slate-400 text-xs">Período de arriendo concluido.</p>
+        <div className="flex items-center gap-2 p-3 bg-[var(--color-input-bg)]/30 border border-[var(--color-border)]/40 rounded-xl">
+          <FaClock className="text-[var(--color-text-muted)] text-xs" />
+          <p className="text-[var(--color-text-muted)] text-xs">Período de arriendo concluido.</p>
         </div>
       )}
       {!isExpired && daysLeft !== null && daysLeft <= 60 && daysLeft >= 0 && (
@@ -164,7 +164,7 @@ function RentInfo({ contract }) {
             <p className={`text-xs font-semibold ${daysLeft <= 30 ? 'text-red-400' : 'text-amber-400'}`}>
               {daysLeft === 0 ? 'Vence hoy' : `Vence en ${daysLeft} días`}
             </p>
-            <p className="text-slate-500 text-[11px]">
+            <p className="text-[var(--color-text-muted)] text-[11px]">
               Considera renovar o coordinar la entrega del inmueble.
             </p>
           </div>
@@ -188,10 +188,10 @@ function PromiseInfo({ contract }) {
         </p>
       </div>
       {arras > 0 && (
-        <div className="flex items-center justify-between p-3 bg-slate-900/60 border border-slate-800 rounded-xl">
+        <div className="flex items-center justify-between p-3 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-xl">
           <div className="flex items-center gap-2">
             <FaMoneyBillWave className="text-amber-400 text-xs" />
-            <span className="text-slate-400 text-xs">Arras / anticipo</span>
+            <span className="text-[var(--color-text-muted)] text-xs">Arras / anticipo</span>
           </div>
           <span className="text-amber-400 font-bold text-sm">{formatCOP(arras)}</span>
         </div>
@@ -209,10 +209,10 @@ export default function SectionContratos({ contracts }) {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white">Mis contratos</h2>
+        <h2 className="text-lg font-bold text-[var(--color-text)]">Mis contratos</h2>
         {total > 0 && (
           <div className="text-right">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wide">Valor total</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide">Valor total</p>
             <p className="text-amber-400 font-bold text-sm">{formatCOP(total)}</p>
           </div>
         )}
@@ -221,13 +221,13 @@ export default function SectionContratos({ contracts }) {
       {contracts.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Total',    value: contracts.length,                                      color: 'text-white' },
+            { label: 'Total',    value: contracts.length,                                      color: 'text-[var(--color-text)]' },
             { label: 'Vigentes', value: vigentes,                                              color: 'text-emerald-400' },
             { label: 'Valor',    value: total > 0 ? `${(total / 1_000_000).toFixed(1)}M` : '—', color: 'text-amber-400' },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 text-center">
+            <div key={label} className="bg-[var(--color-surface)]/40 border border-[var(--color-border)]/40 rounded-xl p-3 text-center">
               <p className={`text-lg font-bold ${color}`}>{value}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
+              <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{label}</p>
             </div>
           ))}
         </div>
@@ -235,11 +235,11 @@ export default function SectionContratos({ contracts }) {
 
       {contracts.length === 0 && (
         <div className="text-center py-12">
-          <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/40 flex items-center justify-center mx-auto mb-4">
-            <FaFileContract className="text-slate-600 text-2xl" />
+          <div className="w-16 h-16 rounded-2xl bg-[var(--color-surface)]/60 border border-[var(--color-border)]/40 flex items-center justify-center mx-auto mb-4">
+            <FaFileContract className="text-[var(--color-text-faint)] text-2xl" />
           </div>
-          <h3 className="text-white font-semibold mb-1">Sin contratos aún</h3>
-          <p className="text-slate-500 text-sm">Cuando firmes un contrato, aparecerá aquí con todos sus detalles.</p>
+          <h3 className="text-[var(--color-text)] font-semibold mb-1">Sin contratos aún</h3>
+          <p className="text-[var(--color-text-muted)] text-sm">Cuando firmes un contrato, aparecerá aquí con todos sus detalles.</p>
         </div>
       )}
 
@@ -248,12 +248,12 @@ export default function SectionContratos({ contracts }) {
           const statusGeneral = c.statusGeneral || c.status;
           const stage = resolveContractBusinessStage(c);
           return (
-            <div key={c.id} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-5 space-y-4">
+            <div key={c.id} className="bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-2xl p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-white font-semibold truncate">{c.propertyName || 'Propiedad'}</p>
+                  <p className="text-[var(--color-text)] font-semibold truncate">{c.propertyName || 'Propiedad'}</p>
                   {c.propertyAddress && (
-                    <p className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-0.5 flex items-center gap-1">
                       <FaMapMarkerAlt className="text-[9px]" /> {c.propertyAddress}
                     </p>
                   )}
@@ -271,7 +271,7 @@ export default function SectionContratos({ contracts }) {
                   <span className="text-amber-400 font-bold text-sm">{formatCOP(c.value)}</span>
                 )}
                 {c.type === CONTRACT_TYPE.RENT && c.value > 0 && (
-                  <span className="text-slate-500 text-xs">/mes</span>
+                  <span className="text-[var(--color-text-muted)] text-xs">/mes</span>
                 )}
               </div>
 
@@ -285,29 +285,29 @@ export default function SectionContratos({ contracts }) {
               {c.type === CONTRACT_TYPE.RENT     && <RentInfo contract={c} />}
               {c.type === CONTRACT_TYPE.PROMISE  && <PromiseInfo contract={c} />}
 
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+              <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-text-muted)]">
                 {c.startDate && (
-                  <div className="bg-slate-800/40 rounded-lg p-2.5">
-                    <p className="text-[10px] text-slate-600 mb-0.5">
+                  <div className="bg-[var(--color-surface)]/40 rounded-lg p-2.5">
+                    <p className="text-[10px] text-[var(--color-text-faint)] mb-0.5">
                       {c.type === CONTRACT_TYPE.RENT ? 'Inicio del arriendo' : 'Fecha inicio'}
                     </p>
-                    <p className="text-slate-300 font-medium">{fmtDate(c.startDate)}</p>
+                    <p className="text-[var(--color-text)] font-medium">{fmtDate(c.startDate)}</p>
                   </div>
                 )}
                 {c.endDate && (
-                  <div className="bg-slate-800/40 rounded-lg p-2.5">
-                    <p className="text-[10px] text-slate-600 mb-0.5">
+                  <div className="bg-[var(--color-surface)]/40 rounded-lg p-2.5">
+                    <p className="text-[10px] text-[var(--color-text-faint)] mb-0.5">
                       {c.type === CONTRACT_TYPE.RENT ? 'Fin del arriendo' : 'Fecha fin'}
                     </p>
-                    <p className="text-slate-300 font-medium">{fmtDate(c.endDate)}</p>
+                    <p className="text-[var(--color-text)] font-medium">{fmtDate(c.endDate)}</p>
                   </div>
                 )}
               </div>
 
               {c.notes && (
-                <div className="flex items-start gap-2 p-3 bg-slate-800/30 rounded-xl border border-slate-700/30">
-                  <FaInfoCircle className="text-slate-500 text-xs mt-0.5 flex-shrink-0" />
-                  <p className="text-slate-400 text-xs leading-relaxed">{c.notes}</p>
+                <div className="flex items-start gap-2 p-3 bg-[var(--color-surface)]/30 rounded-xl border border-[var(--color-border)]/30">
+                  <FaInfoCircle className="text-[var(--color-text-muted)] text-xs mt-0.5 flex-shrink-0" />
+                  <p className="text-[var(--color-text-muted)] text-xs leading-relaxed">{c.notes}</p>
                 </div>
               )}
 
@@ -349,18 +349,18 @@ function ContractDocuments({ contractId }) {
   };
 
   return (
-    <div className="mt-3 pt-3 border-t border-slate-700/30">
-      <p className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold mb-2">
+    <div className="mt-3 pt-3 border-t border-[var(--color-border)]/30">
+      <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-semibold mb-2">
         Documentos ({docs.length})
       </p>
       <div className="space-y-1.5">
         {docs.map((d) => (
           <a key={d.id} href={d.url} target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 p-2 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition group">
+            className="flex items-center gap-2 p-2 bg-[var(--color-surface)]/40 rounded-lg hover:bg-[var(--color-surface)]/60 transition group">
             <FaDownload className="text-blue-400 text-[10px] flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-slate-300 font-medium truncate">{d.label || d.filename}</p>
-              <p className="text-[10px] text-slate-500">{DOCUMENT_LABELS[d.kind] || d.kind}</p>
+              <p className="text-xs text-[var(--color-text)] font-medium truncate">{d.label || d.filename}</p>
+              <p className="text-[10px] text-[var(--color-text-muted)]">{DOCUMENT_LABELS[d.kind] || d.kind}</p>
             </div>
           </a>
         ))}

@@ -24,9 +24,14 @@ Implementar todas las correcciones identificadas en la auditoría sin romper fun
   - properties: transactionType + status + createdAt
   - appointments: visitId + date
 
-### 1.3 ⏳ PENDIENTE: Rate Limiting en Cloud Functions
-- **Archivos**: `functions/index.js`
-- **Acción**: Implementar rate limiting usando Firebase Functions v2
+### 1.3 ✅ COMPLETADO: Rate Limiting en Cloud Functions
+- **Archivos creados**: 
+  - `functions/src/utils/rateLimiter.js` - Rate limiter en memoria
+  - `functions/index.js` - Aplicado a funciones principales
+- **Funcionalidad**: 
+  - 20 requests/min para operaciones de escritura
+  - 200 requests/min para operaciones de lectura
+  - Headers X-RateLimit-* en respuestas
 
 ---
 
@@ -42,8 +47,12 @@ Implementar todas las correcciones identificadas en la auditoría sin romper fun
 - **Archivos**: `src/modules/dashboard/pages/DashboardPage.jsx`
 - **Acción**: Reemplazar queries de 500 documentos por paginación
 
-### 2.3 ⏳ PENDIENTE: Lazy loading de imágenes
-- **Acción**: Implementar IntersectionObserver para imágenes del catálogo
+### 2.3 ✅ COMPLETADO: Lazy loading de imágenes
+- **Archivo creado**: `src/shared/components/LazyImage.jsx`
+- **Funcionalidad**: 
+  - Componente LazyImage con IntersectionObserver
+  - Hook useLazyImage para uso personalizado
+  - Componente LazyImageGallery para galerías
 
 ---
 

@@ -1,14 +1,10 @@
 // functions/src/emails/contacts.js
-// ─── Templates de email para el módulo de Contactos / Leads web ──────────────
+// Templates de email para el módulo de Contactos / Leads web.
 //
-// AUDITORÍA: el formulario público (/contactos y "Pregunta sobre esta propiedad"
-// en PropertyDetail) escribe en /contacts pero NO existía trigger de email.
-// Los admins quedaban ciegos a leads de la web — gran pérdida de conversión.
-//
-// Ahora cada lead dispara:
-//   • Email a admins + agente asignado (si la consulta menciona propertyId)
-//     con tono operativo y CTA al panel.
-//   • Email de auto-respuesta al cliente confirmando que recibimos su consulta.
+// Cada lead enviado desde /contactos o "Pregunta sobre esta propiedad"
+// dispara:
+//   • Email a admins + agente asignado (si hay propertyId) con CTA al panel.
+//   • Email de auto-respuesta al cliente confirmando que recibimos la consulta.
 
 const { BASE_URL, WHATSAPP_URL, GRADIENTS, SUPPORT_EMAIL, FROM_NAME } = require("./config");
 const { escapeHtml, safe, fmtDateTime } = require("./utils");

@@ -16,6 +16,8 @@ class ErrorBoundary extends React.Component {
     this.handleReset = this.handleReset.bind(this);
   }
 
+  static defaultProps = { fallback: null };
+
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
@@ -32,6 +34,9 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    // Si se pasó un fallback personalizado (ej: RouteError), usarlo en lugar del UI completo
+    if (this.props.fallback) return this.props.fallback;
 
     const isDev  = import.meta.env.DEV;
     const msg    = this.state.error?.message;

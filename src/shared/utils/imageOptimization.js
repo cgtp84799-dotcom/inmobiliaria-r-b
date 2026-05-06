@@ -1,6 +1,5 @@
 // Función para comprimir imágenes
 //
-// ★ FIX (auditoría): antes esta función no manejaba errores — si el
 // FileReader o la decodificación de la imagen fallaban, la promesa nunca
 // resolvía/rechazaba y el upload se colgaba indefinidamente.
 export const optimizeImage = (file, maxWidth = 1920, quality = 0.8) => {

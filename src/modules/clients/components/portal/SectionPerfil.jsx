@@ -97,154 +97,290 @@ export default function SectionPerfil({ clientData, clientId, onSave }) {
   const name = form.nombre || email.split('@')[0] || '?';
 
   const inputClass = `
-    w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm
-    text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60
-    focus:ring-1 focus:ring-amber-500/30 transition
+    w-full rounded-xl px-4 py-2.5 text-sm transition
+    bg-[var(--color-input-bg)] border border-[var(--color-input-border)]
+    text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]
+    focus:outline-none focus:border-[var(--color-input-focus)]
+    focus:ring-1 focus:ring-[var(--color-input-focus)]
   `;
 
   return (
-    <div className="space-y-6 max-w-lg">
-      <h2 className="text-lg font-bold text-white">Mi perfil</h2>
-
-      {/* Avatar */}
-      <div className="flex items-center gap-4">
-        {photo ? (
-          <img
-            src={photo}
-            alt={name}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/30"
-          />
-        ) : (
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border-2 border-amber-500/20 flex items-center justify-center text-amber-400 text-xl font-bold">
-            {getInitials(name)}
-          </div>
-        )}
-        <div>
-          <p className="text-white font-semibold">{name}</p>
-          <p className="text-slate-500 text-sm">{email}</p>
-          {isGoogle && (
-            <span className="text-xs text-blue-400 mt-0.5 block">Cuenta de Google</span>
-          )}
-        </div>
-      </div>
-
-      {/* Datos personales */}
+    <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-slate-300 mb-3">Datos personales</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5 font-medium">
-              Nombre completo
-            </label>
-            <div className="relative">
-              <FaUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-              <input
-                value={form.nombre}
-                onChange={update('nombre')}
-                className={`${inputClass} pl-9`}
-                placeholder="Tu nombre completo"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Teléfono</label>
-            <div className="relative">
-              <FaPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-              <input
-                value={form.telefono}
-                onChange={update('telefono')}
-                className={`${inputClass} pl-9`}
-                placeholder="Ej: 3001234567"
-                type="tel"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Email</label>
-            <div className="relative">
-              <FaEnvelope className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-              <input
-                value={email}
-                disabled
-                className={`${inputClass} pl-9 cursor-not-allowed opacity-50`}
-              />
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1">El email no se puede modificar</p>
-          </div>
-        </div>
+        <h2
+          className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight"
+          style={{ color: 'var(--color-text)' }}
+        >
+          Mi perfil
+        </h2>
+        <p
+          className="text-sm mt-1"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          Mantén tus datos al día para que podamos ayudarte mejor.
+        </p>
       </div>
 
-      {/* Preferencias */}
-      <div>
-        <h3 className="text-sm font-semibold text-slate-300 mb-3">Preferencias de búsqueda</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Zona de interés</label>
-            <div className="relative">
-              <FaMapMarkerAlt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-              <input
-                value={form.ubicacionInteres}
-                onChange={update('ubicacionInteres')}
-                placeholder="Ej: Laureles, El Poblado"
-                className={`${inputClass} pl-9`}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Presupuesto máximo</label>
-            <input
-              value={form.presupuesto}
-              onChange={update('presupuesto')}
-              placeholder="Ej: 500.000.000"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Tipo de propiedad</label>
-            <div className="relative">
-              <FaHome className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
-              <select
-                value={form.tipoPropiedad}
-                onChange={update('tipoPropiedad')}
-                className={`${inputClass} pl-9`}
-              >
-                <option value="">Sin preferencia</option>
-                <option value="Apartamento">Apartamento</option>
-                <option value="Casa">Casa</option>
-                <option value="Local">Local comercial</option>
-                <option value="Oficina">Oficina</option>
-                <option value="Lote">Lote</option>
-                <option value="Bodega">Bodega</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Botón guardar */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm transition shadow-lg shadow-amber-500/20 disabled:opacity-60"
+      {/* Tarjeta principal */}
+      <div
+        className="rounded-2xl border p-5 sm:p-7 space-y-7"
+        style={{
+          background: 'var(--color-surface)',
+          borderColor: 'var(--color-border)',
+        }}
       >
-        {saving ? <FaSpinner className="animate-spin" /> : <FaSave />}
-        {saving ? 'Guardando...' : 'Guardar cambios'}
-      </button>
+        {/* Avatar + nombre */}
+        <div className="flex items-center gap-4">
+          {photo ? (
+            <img
+              src={photo}
+              alt={name}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover"
+              style={{ border: '2px solid var(--color-gold)' }}
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold"
+              style={{
+                background:
+                  'linear-gradient(135deg, var(--color-gold-soft), var(--color-gold))',
+                color: 'var(--color-bg)',
+              }}
+            >
+              {getInitials(name)}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p
+              className="font-semibold truncate text-base sm:text-lg"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {name}
+            </p>
+            <p
+              className="text-sm truncate"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              {email}
+            </p>
+            {isGoogle && (
+              <span
+                className="text-xs mt-0.5 inline-flex items-center gap-1"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <FaCheckCircle className="text-[10px]" /> Cuenta de Google
+              </span>
+            )}
+          </div>
+        </div>
 
-      {/* Seguridad — solo si no es Google */}
-      {!isGoogle && (
-        <div className="border-t border-slate-800 pt-5">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-            <FaLock className="text-slate-500 text-xs" /> Seguridad
+        {/* Datos personales */}
+        <div>
+          <h3
+            className="text-xs font-bold uppercase tracking-widest mb-3"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Datos personales
           </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label
+                className="block text-xs mb-1.5 font-medium"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Nombre completo
+              </label>
+              <div className="relative">
+                <FaUser
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+                  style={{ color: 'var(--color-text-muted)' }}
+                />
+                <input
+                  value={form.nombre}
+                  onChange={update('nombre')}
+                  className={`${inputClass} pl-9`}
+                  placeholder="Tu nombre completo"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                className="block text-xs mb-1.5 font-medium"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Teléfono
+              </label>
+              <div className="relative">
+                <FaPhone
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+                  style={{ color: 'var(--color-text-muted)' }}
+                />
+                <input
+                  value={form.telefono}
+                  onChange={update('telefono')}
+                  className={`${inputClass} pl-9`}
+                  placeholder="Ej: 3001234567"
+                  type="tel"
+                />
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label
+                className="block text-xs mb-1.5 font-medium"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Email
+              </label>
+              <div className="relative">
+                <FaEnvelope
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+                  style={{ color: 'var(--color-text-muted)' }}
+                />
+                <input
+                  value={email}
+                  disabled
+                  className={`${inputClass} pl-9 cursor-not-allowed opacity-60`}
+                />
+              </div>
+              <p
+                className="text-[11px] mt-1"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                El email no se puede modificar.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Preferencias */}
+        <div>
+          <h3
+            className="text-xs font-bold uppercase tracking-widest mb-3"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Preferencias de búsqueda
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label
+                className="block text-xs mb-1.5"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Zona de interés
+              </label>
+              <div className="relative">
+                <FaMapMarkerAlt
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+                  style={{ color: 'var(--color-text-muted)' }}
+                />
+                <input
+                  value={form.ubicacionInteres}
+                  onChange={update('ubicacionInteres')}
+                  placeholder="Ej: Laureles, El Poblado"
+                  className={`${inputClass} pl-9`}
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                className="block text-xs mb-1.5"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Presupuesto máximo
+              </label>
+              <input
+                value={form.presupuesto}
+                onChange={update('presupuesto')}
+                placeholder="Ej: 500.000.000"
+                className={inputClass}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label
+                className="block text-xs mb-1.5"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Tipo de propiedad
+              </label>
+              <div className="relative">
+                <FaHome
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
+                  style={{ color: 'var(--color-text-muted)' }}
+                />
+                <select
+                  value={form.tipoPropiedad}
+                  onChange={update('tipoPropiedad')}
+                  className={`${inputClass} pl-9`}
+                >
+                  <option value="">Sin preferencia</option>
+                  <option value="Apartamento">Apartamento</option>
+                  <option value="Casa">Casa</option>
+                  <option value="Local">Local comercial</option>
+                  <option value="Oficina">Oficina</option>
+                  <option value="Lote">Lote</option>
+                  <option value="Bodega">Bodega</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Botón guardar */}
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 font-bold px-5 py-2.5 rounded-xl text-sm transition disabled:opacity-60"
+            style={{
+              background: 'var(--color-gold)',
+              color: 'var(--color-bg)',
+              boxShadow: '0 4px 12px rgba(180, 83, 9, 0.18)',
+            }}
+          >
+            {saving ? <FaSpinner className="animate-spin" /> : <FaSave />}
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+
+      {/* Seguridad — solo si no es Google — fuera de la card principal */}
+      {!isGoogle && (
+        <div
+          className="rounded-2xl border p-5 sm:p-6"
+          style={{
+            background: 'var(--color-surface)',
+            borderColor: 'var(--color-border)',
+          }}
+        >
+          <h3
+            className="text-sm font-semibold mb-2 flex items-center gap-2"
+            style={{ color: 'var(--color-text)' }}
+          >
+            <FaLock
+              className="text-xs"
+              style={{ color: 'var(--color-text-muted)' }}
+            />
+            Seguridad
+          </h3>
+          <p
+            className="text-sm mb-3"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            ¿Quieres cambiar tu contraseña? Te enviamos un enlace seguro a tu email.
+          </p>
           {resetSent ? (
-            <p className="text-emerald-400 text-sm flex items-center gap-1.5">
+            <p
+              className="text-sm flex items-center gap-1.5"
+              style={{ color: '#10b981' }}
+            >
               <FaCheckCircle /> Email enviado. Revisa tu bandeja de entrada.
             </p>
           ) : (
             <button
               onClick={handlePasswordReset}
-              className="text-sm text-amber-400 hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold hover:underline"
+              style={{ color: 'var(--color-gold)' }}
             >
               Cambiar contraseña →
             </button>

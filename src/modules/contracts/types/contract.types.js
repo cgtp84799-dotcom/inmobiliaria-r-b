@@ -200,7 +200,7 @@ export const DOCUMENT_KIND_LABELS = Object.freeze({
 // ─── Colores ────────────────────────────────────────────────────────────────
 
 export const CONTRACT_STATUS_COLORS = Object.freeze({
-  [CONTRACT_STATUS.DRAFT]:     { text: "text-slate-400",   bg: "bg-slate-500/15",   border: "border-slate-500/30" },
+  [CONTRACT_STATUS.DRAFT]:     { text: "text-[var(--color-text-muted)]",   bg: "bg-slate-500/15",   border: "border-slate-500/30" },
   [CONTRACT_STATUS.ACTIVE]:    { text: "text-green-400",   bg: "bg-green-500/15",   border: "border-green-500/30" },
   [CONTRACT_STATUS.PAUSED]:    { text: "text-blue-400",    bg: "bg-blue-500/15",    border: "border-blue-500/30"  },
   [CONTRACT_STATUS.EXPIRED]:   { text: "text-yellow-400",  bg: "bg-yellow-500/15",  border: "border-yellow-500/30" },
@@ -215,11 +215,11 @@ export const CONTRACT_TYPE_COLORS = Object.freeze({
 });
 
 export const PAYMENT_STATUS_COLORS = Object.freeze({
-  [PAYMENT_STATUS.PENDING]:   { text: "text-slate-300",   bg: "bg-slate-500/10",   border: "border-slate-500/30" },
+  [PAYMENT_STATUS.PENDING]:   { text: "text-[var(--color-text)]",   bg: "bg-slate-500/10",   border: "border-slate-500/30" },
   [PAYMENT_STATUS.PAID]:      { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" },
   [PAYMENT_STATUS.LATE]:      { text: "text-red-400",     bg: "bg-red-500/10",     border: "border-red-500/30" },
   [PAYMENT_STATUS.WAIVED]:    { text: "text-blue-400",    bg: "bg-blue-500/10",    border: "border-blue-500/30" },
-  [PAYMENT_STATUS.CANCELLED]: { text: "text-slate-500",   bg: "bg-slate-700/30",   border: "border-slate-700/40" },
+  [PAYMENT_STATUS.CANCELLED]: { text: "text-[var(--color-text-muted)]",   bg: "bg-[var(--color-input-bg)]/30",   border: "border-[var(--color-border)]/40" },
 });
 
 // ─── Secuencias de etapas por flujo ─────────────────────────────────────────
@@ -459,12 +459,17 @@ export function resolveContractBusinessStage(contract = {}) {
 //
 // Un único lugar donde se define cómo una etapa de contrato afecta el
 // `status` de la propiedad asociada. Lo consume contract.service._syncPropertyStatus.
+//
+// IMPORTANTE: estos valores deben coincidir con los del enum canónico
+// `PROPERTY_STATUS` en src/modules/properties/types/property.types.js.
+// Los valores legacy (disponible/reservada/arrendada/vendida) se aceptan
+// en lectura pero NO se escriben — todo escribe el enum en inglés.
 
 export const PROPERTY_STATUS = Object.freeze({
-  AVAILABLE: "disponible",
-  RESERVED: "reservada",
-  RENTED: "arrendada",
-  SOLD: "vendida",
+  AVAILABLE: "published",
+  RESERVED: "reserved",
+  RENTED: "rented",
+  SOLD: "sold",
 });
 
 export function getPropertyStatusFromContract(contract = {}) {

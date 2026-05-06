@@ -39,8 +39,8 @@ function PropertySelector({ favProps, selected, onToggle, maxSelect }) {
   if (!favProps.length) {
     return (
       <div className="text-center py-10">
-        <FaHeart className="text-slate-700 text-3xl mx-auto mb-3" />
-        <p className="text-slate-400 text-sm">No tienes favoritos aún.</p>
+        <FaHeart className="text-[var(--color-text-faint)] text-3xl mx-auto mb-3" />
+        <p className="text-[var(--color-text-muted)] text-sm">No tienes favoritos aún.</p>
         <Link to="/catalogo" className="mt-3 inline-block text-amber-400 hover:underline text-sm">
           Explorar catálogo →
         </Link>
@@ -50,7 +50,7 @@ function PropertySelector({ favProps, selected, onToggle, maxSelect }) {
 
   return (
     <div>
-      <p className="text-slate-400 text-xs mb-3">
+      <p className="text-[var(--color-text-muted)] text-xs mb-3">
         Selecciona de 2 a {maxSelect} propiedades para comparar
         <span className="ml-2 text-amber-400 font-semibold">({selected.length}/{maxSelect})</span>
       </p>
@@ -69,26 +69,26 @@ function PropertySelector({ favProps, selected, onToggle, maxSelect }) {
                 ${isSelected
                   ? 'border-amber-500/60 ring-1 ring-amber-500/30 bg-amber-500/5'
                   : isDisabled
-                    ? 'border-slate-800/40 opacity-40 cursor-not-allowed'
-                    : 'border-slate-800/60 hover:border-slate-700 bg-slate-900/40'
+                    ? 'border-[var(--color-border)]/40 opacity-40 cursor-not-allowed'
+                    : 'border-[var(--color-border)]/60 hover:border-[var(--color-border)] bg-[var(--color-surface)]/40'
                 }
               `}
             >
               {/* Imagen */}
-              <div className="h-28 bg-slate-800 overflow-hidden">
+              <div className="h-28 bg-[var(--color-surface)] overflow-hidden">
                 {p.images?.[0] ? (
                   <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <FaHome className="text-slate-700 text-xl" />
+                    <FaHome className="text-[var(--color-text-faint)] text-xl" />
                   </div>
                 )}
               </div>
               {/* Info */}
               <div className="p-3">
-                <p className="text-white text-xs font-semibold truncate">{p.title}</p>
+                <p className="text-[var(--color-text)] text-xs font-semibold truncate">{p.title}</p>
                 {resolveCity(p) && (
-                  <p className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
+                  <p className="text-[var(--color-text-muted)] text-xs mt-0.5 flex items-center gap-1">
                     <FaMapMarkerAlt className="text-[9px]" /> {resolveCity(p)}
                   </p>
                 )}
@@ -122,7 +122,7 @@ function CompareTable({ properties }) {
         const v = resolvePrice(p);
         return v
           ? <span className="text-amber-400 font-bold">{formatCOP ? formatCOP(v) : `$${Number(v).toLocaleString()}`}</span>
-          : <span className="text-slate-600">—</span>;
+          : <span className="text-[var(--color-text-faint)]">—</span>;
       },
       highlight: (vals) => {
         const nums = vals.map(resolvePrice).map(Number);
@@ -134,19 +134,19 @@ function CompareTable({ properties }) {
       label: 'Tipo',
       render: (p) => resolveType(p)
         ? <span className="capitalize">{resolveType(p)}</span>
-        : <span className="text-slate-600">—</span>,
+        : <span className="text-[var(--color-text-faint)]">—</span>,
     },
     {
       label: 'Ciudad',
       icon: FaMapMarkerAlt,
-      render: (p) => resolveCity(p) || <span className="text-slate-600">—</span>,
+      render: (p) => resolveCity(p) || <span className="text-[var(--color-text-faint)]">—</span>,
     },
     {
       label: 'Habitaciones',
       icon: FaBed,
       render: (p) => {
         const v = resolveRooms(p);
-        return v != null ? <span>{v}</span> : <span className="text-slate-600">—</span>;
+        return v != null ? <span>{v}</span> : <span className="text-[var(--color-text-faint)]">—</span>;
       },
       highlight: (vals) => {
         const nums = vals.map(resolveRooms).map(Number);
@@ -159,7 +159,7 @@ function CompareTable({ properties }) {
       icon: FaBath,
       render: (p) => {
         const v = resolveBathrooms(p);
-        return v != null ? <span>{v}</span> : <span className="text-slate-600">—</span>;
+        return v != null ? <span>{v}</span> : <span className="text-[var(--color-text-faint)]">—</span>;
       },
       highlight: (vals) => {
         const nums = vals.map(resolveBathrooms).map(Number);
@@ -172,7 +172,7 @@ function CompareTable({ properties }) {
       icon: FaRulerCombined,
       render: (p) => {
         const v = resolveArea(p);
-        return v != null ? <span>{v} m²</span> : <span className="text-slate-600">—</span>;
+        return v != null ? <span>{v} m²</span> : <span className="text-[var(--color-text-faint)]">—</span>;
       },
       highlight: (vals) => {
         const nums = vals.map(resolveArea).map(Number);
@@ -183,7 +183,7 @@ function CompareTable({ properties }) {
     {
       label: 'Descripción',
       render: (p) => (
-        <span className="text-slate-400 text-xs leading-relaxed line-clamp-3">
+        <span className="text-[var(--color-text-muted)] text-xs leading-relaxed line-clamp-3">
           {p.description || p.descripcion || '—'}
         </span>
       ),
@@ -199,18 +199,18 @@ function CompareTable({ properties }) {
         <div className="w-28 flex-shrink-0" />
         {properties.map((p) => (
           <div key={p.id} className={`${colWidth} flex-shrink-0 px-2`}>
-            <div className="rounded-xl overflow-hidden border border-slate-800/60 bg-slate-900/60">
-              <div className="h-32 bg-slate-800 overflow-hidden">
+            <div className="rounded-xl overflow-hidden border border-[var(--color-border)]/60 bg-[var(--color-surface)]/60">
+              <div className="h-32 bg-[var(--color-surface)] overflow-hidden">
                 {p.images?.[0] ? (
                   <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <FaHome className="text-slate-700 text-2xl" />
+                    <FaHome className="text-[var(--color-text-faint)] text-2xl" />
                   </div>
                 )}
               </div>
               <div className="p-3">
-                <p className="text-white font-semibold text-xs truncate">{p.title}</p>
+                <p className="text-[var(--color-text)] font-semibold text-xs truncate">{p.title}</p>
                 <Link
                   to={`/propiedades/${p.slug || p.id}`}
                   className="mt-1.5 text-[10px] text-amber-400 hover:underline flex items-center gap-1"
@@ -231,8 +231,8 @@ function CompareTable({ properties }) {
             <div key={row.label} className="flex gap-0 items-start">
               {/* Label */}
               <div className="w-28 flex-shrink-0 flex items-center gap-1.5 py-3 pr-2">
-                {row.icon && <row.icon className="text-slate-500 text-[10px] flex-shrink-0" />}
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">
+                {row.icon && <row.icon className="text-[var(--color-text-muted)] text-[10px] flex-shrink-0" />}
+                <span className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide leading-tight">
                   {row.label}
                 </span>
               </div>
@@ -290,8 +290,8 @@ export default function SectionComparar({ favProps }) {
             <FaBalanceScale className="text-blue-400 text-sm" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">Comparar propiedades</h2>
-            <p className="text-slate-500 text-xs">Compara tus favoritos lado a lado</p>
+            <h2 className="text-lg font-bold text-[var(--color-text)]">Comparar propiedades</h2>
+            <p className="text-[var(--color-text-muted)] text-xs">Compara tus favoritos lado a lado</p>
           </div>
         </div>
         {selected.length >= 2 && !comparing && (
@@ -305,7 +305,7 @@ export default function SectionComparar({ favProps }) {
         {comparing && (
           <button
             onClick={() => setComparing(false)}
-            className="inline-flex items-center gap-2 border border-slate-700/60 text-slate-400 hover:text-white px-4 py-2 rounded-xl text-sm transition"
+            className="inline-flex items-center gap-2 border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] px-4 py-2 rounded-xl text-sm transition"
           >
             <FaTimes className="text-xs" /> Cambiar selección
           </button>
@@ -315,9 +315,9 @@ export default function SectionComparar({ favProps }) {
       {/* Sin favoritos */}
       {!favProps.length && (
         <div className="text-center py-14">
-          <FaHeart className="text-slate-700 text-3xl mx-auto mb-3" />
-          <h3 className="text-white font-semibold mb-2">Nada que comparar aún</h3>
-          <p className="text-slate-400 text-sm mb-4">
+          <FaHeart className="text-[var(--color-text-faint)] text-3xl mx-auto mb-3" />
+          <h3 className="text-[var(--color-text)] font-semibold mb-2">Nada que comparar aún</h3>
+          <p className="text-[var(--color-text-muted)] text-sm mb-4">
             Primero guarda propiedades en tus favoritos.
           </p>
           <Link
@@ -351,7 +351,7 @@ export default function SectionComparar({ favProps }) {
             {/* Info tip */}
             <div className="flex items-center gap-2 p-3 bg-blue-500/8 border border-blue-500/15 rounded-xl mb-4">
               <FaInfoCircle className="text-blue-400 text-xs flex-shrink-0" />
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[var(--color-text-muted)]">
                 Los valores marcados con <span className="text-amber-400 font-semibold">★ mejor</span>{' '}
                 indican el más favorable en cada categoría.
               </p>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { FaCalendarCheck } from 'react-icons/fa';
 import { useVisits } from '../hooks/useVisits';
 import { useAuth } from '../../../core/contexts/AuthContext';
@@ -36,8 +36,7 @@ const KPI_STATUSES = [
 ];
 
 export default function VisitsPage() {
-  // ✅ Usar los booleans del AuthContext directamente
-  const { isAdmin, isMember, canOperate } = useAuth();
+  const { isAdmin, canOperate } = useAuth();
 
   const { visits, loading, error, counts, approve, reject, complete, reschedule, remove } = useVisits();
   const [filter, setFilter] = useState('all');
@@ -85,11 +84,11 @@ export default function VisitsPage() {
             className={`rounded-2xl p-4 text-left border transition-all ${
               filter === s
                 ? 'border-primary/50 bg-primary/10'
-                : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                : 'border-[var(--color-border)] bg-[var(--color-surface)]/60 hover:border-[var(--color-border)]'
             }`}
           >
-            <p className="text-2xl font-extrabold text-white">{counts[s] ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{VISIT_STATUS_LABELS[s]}</p>
+            <p className="text-2xl font-extrabold text-[var(--color-text)]">{counts[s] ?? 0}</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{VISIT_STATUS_LABELS[s]}</p>
           </button>
         ))}
       </div>
@@ -103,7 +102,7 @@ export default function VisitsPage() {
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
               filter === f.value
                 ? 'bg-primary text-slate-950 border-primary'
-                : 'bg-slate-900/60 border-slate-700 text-slate-400 hover:border-slate-500'
+                : 'bg-[var(--color-surface)]/60 border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-slate-500'
             }`}
           >
             {f.label}
@@ -119,9 +118,9 @@ export default function VisitsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
-          <FaCalendarCheck className="mx-auto text-4xl text-slate-700 mb-3" />
-          <p className="text-slate-400 font-semibold">No hay visitas aquí todavía</p>
-          <p className="text-slate-500 text-xs mt-2">
+          <FaCalendarCheck className="mx-auto text-4xl text-[var(--color-text-faint)] mb-3" />
+          <p className="text-[var(--color-text-muted)] font-semibold">No hay visitas aquí todavía</p>
+          <p className="text-[var(--color-text-muted)] text-xs mt-2">
             {filter === 'all'
               ? 'Cuando llegue una solicitud aparecerá aquí automáticamente.'
               : 'Prueba con otro filtro o espera nuevas solicitudes.'}

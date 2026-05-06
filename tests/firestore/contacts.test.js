@@ -57,4 +57,4 @@ describe('/contacts', () => {
   it('🚫 Viewer NO puede leer contactos (canOperate, no canRead)', async () => {
     await assertFails(getDoc(doc(asViewer(env).firestore(), 'contacts', 'c-1')));
   });
-}); 
+});

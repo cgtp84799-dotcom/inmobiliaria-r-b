@@ -1,11 +1,10 @@
+const { SITE_URL: BASE_URL } = require('../site.config');
 // src/emails/config.js
 // ─── Constantes compartidas por todos los módulos de email ───────────────────
 // Si cambias BASE_URL, WHATSAPP_URL o SUPPORT_EMAIL aquí, se propaga a todos
 // los templates automáticamente. No hay que buscar en ningún otro archivo.
-
-const BASE_URL      = "https://inmobiliaria-ryb-y-asociados.com";
 const WHATSAPP_URL  = "https://wa.me/573105968202";
-const LOGO_URL      = `${BASE_URL}/logo.jpg.png`;          // ← fix: eliminado .jpg.png
+const LOGO_URL      = `${BASE_URL}/logo-dark.png`;          // ← fix: eliminado .jpg.png
 const FROM_NAME     = "Inmobiliaria Rincón Bedoya y Asociados";
 const SUPPORT_EMAIL = "inmojuridi09@gmail.com";        // ← centralizado aquí
 

@@ -85,7 +85,6 @@ export function useAgentStats(agentEmail = null) {
     }).length;
 
     // Contratos
-    // ★ FIX (auditoría): el campo es `statusGeneral` (con fallback a `status`)
     // y los valores son 'vigente' / 'borrador' / 'pausado' / etc., NO 'active'.
     const isActiveContract = (c) => {
       const s = String(c.statusGeneral || c.status || '').toLowerCase();
@@ -142,7 +141,6 @@ export function useAgentStats(agentEmail = null) {
       ...visits.slice(0, 20).map((v) => ({
         id:      v.id,
         type:    'visit',
-        // ★ FIX (auditoría): el campo es propertyName, no propertyTitle.
         title:   v.propertyName || v.propertyAddress || 'Propiedad sin nombre',
         client:  v.clientName   || v.visitorName || v.email || '—',
         status:  v.status,

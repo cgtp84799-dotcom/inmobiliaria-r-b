@@ -32,7 +32,6 @@ export default function VisitCard({
   onReschedule,
   onDelete,
 }) {
-  // ✅ CORRECCIÓN CRÍTICA: AuthContext expone isAdmin/isMember/canOperate,
   //    NO expone "role" directamente. Antes se leía { role } → undefined → isAdmin siempre false → sin botones.
   const { isAdmin, isMember, canOperate } = useAuth();
 
@@ -42,7 +41,6 @@ export default function VisitCard({
   const [action,        setAction]        = useState(null);
   const [proposedDate,  setProposedDate]  = useState('');
   const [proposedTime,  setProposedTime]  = useState('');
-  // ★ FIX (auditoría): protección anti-doble-click. Sin esto un clic acelerado
   // dispara dos veces el handler → 2 emails al cliente y 2 entradas en history.
   const [busy,          setBusy]          = useState(false);
 
@@ -96,8 +94,8 @@ export default function VisitCard({
   const confirmBtnClass = [
     'flex-1 py-2 rounded-xl text-sm font-semibold transition-colors',
     'disabled:opacity-40 disabled:cursor-not-allowed',
-    action === 'reschedule' ? 'bg-blue-600 text-white hover:bg-blue-500' :
-    action === 'reject'     ? 'bg-red-600  text-white hover:bg-red-500'  :
+    action === 'reschedule' ? 'bg-blue-600 text-[var(--color-text)] hover:bg-blue-500' :
+    action === 'reject'     ? 'bg-red-600  text-[var(--color-text)] hover:bg-red-500'  :
                               'bg-primary text-slate-950 hover:bg-primary/90',
   ].join(' ');
 
@@ -107,7 +105,7 @@ export default function VisitCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-      className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-colors"
+      className="bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-2xl overflow-hidden hover:border-[var(--color-border)] transition-colors"
     >
       {/* ─── Cabecera ─────────────────────────────────────────────────────── */}
       <div className="p-4 sm:p-5">
@@ -118,7 +116,7 @@ export default function VisitCard({
                 <span className={`w-1.5 h-1.5 rounded-full ${colors.dot ?? ''}`} />
                 {label}
               </span>
-              <span className="text-slate-500 text-xs">
+              <span className="text-[var(--color-text-muted)] text-xs">
                 {visit.requestedDate} — {visit.requestedTime}
               </span>
               {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
@@ -127,15 +125,15 @@ export default function VisitCard({
                 </span>
               )}
             </div>
-            <h3 className="text-white font-bold text-sm sm:text-base truncate">
+            <h3 className="text-[var(--color-text)] font-bold text-sm sm:text-base truncate">
               {visit.propertyName ?? 'Propiedad sin nombre'}
             </h3>
-            <p className="text-slate-400 text-xs truncate mt-0.5">{visit.propertyAddress}</p>
+            <p className="text-[var(--color-text-muted)] text-xs truncate mt-0.5">{visit.propertyAddress}</p>
           </div>
 
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
+            className="p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors flex-shrink-0"
             aria-label={expanded ? 'Colapsar' : 'Expandir'}
           >
             {expanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
@@ -144,16 +142,16 @@ export default function VisitCard({
 
         {/* Datos del cliente */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <div className="flex items-center gap-2 text-slate-300 text-xs">
-            <FaUser className="text-slate-500 flex-shrink-0" size={11} />
+          <div className="flex items-center gap-2 text-[var(--color-text)] text-xs">
+            <FaUser className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
             <span className="truncate">{visit.clientName}</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-300 text-xs">
-            <FaPhone className="text-slate-500 flex-shrink-0" size={11} />
+          <div className="flex items-center gap-2 text-[var(--color-text)] text-xs">
+            <FaPhone className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
             <span>{visit.clientPhone}</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-300 text-xs">
-            <FaEnvelope className="text-slate-500 flex-shrink-0" size={11} />
+          <div className="flex items-center gap-2 text-[var(--color-text)] text-xs">
+            <FaEnvelope className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
             <span className="truncate">{visit.clientEmail}</span>
           </div>
         </div>
@@ -222,7 +220,6 @@ export default function VisitCard({
           {canDelete && onDelete && (
             <button
               onClick={() => {
-                // ★ FIX (auditoría): confirmación nativa antes de eliminar — antes
                 // un solo clic borraba la visita sin advertencia.
                 if (window.confirm(`¿Eliminar permanentemente la visita de "${visit.clientName || ''}" en "${visit.propertyName || ''}"? Esta acción no se puede deshacer.`)) {
                   onDelete(visit.id);
@@ -247,14 +244,14 @@ export default function VisitCard({
               {/* Selector de agente solo para admin al aprobar */}
               {action === 'approve' && isAdmin && agents.length > 0 && (
                 <div>
-                  <label className="block text-slate-400 text-xs font-semibold mb-1">
+                  <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1">
                     <FaUserTie className="inline mr-1" size={10} />
                     Asignar agente (opcional)
                   </label>
                   <select
                     value={selectedAgent}
                     onChange={(e) => setSelectedAgent(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                   >
                     <option value="">Sin agente asignado</option>
                     {agents.map((a) => (
@@ -282,22 +279,22 @@ export default function VisitCard({
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Fecha</label>
+                      <label className="block text-[var(--color-text-muted)] text-xs mb-1">Fecha</label>
                       <input
                         type="date"
                         value={proposedDate}
                         min={new Date().toISOString().split('T')[0]}
                         onChange={(e) => setProposedDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
+                        className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-2 text-sm text-[var(--color-text)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 text-xs mb-1">Hora</label>
+                      <label className="block text-[var(--color-text-muted)] text-xs mb-1">Hora</label>
                       <input
                         type="time"
                         value={proposedTime}
                         onChange={(e) => setProposedTime(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
+                        className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-2.5 py-2 text-sm text-[var(--color-text)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors"
                       />
                     </div>
                   </div>
@@ -314,7 +311,7 @@ export default function VisitCard({
                                            'Notas de cierre (opcional)...'
                 }
                 rows={2}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none"
               />
 
               <div className="flex gap-2">
@@ -332,7 +329,7 @@ export default function VisitCard({
                 </button>
                 <button
                   onClick={closeAction}
-                  className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:bg-slate-800 transition-colors"
+                  className="px-4 py-2 rounded-xl text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
                 >
                   Cancelar
                 </button>
@@ -349,7 +346,7 @@ export default function VisitCard({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-slate-800 px-4 sm:px-5 py-3 space-y-2 overflow-hidden"
+            className="border-t border-[var(--color-border)] px-4 sm:px-5 py-3 space-y-2 overflow-hidden"
           >
             {visit.status === VISIT_STATUS.RESCHEDULED && visit.proposedDate && (
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
@@ -360,43 +357,43 @@ export default function VisitCard({
 
             {visit.notes && (
               <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Notas del cliente</p>
-                <p className="text-slate-300 text-xs leading-relaxed">{visit.notes}</p>
+                <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-1">Notas del cliente</p>
+                <p className="text-[var(--color-text)] text-xs leading-relaxed">{visit.notes}</p>
               </div>
             )}
 
             {visit.adminNotes && (
               <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Notas internas</p>
-                <p className="text-slate-300 text-xs leading-relaxed">{visit.adminNotes}</p>
+                <p className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider mb-1">Notas internas</p>
+                <p className="text-[var(--color-text)] text-xs leading-relaxed">{visit.adminNotes}</p>
               </div>
             )}
 
             {visit.agentName && (
               <div className="flex items-center gap-2 pt-1">
                 <FaUserTie className="text-yellow-500" size={11} />
-                <span className="text-slate-400 text-xs">Agente asignado:</span>
+                <span className="text-[var(--color-text-muted)] text-xs">Agente asignado:</span>
                 <span className="text-yellow-400 text-xs font-semibold">{visit.agentName}</span>
               </div>
             )}
 
             {isAdmin && visit.approvedBy && (
               <div className="flex items-center gap-2">
-                <FaShieldAlt className="text-slate-500" size={11} />
-                <span className="text-slate-400 text-xs">Aprobado por:</span>
-                <span className="text-slate-300 text-xs font-semibold">{visit.approvedBy}</span>
+                <FaShieldAlt className="text-[var(--color-text-muted)]" size={11} />
+                <span className="text-[var(--color-text-muted)] text-xs">Aprobado por:</span>
+                <span className="text-[var(--color-text)] text-xs font-semibold">{visit.approvedBy}</span>
               </div>
             )}
 
             {visit.approvedAt && (
               <div className="flex items-center gap-2">
-                <FaClock className="text-slate-500" size={11} />
-                <span className="text-slate-400 text-xs">Autorizado:</span>
-                <span className="text-slate-300 text-xs">{formatShort(visit.approvedAt)}</span>
+                <FaClock className="text-[var(--color-text-muted)]" size={11} />
+                <span className="text-[var(--color-text-muted)] text-xs">Autorizado:</span>
+                <span className="text-[var(--color-text)] text-xs">{formatShort(visit.approvedAt)}</span>
               </div>
             )}
 
-            <p className="text-slate-600 text-xs pt-1">Creada {formatShort(visit.createdAt)}</p>
+            <p className="text-[var(--color-text-faint)] text-xs pt-1">Creada {formatShort(visit.createdAt)}</p>
           </motion.div>
         )}
       </AnimatePresence>

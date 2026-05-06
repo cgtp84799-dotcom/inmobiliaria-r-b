@@ -1,14 +1,9 @@
 // src/modules/clients/pages/ClientManagement.jsx
 //
-// ═══════════════════════════════════════════════════════════════════
-// FIXES APLICADOS:
-//   1. ★ FIX CRÍTICO: handleDelete ya NO elimina directamente /users/{email}.
-//      Ahora usa userService.deleteUser() que tiene protección contra
-//      auto-eliminación y manejo seguro de Cloud Function + fallback.
-//   2. ★ FIX: Eliminado el import dinámico de getDoc que causaba conflictos.
-//   3. ★ FIX: Se usa _authUser para getIdToken() (Auth User puro).
-//   4. handleDelete verifica que no seas tú mismo antes de eliminar.
-// ═══════════════════════════════════════════════════════════════════
+// Página de gestión de clientes para staff. handleDelete delega en
+// userService.deleteUser() (Cloud Function con Admin SDK) en lugar de
+// borrar /users/{email} directamente, y verifica que no sea
+// auto-eliminación antes de proceder.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,7 +45,7 @@ const EstadoBadge = ({ estado }) => {
   const norm = estado?.toLowerCase();
   const s = {
     activo:     'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    inactivo:   'bg-slate-500/20 text-slate-400 border-slate-500/30',
+    inactivo:   'bg-slate-500/20 text-[var(--color-text-muted)] border-slate-500/30',
     convertido: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
   };
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${s[norm] || s.activo}`}>{estado}</span>;
@@ -70,7 +65,7 @@ function ClientMetrics({ clients }) {
   const activos  = clients.filter((c) => ['activo', 'Activo'].includes(c.estado)).length;
 
   const metrics = [
-    { label: 'Total',    value: total,   color: 'text-white',        icon: FaUsers        },
+    { label: 'Total',    value: total,   color: 'text-[var(--color-text)]',        icon: FaUsers        },
     { label: 'Activos',  value: activos, color: 'text-emerald-400',  icon: FaChartBar     },
     { label: 'Portal',   value: portal,  color: 'text-amber-400',    icon: FaGlobe        },
     { label: 'Leads',    value: leads,   color: 'text-yellow-400',   icon: FaUser         },
@@ -79,13 +74,13 @@ function ClientMetrics({ clients }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {metrics.map(({ label, value, color, icon: Icon }) => (
-        <div key={label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+        <div key={label} className="bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-xl p-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0">
             <Icon className={`${color} text-xs`} />
           </div>
           <div>
             <p className={`text-lg font-bold leading-none ${color}`}>{value}</p>
-            <p className="text-slate-500 text-xs mt-0.5">{label}</p>
+            <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{label}</p>
           </div>
         </div>
       ))}
@@ -159,26 +154,26 @@ function ScheduleVisitModal({ client, onClose }) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-2xl p-6"
+        className="w-full max-w-md bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-6"
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-white font-bold flex items-center gap-2">
+          <h3 className="text-[var(--color-text)] font-bold flex items-center gap-2">
             <FaCalendarCheck className="text-primary" /> Agendar visita
           </h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
             <FaTimes size={13} />
           </button>
         </div>
-        <p className="text-slate-400 text-sm mb-4">
-          Cliente: <span className="text-white font-semibold">{client?.nombre}</span>
+        <p className="text-[var(--color-text-muted)] text-sm mb-4">
+          Cliente: <span className="text-[var(--color-text)] font-semibold">{client?.nombre}</span>
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Propiedad</label>
+            <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Propiedad</label>
             <select
               value={form.propertyId}
               onChange={(e) => setForm({ ...form, propertyId: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
             >
               <option value="">Sin propiedad específica</option>
               {properties.map((p) => (
@@ -188,41 +183,41 @@ function ScheduleVisitModal({ client, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Fecha *</label>
+              <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Fecha *</label>
               <input
                 type="date"
                 required
                 value={form.date}
                 min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
               />
             </div>
             <div>
-              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Hora</label>
+              <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Hora</label>
               <input
                 type="time"
                 value={form.time}
                 onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
               />
             </div>
           </div>
           <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Notas</label>
+            <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Notas</label>
             <textarea
               rows={3}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="Instrucciones, observaciones..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:border-primary outline-none resize-none"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] focus:border-primary outline-none resize-none"
             />
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors"
+              className="flex-1 py-2.5 rounded-xl bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-input-bg)] text-sm font-semibold transition-colors"
             >
               Cancelar
             </button>
@@ -287,26 +282,26 @@ function AddActivityModal({ client, onClose }) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-2xl p-6"
+        className="w-full max-w-md bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-bold flex items-center gap-2">
+          <h3 className="text-[var(--color-text)] font-bold flex items-center gap-2">
             <FaPlus className="text-primary" /> Nueva actividad
           </h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
             <FaTimes size={13} />
           </button>
         </div>
-        <p className="text-slate-400 text-sm mb-4">
-          Cliente: <span className="text-white font-semibold">{client?.nombre}</span>
+        <p className="text-[var(--color-text-muted)] text-sm mb-4">
+          Cliente: <span className="text-[var(--color-text)] font-semibold">{client?.nombre}</span>
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo</label>
+            <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Tipo</label>
             <select
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
             >
               <option value="llamada">📞 Llamada</option>
               <option value="reunion">🤝 Reunión</option>
@@ -317,39 +312,39 @@ function AddActivityModal({ client, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Fecha</label>
+              <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Fecha</label>
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
               />
             </div>
             <div>
-              <label className="block text-slate-400 text-xs font-semibold mb-1.5">Hora</label>
+              <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Hora</label>
               <input
                 type="time"
                 value={form.time}
                 onChange={(e) => setForm({ ...form, time: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
               />
             </div>
           </div>
           <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">Notas *</label>
+            <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Notas *</label>
             <textarea
               rows={3}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="¿Qué se trató? ¿Cuáles son los siguientes pasos?"
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:border-primary outline-none resize-none"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] focus:border-primary outline-none resize-none"
             />
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors"
+              className="flex-1 py-2.5 rounded-xl bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-input-bg)] text-sm font-semibold transition-colors"
             >
               Cancelar
             </button>
@@ -434,16 +429,12 @@ export default function ClientManagement() {
 
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-
-  // ★ FIX CRÍTICO: handleDelete ahora usa userService.deleteUser() que:
   //   - Tiene protección contra auto-eliminación
   //   - Maneja Cloud Function + fallback de forma segura
   //   - NO elimina directamente /users/{email} de forma insegura
   const handleDelete = (clientId) => {
     const client = clients.find((c) => c.id === clientId);
     const isPortalClient = client?.createdViaPortal || client?.tipoCliente === 'portal';
-
-    // ★ PROTECCIÓN: verificar que no estés eliminándote a ti mismo
     if (client?.email && currentUser?.email &&
         client.email.toLowerCase() === currentUser.email.toLowerCase()) {
       toast.error('No puedes eliminar tu propia cuenta.');
@@ -533,7 +524,7 @@ export default function ClientManagement() {
     }
   };
 
-  const inputCls = 'w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none transition-colors';
+  const inputCls = 'w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none transition-colors';
 
   if (loading) {
     return (
@@ -549,20 +540,20 @@ export default function ClientManagement() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-light">
-            Clientes <span className="text-slate-500 text-lg font-normal">({filtered.length})</span>
+            Clientes <span className="text-[var(--color-text-muted)] text-lg font-normal">({filtered.length})</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Gestión completa de clientes del panel y del portal</p>
+          <p className="text-[var(--color-text-muted)] text-sm mt-0.5">Gestión completa de clientes del panel y del portal</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
-            className="p-2.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700"
+            className="p-2.5 rounded-xl bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-input-bg)] transition-colors border border-[var(--color-border)]"
           >
             {viewMode === 'table' ? <FaTh size={14} /> : <FaTable size={14} />}
           </button>
           <button
             onClick={() => setShowFilters((v) => !v)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-sm font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-surface)] text-[var(--color-text)] hover:text-[var(--color-text)] border border-[var(--color-border)] text-sm font-semibold transition-colors"
           >
             <FaFilter size={12} /> Filtros
           </button>
@@ -587,17 +578,17 @@ export default function ClientManagement() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3"
+            className="bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-2xl p-4 space-y-3"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="relative lg:col-span-2">
-                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none" />
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-sm pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Buscar por nombre, email, teléfono..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-200 focus:border-primary outline-none"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] focus:border-primary outline-none"
                 />
               </div>
               <select
@@ -639,14 +630,14 @@ export default function ClientManagement() {
       {/* Lista */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 card-soft">
-          <FaUsers className="text-slate-700 text-4xl mx-auto mb-3" />
-          <p className="text-slate-400 font-semibold">No se encontraron clientes</p>
-          <p className="text-slate-600 text-sm mt-1">Ajusta los filtros o crea un nuevo cliente</p>
+          <FaUsers className="text-[var(--color-text-faint)] text-4xl mx-auto mb-3" />
+          <p className="text-[var(--color-text-muted)] font-semibold">No se encontraron clientes</p>
+          <p className="text-[var(--color-text-faint)] text-sm mt-1">Ajusta los filtros o crea un nuevo cliente</p>
         </div>
       ) : (
         <div className="space-y-2">
           {viewMode === 'table' && (
-            <div className="hidden md:grid grid-cols-[2fr_1.5fr_1fr_1fr_auto] gap-3 px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <div className="hidden md:grid grid-cols-[2fr_1.5fr_1fr_1fr_auto] gap-3 px-4 py-2 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
               <span>Cliente</span>
               <span>Contacto</span>
               <span>Tipo</span>
@@ -663,8 +654,8 @@ export default function ClientManagement() {
                 key={client.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className={`bg-slate-900/60 border rounded-xl hover:border-slate-700 transition-colors ${
-                  isSelected ? 'border-primary/40 ring-1 ring-primary/20' : 'border-slate-800/60'
+                className={`bg-[var(--color-surface)]/60 border rounded-xl hover:border-[var(--color-border)] transition-colors ${
+                  isSelected ? 'border-primary/40 ring-1 ring-primary/20' : 'border-[var(--color-border)]/60'
                 }`}
               >
                 {viewMode === 'table' ? (
@@ -675,21 +666,21 @@ export default function ClientManagement() {
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-white text-sm font-semibold truncate">{client.nombre}</p>
+                          <p className="text-[var(--color-text)] text-sm font-semibold truncate">{client.nombre}</p>
                           {isPortal && <PortalBadge />}
                         </div>
-                        {client.email && <p className="text-slate-500 text-xs truncate">{client.email}</p>}
+                        {client.email && <p className="text-[var(--color-text-muted)] text-xs truncate">{client.email}</p>}
                       </div>
                     </div>
                     <div className="space-y-0.5">
                       {client.telefono && (
-                        <p className="text-slate-400 text-xs flex items-center gap-1.5">
-                          <FaPhone className="text-[10px] text-slate-600" /> {client.telefono}
+                        <p className="text-[var(--color-text-muted)] text-xs flex items-center gap-1.5">
+                          <FaPhone className="text-[10px] text-[var(--color-text-faint)]" /> {client.telefono}
                         </p>
                       )}
                       {client.email && (
-                        <p className="text-slate-400 text-xs flex items-center gap-1.5">
-                          <FaEnvelope className="text-[10px] text-slate-600" /> {client.email}
+                        <p className="text-[var(--color-text-muted)] text-xs flex items-center gap-1.5">
+                          <FaEnvelope className="text-[10px] text-[var(--color-text-faint)]" /> {client.email}
                         </p>
                       )}
                     </div>
@@ -701,7 +692,7 @@ export default function ClientManagement() {
                         className={`p-2 rounded-lg transition-colors ${
                           isSelected
                             ? 'text-primary bg-primary/10'
-                            : 'text-slate-500 hover:text-primary hover:bg-primary/10'
+                            : 'text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10'
                         }`}
                         title="Ver detalle"
                       >
@@ -712,7 +703,7 @@ export default function ClientManagement() {
                           href={`https://wa.me/57${client.telefono.replace(/\D/g, '')}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-2 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                          className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                           title="WhatsApp"
                         >
                           <FaWhatsapp size={12} />
@@ -720,14 +711,14 @@ export default function ClientManagement() {
                       )}
                       <button
                         onClick={() => setVisitClient(client)}
-                        className="p-2 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                        className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                         title="Agendar visita"
                       >
                         <FaCalendarCheck size={12} />
                       </button>
                       <button
                         onClick={() => setActivityClient(client)}
-                        className="p-2 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                        className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
                         title="Agregar actividad"
                       >
                         <FaHistory size={12} />
@@ -735,7 +726,7 @@ export default function ClientManagement() {
                       {canUpdate && (
                         <button
                           onClick={() => handleEdit(client)}
-                          className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
+                          className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-input-bg)] transition-colors"
                           title="Editar"
                         >
                           <FaEdit size={12} />
@@ -744,7 +735,7 @@ export default function ClientManagement() {
                       {canDelete && (
                         <button
                           onClick={() => handleDelete(client.id)}
-                          className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
                           title="Eliminar"
                         >
                           <FaTrash size={12} />
@@ -761,10 +752,10 @@ export default function ClientManagement() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-white font-semibold truncate">{client.nombre}</p>
+                            <p className="text-[var(--color-text)] font-semibold truncate">{client.nombre}</p>
                             {isPortal && <PortalBadge />}
                           </div>
-                          {client.email && <p className="text-slate-500 text-xs truncate">{client.email}</p>}
+                          {client.email && <p className="text-[var(--color-text-muted)] text-xs truncate">{client.email}</p>}
                         </div>
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
@@ -774,21 +765,21 @@ export default function ClientManagement() {
                     </div>
                     <div className="flex items-center justify-between">
                       {client.telefono && (
-                        <p className="text-slate-400 text-xs flex items-center gap-1.5">
+                        <p className="text-[var(--color-text-muted)] text-xs flex items-center gap-1.5">
                           <FaPhone className="text-[10px]" /> {client.telefono}
                         </p>
                       )}
                       <div className="flex items-center gap-1.5 ml-auto">
                         <button
                           onClick={() => setDetailClient(isSelected ? null : client)}
-                          className={`p-2 rounded-lg transition-colors ${isSelected ? 'text-primary bg-primary/10' : 'text-slate-500 hover:text-primary hover:bg-primary/10'}`}
+                          className={`p-2 rounded-lg transition-colors ${isSelected ? 'text-primary bg-primary/10' : 'text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10'}`}
                         >
                           <FaUser size={12} />
                         </button>
                         {canUpdate && (
                           <button
                             onClick={() => handleEdit(client)}
-                            className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
+                            className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-input-bg)] transition-colors"
                           >
                             <FaEdit size={12} />
                           </button>
@@ -796,7 +787,7 @@ export default function ClientManagement() {
                         {canDelete && (
                           <button
                             onClick={() => handleDelete(client.id)}
-                            className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
                           >
                             <FaTrash size={12} />
                           </button>
@@ -814,21 +805,21 @@ export default function ClientManagement() {
       {/* Paginación */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <p className="text-slate-500 text-sm">
+          <p className="text-[var(--color-text-muted)] text-sm">
             Página {page} de {totalPages} · {filtered.length} clientes
           </p>
           <div className="flex gap-2">
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-slate-700"
+              className="p-2 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[var(--color-border)]"
             >
               <FaChevronLeft size={12} />
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-slate-700"
+              className="p-2 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[var(--color-border)]"
             >
               <FaChevronRight size={12} />
             </button>
@@ -852,7 +843,7 @@ export default function ClientManagement() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[460px] bg-slate-950 border-l border-slate-800 overflow-y-auto shadow-2xl"
+              className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[460px] bg-[var(--color-bg)] border-l border-[var(--color-border)] overflow-y-auto shadow-2xl"
             >
               <div className="p-6 flex flex-col gap-4 min-h-full">
                 <ClientDetail
@@ -884,32 +875,32 @@ export default function ClientManagement() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.93, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xl bg-slate-950 border border-slate-800 rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-xl bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-white font-bold text-lg">
+                <h3 className="text-[var(--color-text)] font-bold text-lg">
                   {editClient ? 'Editar cliente' : 'Nuevo cliente'}
                 </h3>
-                <button onClick={handleCloseForm} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                <button onClick={handleCloseForm} className="p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
                   <FaTimes size={14} />
                 </button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Nombre completo *</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Nombre completo *</label>
                     <input value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} placeholder="Juan García" className={inputCls} required />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Teléfono</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Teléfono</label>
                     <input value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} placeholder="310 000 0000" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Email</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Email</label>
                     <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="cliente@email.com" className={inputCls} disabled={!!editClient} />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo de cliente</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Tipo de cliente</label>
                     <select value={formData.tipoCliente} onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })} className={inputCls}>
                       <option value="Lead">Lead</option>
                       <option value="Comprador">Comprador</option>
@@ -918,7 +909,7 @@ export default function ClientManagement() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Estado</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Estado</label>
                     <select value={formData.estado} onChange={(e) => setFormData({ ...formData, estado: e.target.value })} className={inputCls}>
                       <option value="Activo">Activo</option>
                       <option value="Inactivo">Inactivo</option>
@@ -926,11 +917,11 @@ export default function ClientManagement() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Presupuesto</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Presupuesto</label>
                     <input value={formData.presupuesto} onChange={(e) => setFormData({ ...formData, presupuesto: e.target.value })} placeholder="500.000.000" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Tipo de propiedad</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Tipo de propiedad</label>
                     <select value={formData.tipoPropiedad} onChange={(e) => setFormData({ ...formData, tipoPropiedad: e.target.value })} className={inputCls}>
                       <option value="">Sin preferencia</option>
                       <option value="Apartamento">Apartamento</option>
@@ -941,16 +932,16 @@ export default function ClientManagement() {
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Zona de interés</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Zona de interés</label>
                     <input value={formData.ubicacionInteres} onChange={(e) => setFormData({ ...formData, ubicacionInteres: e.target.value })} placeholder="Ej: Laureles, El Poblado" className={inputCls} />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-slate-400 text-xs font-semibold mb-1.5">Notas internas</label>
+                    <label className="block text-[var(--color-text-muted)] text-xs font-semibold mb-1.5">Notas internas</label>
                     <textarea rows={3} value={formData.notas} onChange={(e) => setFormData({ ...formData, notas: e.target.value })} placeholder="Observaciones, preferencias especiales..." className={`${inputCls} resize-none`} />
                   </div>
                 </div>
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={handleCloseForm} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-semibold transition-colors">Cancelar</button>
+                  <button type="button" onClick={handleCloseForm} className="flex-1 py-2.5 rounded-xl bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-input-bg)] text-sm font-semibold transition-colors">Cancelar</button>
                   <button type="submit" disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-primary text-slate-950 font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                     {submitting ? <><FaSpinner className="animate-spin" size={12} /> Guardando...</> : editClient ? 'Guardar cambios' : 'Crear cliente'}
                   </button>

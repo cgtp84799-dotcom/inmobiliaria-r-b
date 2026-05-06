@@ -20,14 +20,20 @@ import {
 
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-
-// ✅ Factory function en lugar de objeto compartido — evita mutaciones accidentales
+//
+// Para CREAR usuarios staff por default usamos status='pending'. Esto hace
+// que createUserByAdmin envíe el correo "configura tu contraseña" en vez
+// del welcome inmediato, y el welcome del equipo se difiera al primer
+// login del usuario (vía onUserWelcomeOnReady en functions/index.js).
+//
+// Si el admin quiere crear un usuario "activo directo" (poco común), puede
+// cambiar el dropdown de Estado a "Activo" antes de guardar.
 const makeEmptyForm = () => ({
   displayName:     '',
   email:           '',
   phone:           '',
   role:            USER_ROLES.MEMBER,
-  status:          USER_STATUS.ACTIVE,
+  status:          USER_STATUS.PENDING,
   password:        '',
   confirmPassword: '',
 });
@@ -41,14 +47,11 @@ const getRoleIcon = (role) => {
     default:                return <FaUser />;
   }
 };
-
-
-// ✅ Ahora incluye 'green' para MEMBER — coincide con USER_ROLE_COLORS
 const ROLE_STYLE = {
   red:   { border: 'border-red-500',   bg: 'bg-red-500/10',   icon: 'bg-red-500/20 text-red-500',   check: 'text-red-500'   },
   green: { border: 'border-green-500', bg: 'bg-green-500/10', icon: 'bg-green-500/20 text-green-500', check: 'text-green-500' },
   blue:  { border: 'border-blue-500',  bg: 'bg-blue-500/10',  icon: 'bg-blue-500/20 text-blue-500',  check: 'text-blue-500'  },
-  slate: { border: 'border-slate-500', bg: 'bg-slate-500/10', icon: 'bg-slate-500/20 text-slate-500', check: 'text-slate-500' },
+  slate: { border: 'border-slate-500', bg: 'bg-slate-500/10', icon: 'bg-slate-500/20 text-[var(--color-text-muted)]', check: 'text-[var(--color-text-muted)]' },
 };
 
 
@@ -164,11 +167,11 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
             exit={{    opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
           >
 
             {/* ── Header ── */}
-            <div className="bg-gradient-to-r from-primary/20 to-blue-500/20 border-b border-slate-700 px-6 py-5 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-primary/20 to-blue-500/20 border-b border-[var(--color-border)] px-6 py-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
                   <FaUserShield className="text-primary text-xl" />
@@ -177,7 +180,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                   <h2 className="text-2xl font-bold text-light">
                     {isEditMode ? 'Editar usuario' : 'Crear nuevo usuario'}
                   </h2>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-[var(--color-text-muted)] text-sm">
                     {isEditMode
                       ? 'Modifica los datos y permisos del usuario'
                       : 'Completa la información del nuevo miembro del equipo'}
@@ -187,7 +190,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
               <button
                 onClick={onClose}
                 aria-label="Cerrar modal"
-                className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-light transition-all flex items-center justify-center"
+                className="w-10 h-10 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text-muted)] hover:text-light transition-all flex items-center justify-center"
               >
                 <FaTimes />
               </button>
@@ -211,7 +214,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
 
                   {/* Nombre */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                       Nombre completo <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -219,16 +222,16 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                       value={formData.displayName}
                       onChange={setField('displayName')}
                       placeholder="Juan Pérez Gómez"
-                      className={`w-full bg-slate-800 border rounded-xl py-3 px-4 text-light text-sm
+                      className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 text-light text-sm
                         focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all
-                        ${errors.displayName ? 'border-red-500' : 'border-slate-700 focus:border-primary'}`}
+                        ${errors.displayName ? 'border-red-500' : 'border-[var(--color-border)] focus:border-primary'}`}
                     />
                     <FieldError msg={errors.displayName} />
                   </div>
 
                   {/* Email */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                       Correo electrónico <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -237,14 +240,14 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                       onChange={setField('email')}
                       disabled={isEditMode}
                       placeholder="usuario@ejemplo.com"
-                      className={`w-full bg-slate-800 border rounded-xl py-3 px-4 text-light text-sm
+                      className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 text-light text-sm
                         focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all
                         disabled:opacity-50 disabled:cursor-not-allowed
-                        ${errors.email ? 'border-red-500' : 'border-slate-700 focus:border-primary'}`}
+                        ${errors.email ? 'border-red-500' : 'border-[var(--color-border)] focus:border-primary'}`}
                     />
                     <FieldError msg={errors.email} />
                     {isEditMode && (
-                      <p className="text-slate-500 text-xs mt-1">
+                      <p className="text-[var(--color-text-muted)] text-xs mt-1">
                         El correo no se puede modificar una vez creado el usuario.
                       </p>
                     )}
@@ -252,7 +255,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
 
                   {/* Teléfono */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                       Teléfono
                     </label>
                     <input
@@ -260,7 +263,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                       value={formData.phone}
                       onChange={setField('phone')}
                       placeholder="+57 310 123 4567"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 px-4 text-light text-sm
+                      className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-3 px-4 text-light text-sm
                         focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                     />
                   </div>
@@ -280,7 +283,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
 
                     {/* Contraseña */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                         Contraseña <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -289,16 +292,16 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                           value={formData.password}
                           onChange={setField('password')}
                           placeholder="••••••••"
-                          className={`w-full bg-slate-800 border rounded-xl py-3 px-4 pr-12 text-light text-sm
+                          className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 pr-12 text-light text-sm
                             focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all
-                            ${errors.password ? 'border-red-500' : 'border-slate-700 focus:border-primary'}`}
+                            ${errors.password ? 'border-red-500' : 'border-[var(--color-border)] focus:border-primary'}`}
                         />
                         {/* ✅ FaEyeIcon (alias) para el toggle — no confunde con el ícono del rol Viewer */}
                         <button
                           type="button"
                           onClick={() => setShowPassword(v => !v)}
                           aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-light transition-colors"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-light transition-colors"
                         >
                           {showPassword ? <FaEyeSlash /> : <FaEyeIcon />}
                         </button>
@@ -308,7 +311,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
 
                     {/* Confirmar contraseña */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                         Confirmar contraseña <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -316,9 +319,9 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                         value={formData.confirmPassword}
                         onChange={setField('confirmPassword')}
                         placeholder="••••••••"
-                        className={`w-full bg-slate-800 border rounded-xl py-3 px-4 text-light text-sm
+                        className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 text-light text-sm
                           focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all
-                          ${errors.confirmPassword ? 'border-red-500' : 'border-slate-700 focus:border-primary'}`}
+                          ${errors.confirmPassword ? 'border-red-500' : 'border-[var(--color-border)] focus:border-primary'}`}
                       />
                       <FieldError msg={errors.confirmPassword} />
                     </div>
@@ -351,7 +354,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                         className={`w-full p-4 rounded-xl border-2 text-left transition-all
                           ${isSelected
                             ? `${style.border} ${style.bg}`
-                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'}
+                            : 'border-[var(--color-border)] bg-[var(--color-surface)]/50 hover:border-slate-600'}
                           ${!canSelect ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
                         <div className="flex items-start gap-3">
@@ -367,7 +370,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
                                 <FaCheckCircle className={`text-xs ${style.check}`} />
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 leading-relaxed">
+                            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
                               {USER_ROLE_DESCRIPTIONS[role]}
                             </p>
                           </div>
@@ -381,29 +384,45 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
 
               {/* Estado */}
               <section>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-[var(--color-text)] mb-1.5">
                   Estado del usuario
                 </label>
                 <select
                   value={formData.status}
                   onChange={setField('status')}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 px-4 text-light text-sm
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-3 px-4 text-light text-sm
                     focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 >
                   {Object.entries(USER_STATUS_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
+                {!isEditMode && (
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+                    {formData.status === USER_STATUS.PENDING && (
+                      <>📨 Le llegará un correo para <strong>configurar su contraseña</strong>. El correo de bienvenida del equipo se enviará cuando inicie sesión por primera vez.</>
+                    )}
+                    {formData.status === USER_STATUS.ACTIVE && (
+                      <>✅ Cuenta lista para usar. Le llegará el <strong>correo de bienvenida</strong> del equipo de inmediato.</>
+                    )}
+                    {formData.status === USER_STATUS.INACTIVE && (
+                      <>⏸️ Cuenta creada pero <strong>sin acceso</strong> al panel. No recibirá correos.</>
+                    )}
+                    {formData.status === USER_STATUS.BLOCKED && (
+                      <>🚫 Cuenta bloqueada en Auth. No podrá iniciar sesión.</>
+                    )}
+                  </p>
+                )}
               </section>
 
             </form>
 
             {/* ── Footer ── */}
-            <div className="border-t border-slate-700 px-6 py-4 flex items-center justify-end gap-3 bg-slate-900/50">
+            <div className="border-t border-[var(--color-border)] px-6 py-4 flex items-center justify-end gap-3 bg-[var(--color-surface)]/50">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all font-medium text-sm"
+                className="px-6 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text)] rounded-xl transition-all font-medium text-sm"
               >
                 Cancelar
               </button>
@@ -415,7 +434,7 @@ const UserEditModal = ({ editingUser, isOpen, onClose, onSave, currentUserRole }
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-900 border-t-transparent" />
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-[var(--color-border)] border-t-transparent" />
                     Guardando...
                   </>
                 ) : (

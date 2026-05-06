@@ -1,4 +1,3 @@
-// FIX [CALIDAD]: feedback visible en errores de carga y animaciones respetan reduced motion.
 // src/modules/public/pages/CatalogPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Catálogo editorial — Inmobiliaria Rincón Bedoya & Asociados
@@ -167,6 +166,7 @@ const CatalogPage = () => {
       toast.error("No se pudo cargar el catálogo. Intenta de nuevo.");
     } finally {
       setLoading(false);
+      if (typeof window !== "undefined") window.prerenderReady = true;
     }
   };
 
@@ -204,8 +204,6 @@ const CatalogPage = () => {
         return true;
       });
     }
-
-    // ★ FIX (auditoría): cuando hay filtro de precio, excluir propiedades
     // sin precio (antes una propiedad sin precio se contaba como precio=0
     // y aparecía siempre en filtros "hasta X").
     if (filters.minPrice) {

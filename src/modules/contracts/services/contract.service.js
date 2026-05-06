@@ -189,9 +189,23 @@ export const contractService = {
         actionUrl: "/contratos",
       }).catch(() => {});
     }
-
+// Notificar a todos los administradores (además de los triggers de email)
+try {
+  const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+  await Promise.all(adminsSnap.docs.map((d) =>
+    notificationService.createNotification({
+      userId:    d.id,
+      type:      'new_contract',
+      title:     '📄 Nuevo contrato registrado',
+      message:   `Contrato de "${payload.propertyName}" con ${payload.clientName} (${contractTypeLabel}) ha sido creado.`,
+      relatedId: docRef.id,
+      actionUrl: '/contratos',
+    })
+  ));
+} catch (e) { console.warn('Error notificando admins nuevo contrato:', e); }
     return docRef.id;
   },
+  
 
   // ── 2. CREAR MILESTONES INICIALES ────────────────────────────────────────
 
@@ -356,8 +370,6 @@ export const contractService = {
     // Leer contrato actual para calcular businessStage coherente
     const cur = await this.getContractById(id);
     if (!cur) throw new Error("Contrato no encontrado");
-
-    // ★ FIX (auditoría): validar transiciones permitidas. Antes el frontend
     // podía mover un contrato de "cancelado" a "vigente" — eso rompe la
     // trazabilidad legal. Las transiciones siguen una máquina de estados:
     //   draft   → active | cancelled
@@ -623,8 +635,6 @@ export const contractService = {
         }).catch(() => {});
       }
     } catch { /* no romper el delete */ }
-
-    // ★ FIX (auditoría): antes solo se borraba el doc principal y las
     // subcolecciones (milestones, payments, documents, history, alerts_sent)
     // quedaban huérfanas en Firestore. Aquí limpiamos las subcolecciones
     // metadata-only (los archivos en Storage ya tienen su propio cleanup

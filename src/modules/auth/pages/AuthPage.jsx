@@ -204,13 +204,13 @@ export default function AuthPage() {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-            className="inline-flex items-center justify-center w-16 h-16 bg-slate-800 border border-slate-700 rounded-2xl mb-4 shadow-lg"
+            className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl mb-4 shadow-lg"
             aria-hidden="true"
           >
             <FaShieldAlt className="text-primary text-2xl" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-white mb-1.5">Acceso Autorizado</h1>
-          <p className="text-slate-400 text-sm">
+          <h1 className="text-3xl font-bold text-[var(--color-text)] mb-1.5">Acceso Autorizado</h1>
+          <p className="text-[var(--color-text-muted)] text-sm">
             Solo para agentes y personal de Rincón Bedoya &amp; Asociados
           </p>
         </div>
@@ -220,7 +220,7 @@ export default function AuthPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
-          className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 shadow-2xl shadow-black/40"
+          className="bg-[var(--color-surface)]/80 backdrop-blur-xl border border-[var(--color-border)]/50 rounded-2xl p-8 shadow-2xl shadow-black/40"
         >
           {/* Banner de bloqueo */}
           {isBlocked && (
@@ -237,12 +237,12 @@ export default function AuthPage() {
 
             {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-[var(--color-text)] mb-2">
                 Correo electrónico
               </label>
               <div className="relative">
                 <FaEnvelope
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none"
                   aria-hidden="true"
                 />
                 <input
@@ -250,7 +250,7 @@ export default function AuthPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-slate-600"
+                  className="w-full bg-[var(--color-bg)]/70 border border-[var(--color-border)] text-[var(--color-text)] rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-[var(--color-text-faint)]"
                   placeholder="tucorreo@ejemplo.com"
                   required
                   autoComplete="email"
@@ -262,20 +262,20 @@ export default function AuthPage() {
             {/* Contraseña */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label htmlFor="password" className="text-sm font-medium text-slate-300">
+                <label htmlFor="password" className="text-sm font-medium text-[var(--color-text)]">
                   Contraseña
                 </label>
                 <button
                   type="button"
                   onClick={handleForgot}
-                  className="text-xs text-slate-400 hover:text-primary transition-colors"
+                  className="text-xs text-[var(--color-text-muted)] hover:text-primary transition-colors"
                 >
                   ¿Olvidé mi contraseña?
                 </button>
               </div>
               <div className="relative">
                 <FaLock
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none"
                   aria-hidden="true"
                 />
                 <input
@@ -283,7 +283,7 @@ export default function AuthPage() {
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-950/70 border border-slate-700 text-slate-100 rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-slate-600"
+                  className="w-full bg-[var(--color-bg)]/70 border border-[var(--color-border)] text-[var(--color-text)] rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-[var(--color-text-faint)]"
                   placeholder="••••••••"
                   required
                   autoComplete="current-password"
@@ -293,7 +293,7 @@ export default function AuthPage() {
                   type="button"
                   aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                   onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors p-1"
                 >
                   {showPass ? <FaEyeSlash /> : <FaEye />}
                 </button>
@@ -316,11 +316,11 @@ export default function AuthPage() {
           </form>
 
           {/* Links internos */}
-          <div className="mt-6 pt-5 border-t border-slate-800/50 space-y-2.5 text-center">
+          <div className="mt-6 pt-5 border-t border-[var(--color-border)]/50 space-y-2.5 text-center">
             <div>
               <Link
                 to={AUTH_ROUTES.ACCESS_REQUEST}
-                className="text-sm text-slate-400 hover:text-primary transition-colors"
+                className="text-sm text-[var(--color-text-muted)] hover:text-primary transition-colors"
               >
                 ¿No tienes acceso?{' '}
                 <span className="text-primary font-medium">Solicitar autorización</span>
@@ -329,7 +329,7 @@ export default function AuthPage() {
             <div>
               <Link
                 to={PUBLIC_ROUTES.CLIENT_AUTH}
-                className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+                className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] transition-colors"
               >
                 ¿Eres cliente?{' '}
                 <span className="text-primary/70 hover:text-primary transition-colors">
@@ -349,7 +349,7 @@ export default function AuthPage() {
         >
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
           >
             <FaArrowLeft className="text-xs" aria-hidden="true" />
             Volver al inicio

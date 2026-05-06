@@ -41,15 +41,15 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
   };
 
   return (
-    <section aria-labelledby="personal-info-heading" className="card-soft p-6 border border-slate-800">
-      <h2 id="personal-info-heading" className="text-lg font-bold text-white mb-5 flex items-center gap-2">
+    <section aria-labelledby="personal-info-heading" className="card-soft p-6 border border-[var(--color-border)]">
+      <h2 id="personal-info-heading" className="text-lg font-bold text-[var(--color-text)] mb-5 flex items-center gap-2">
         <FaUser className="text-primary" />
         Información personal
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-slate-300 mb-2">
+          <label htmlFor="displayName" className="block text-sm font-medium text-[var(--color-text)] mb-2">
             Nombre completo <span className="text-red-400">*</span>
           </label>
           <input
@@ -60,8 +60,8 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
             placeholder="Juan Pérez"
             aria-describedby={errors.displayName ? 'displayName-error' : undefined}
             aria-invalid={!!errors.displayName}
-            className={`w-full bg-slate-800 border rounded-xl py-3 px-4 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
-              errors.displayName ? 'border-red-500' : 'border-slate-700'
+            className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
+              errors.displayName ? 'border-red-500' : 'border-[var(--color-border)]'
             }`}
           />
           {errors.displayName && (
@@ -72,7 +72,7 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
         </div>
 
         <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-2">
+          <label htmlFor="phone" className="block text-sm font-medium text-[var(--color-text)] mb-2">
             Teléfono
           </label>
           <input
@@ -83,8 +83,8 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
             placeholder="+57 310 123 4567"
             aria-describedby={errors.phone ? 'phone-error' : undefined}
             aria-invalid={!!errors.phone}
-            className={`w-full bg-slate-800 border rounded-xl py-3 px-4 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
-              errors.phone ? 'border-red-500' : 'border-slate-700'
+            className={`w-full bg-[var(--color-surface)] border rounded-xl py-3 px-4 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
+              errors.phone ? 'border-red-500' : 'border-[var(--color-border)]'
             }`}
           />
           {errors.phone && (
@@ -96,7 +96,7 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
 
         {/* El email es solo lectura — es el docId y no cambia */}
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+          <label htmlFor="email" className="block text-sm font-medium text-[var(--color-text)] mb-2">
             Correo electrónico
           </label>
           <input
@@ -105,9 +105,9 @@ export default function PersonalInfoSection({ userData, saving, onSave }) {
             value={userData?.email || ''}
             readOnly
             disabled
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-slate-500 cursor-not-allowed"
+            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-3 px-4 text-[var(--color-text-muted)] cursor-not-allowed"
           />
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-[var(--color-text-muted)] text-xs mt-1">
             El correo no se puede modificar — es tu identificador en el sistema.
           </p>
         </div>

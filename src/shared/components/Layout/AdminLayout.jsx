@@ -1,7 +1,7 @@
 // src/shared/components/Layout/AdminLayout.jsx
 import { useEffect, useRef, useState } from 'react';
 import { Outlet }    from 'react-router-dom';
-import { motion }    from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   FaBars, FaShieldAlt, FaUsers,
   FaEye, FaUser, FaUserTie,
@@ -51,7 +51,6 @@ const DEFAULT_ROLE = {
    ADMIN LAYOUT
 ═══════════════════════════════════════════════════════════════ */
 export default function AdminLayout() {
-  // ✅ userData es la fuente de verdad del rol (viene de Firestore)
   const { currentUser, userData } = useAuth();
   const role = userData?.role ?? USER_ROLES.VIEWER;
   const roleMeta = ROLE_META[role] ?? DEFAULT_ROLE;
@@ -176,7 +175,7 @@ export default function AdminLayout() {
         >
           {/* Hamburguesa móvil */}
           <button
-            className="lg:hidden p-2 rounded-lg transition-colors hover:bg-white/5"
+            className="lg:hidden p-2 rounded-lg transition-colors hover:bg-[var(--color-surface)]/5"
             style={{ color: 'var(--color-text-muted)' }}
             onClick={() => setSidebarOpen((v) => !v)}
             aria-label="Abrir menú lateral"
@@ -189,7 +188,7 @@ export default function AdminLayout() {
           {/* Logo — solo móvil */}
           <div className="lg:hidden flex-shrink-0">
             <img
-              src="/logo.jpg.png"
+              src="/logo-dark.png"
               alt="Rincón Bedoya & Asociados"
               className="h-9 w-auto object-contain max-w-[160px]"
               width={160}

@@ -24,7 +24,6 @@ class DocumentService {
    */
   async uploadFile(file, category, entityId) {
     try {
-      // ★ FIX (auditoría): validaciones cliente antes de subir.
       if (!file) throw new Error('Archivo requerido');
       if (file.size === 0) throw new Error('El archivo está vacío');
       if (file.size > 20 * 1024 * 1024) throw new Error('El archivo excede el tamaño máximo permitido (20 MB)');
@@ -44,7 +43,7 @@ class DocumentService {
 
       // Sanitizar nombre — evita caracteres conflictivos en Storage paths
       const originalName = (file?.name || 'archivo')
-        .replace(/[\/\\?%*:|"<>]/g, '_')
+        .replace(/[/\\?%*:|"<>]/g, '_')
         .replace(/\s+/g, '_')
         .slice(0, 200);
       const fileName = `${safeCategory}/${safeEntityId}/${timestamp}_${originalName}`; // relativo

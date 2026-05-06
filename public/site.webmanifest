@@ -15,92 +15,81 @@
   "categories": ["business", "finance", "lifestyle", "productivity"],
   "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "48x48",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "/favicon-16x16.png",
-      "sizes": "16x16",
-      "type": "image/png"
-    },
-    {
-      "src": "/favicon-32x32.png",
-      "sizes": "32x32",
-      "type": "image/png"
-    },
-    {
-      "src": "/logo.jpg.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo.jpg.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo.jpg.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo.jpg.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo-ryb.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ],
+  {
+    "src": "/favicon-16x16.png",
+    "sizes": "16x16",
+    "type": "image/png"
+  },
+  {
+    "src": "/favicon-32x32.png",
+    "sizes": "32x32",
+    "type": "image/png"
+  },
+  {
+    "src": "/android-chrome-192x192.png",
+    "sizes": "192x192",
+    "type": "image/png",
+    "purpose": "any"
+  },
+  {
+    "src": "/android-chrome-512x512.png",
+    "sizes": "512x512",
+    "type": "image/png",
+    "purpose": "any"
+  },
+  {
+    "src": "/android-chrome-192x192.png",
+    "sizes": "192x192",
+    "type": "image/png",
+    "purpose": "maskable"
+  },
+  {
+    "src": "/android-chrome-512x512.png",
+    "sizes": "512x512",
+    "type": "image/png",
+    "purpose": "maskable"
+  }
+],
   "shortcuts": [
     {
       "name": "Ver catálogo de propiedades",
       "short_name": "Catálogo",
       "description": "Explora todas las propiedades disponibles en venta y arriendo",
       "url": "/catalogo?source=shortcut",
-      "icons": [{ "src": "/logo.jpg.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/logo-dark.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Casas en venta",
       "short_name": "Casas venta",
       "description": "Casas en venta en Caldas, Risaralda y toda Colombia",
       "url": "/catalogo?operacion=venta&tipo=casa&source=shortcut",
-      "icons": [{ "src": "/logo.jpg.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/logo-dark.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Apartamentos en arriendo",
       "short_name": "Apartamentos",
       "description": "Apartamentos en arriendo en Colombia",
       "url": "/catalogo?operacion=arriendo&tipo=apartamento&source=shortcut",
-      "icons": [{ "src": "/logo.jpg.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/logo-dark.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Contactar asesor",
       "short_name": "Contacto",
       "description": "Habla con un asesor inmobiliario con respaldo jurídico",
       "url": "/contacto?source=shortcut",
-      "icons": [{ "src": "/logo.jpg.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/logo-dark.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "screenshots": [
     {
-      "src": "/logo-ryb.png",
+      "src": "/logo-light.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Inmobiliaria Rincón Bedoya — página principal"
     },
     {
-      "src": "/logo-ryb.png",
+      "src": "/logo-light.png",
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",

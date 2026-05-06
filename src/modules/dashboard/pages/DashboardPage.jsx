@@ -3,7 +3,7 @@
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  DASHBOARD PREMIUM — Inmobiliaria Rincón Bedoya y Asociados              ║
 // ║                                                                          ║
-// ║  Inspiración: Compass Live Market Insights, Realto, Vaulto, Nova.house  ║
+// ║  Inspiración: Compass Live Market Insights, Realto, Vaulto, Nova.house   ║
 // ║                                                                          ║
 // ║  Características:                                                        ║
 // ║    • Hero cinematográfico con gradient mesh + stats clave                ║
@@ -182,7 +182,6 @@ const CHART_COLORS = [
 // ═══════════════════════════════════════════════════════════════════════════
 //  HOOK — carga y procesamiento (OPTIMIZADO)
 // ═══════════════════════════════════════════════════════════════════════════
-// ★ FIX (auditoría): Reducido de 500 a 50 documentos iniciales para mejor performance.
 // Los stats principales usan getCountFromServer (analytics.service.js)
 // Este hook carga solo datos necesarios para gráficos y listas.
 
@@ -198,7 +197,6 @@ function useDashboardData() {
 
       const [propsSnap, clientsSnap, contractsSnap, visitsSnap, usersSnap] =
         await Promise.all([
-          // ★ FIX: limit(50) en lugar de 500 - suficiente para gráficos y listas
           // Los stats usan getCountFromServer en analytics.service.js
           getDocs(query(collection(db, 'properties'), orderBy('createdAt', 'desc'), limit(50))),
           getDocs(query(collection(db, 'clients'),    orderBy('createdAt', 'desc'), limit(50))),
@@ -651,7 +649,7 @@ const StatusBadge = ({ status }) => {
     vendida:    'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
     arrendada:  'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
     reservada:  'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    inactiva:   'bg-slate-500/10 text-slate-500 border-slate-500/20',
+    inactiva:   'bg-slate-500/10 text-[var(--color-text-muted)] border-slate-500/20',
   };
   const labels = {
     disponible: 'Disponible', vendida: 'Vendida', arrendada: 'Arrendada',
@@ -865,7 +863,7 @@ function TabBar({ active, onChange }) {
           key={t.id}
           onClick={() => onChange(t.id)}
           className={`relative flex items-center gap-2 px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
-            active === t.id ? 'text-white' : 'text-t-muted hover:text-t-base'
+            active === t.id ? 'text-[var(--color-text)]' : 'text-t-muted hover:text-t-base'
           }`}
         >
           {active === t.id && (
@@ -953,7 +951,7 @@ function OverviewTab({ data }) {
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
         <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-700 text-white flex items-center justify-center shrink-0 shadow-glow-gold">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-700 text-[var(--color-text)] flex items-center justify-center shrink-0 shadow-glow-gold">
               <FaMoneyBillWave className="text-xl sm:text-2xl" />
             </div>
             <div className="min-w-0">
@@ -1193,7 +1191,7 @@ function PipelineTab({ data }) {
                 <div key={i} className="relative">
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-md flex items-center justify-center text-2xs font-bold text-white"
+                      <span className="w-6 h-6 rounded-md flex items-center justify-center text-2xs font-bold text-[var(--color-text)]"
                             style={{ background: stage.fill }}>{i + 1}</span>
                       <span className="text-sm font-semibold text-t-base">{stage.name}</span>
                     </div>
@@ -1203,7 +1201,7 @@ function PipelineTab({ data }) {
                     </div>
                   </div>
                   <div className="h-8 bg-surface-2 rounded-lg overflow-hidden relative">
-                    <motion.div className="h-full rounded-lg flex items-center justify-end pr-3 text-xs font-semibold text-white"
+                    <motion.div className="h-full rounded-lg flex items-center justify-end pr-3 text-xs font-semibold text-[var(--color-text)]"
                       style={{ background: `linear-gradient(90deg, ${stage.fill}cc, ${stage.fill})` }}
                       initial={{ width: 0 }}
                       animate={{ width: `${Math.max(pct, 5)}%` }}
@@ -1291,7 +1289,7 @@ function MarketTab({ data }) {
             <div className="space-y-2 mt-2">
               {propsByType.map((t, i) => (
                 <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-2 hover:bg-surface-off transition-colors">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0"
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs text-[var(--color-text)] shrink-0"
                        style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}>
                     {t.tipo.slice(0, 2).toUpperCase()}
                   </div>
@@ -1328,7 +1326,7 @@ function MarketTab({ data }) {
                 className="flex items-center gap-3 p-3 bg-surface-2 hover:bg-surface-off rounded-xl transition-colors"
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                  i === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md'
+                  i === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-[var(--color-text)] shadow-md'
                   : 'bg-primary/10 text-primary'
                 }`}>
                   {i === 0 ? <FaCrown /> : i + 1}
@@ -1402,14 +1400,14 @@ function TeamTab({ data }) {
                   className="flex items-center gap-3 p-3 sm:p-4 bg-surface-2 hover:bg-surface-off rounded-xl transition-colors"
                 >
                   <div className={`w-7 sm:w-8 h-7 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                    i === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'
-                    : i === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
-                    : i === 2 ? 'bg-gradient-to-br from-amber-700 to-amber-800 text-white'
+                    i === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-[var(--color-text)]'
+                    : i === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-[var(--color-text)]'
+                    : i === 2 ? 'bg-gradient-to-br from-amber-700 to-amber-800 text-[var(--color-text)]'
                     : 'bg-surface text-t-muted'
                   }`}>
                     {i === 0 ? <FaCrown className="text-2xs" /> : `#${i + 1}`}
                   </div>
-                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm shrink-0"
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-[var(--color-text)] font-bold text-xs sm:text-sm shrink-0"
                        style={{ background: agent.color }}>
                     {agent.initials}
                   </div>
@@ -1491,7 +1489,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold text-t-base mb-1">No pudimos cargar el dashboard</h3>
           <p className="text-sm text-t-muted mb-4">{error}</p>
           <button onClick={reload}
-            className="px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary-600 transition-colors">
+            className="px-4 py-2 bg-primary text-[var(--color-text)] rounded-lg font-medium hover:bg-primary-600 transition-colors">
             Reintentar
           </button>
         </Card>

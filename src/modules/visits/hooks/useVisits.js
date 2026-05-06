@@ -1,11 +1,9 @@
-// FIX [CALIDAD]: evita doble ejecución concurrente de acciones críticas (approve/reject/complete/reschedule/remove).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '../services/visit.service';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export function useVisits() {
-  // ✅ Usar los booleans del AuthContext — no derivar role manualmente
   const { currentUser, userData, isAdmin, isMember, canOperate } = useAuth();
 
   const [visits,  setVisits]  = useState([]);

@@ -20,8 +20,7 @@
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { FaChevronRight, FaHome } from 'react-icons/fa';
-
-const BASE_URL = 'https://inmobiliaria-ryb-y-asociados.com';
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 
 const toAbsolute = (href) => {
   if (!href) return undefined;

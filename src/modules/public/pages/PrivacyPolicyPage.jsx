@@ -12,15 +12,15 @@ const Section = ({ icon: Icon, title, children }) => (
     whileInView={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.5 }}
     viewport={{ once: true }}
-    className="bg-slate-900 border border-slate-800 rounded-2xl p-6"
+    className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6"
   >
     <div className="flex items-center gap-3 mb-4">
       <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
         <Icon className="text-primary" size={15} />
       </div>
-      <h2 className="text-white font-bold text-base">{title}</h2>
+      <h2 className="text-[var(--color-text)] font-bold text-base">{title}</h2>
     </div>
-    <div className="text-slate-400 text-sm leading-relaxed space-y-2">{children}</div>
+    <div className="text-[var(--color-text-muted)] text-sm leading-relaxed space-y-2">{children}</div>
   </motion.section>
 );
 
@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage() {
         {/* Back */}
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-slate-400 hover:text-white
+          className="inline-flex items-center gap-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]
             text-sm mb-6 transition-colors"
         >
           <FaArrowLeft size={12} /> Volver al inicio
@@ -61,17 +61,17 @@ export default function PrivacyPolicyPage() {
               <FaShieldAlt className="text-primary text-2xl" />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-white">
+              <h1 className="text-2xl font-extrabold text-[var(--color-text)]">
                 Política de Privacidad
               </h1>
-              <p className="text-slate-400 text-sm">Última actualización: abril de 2026</p>
+              <p className="text-[var(--color-text-muted)] text-sm">Última actualización: abril de 2026</p>
             </div>
           </div>
           <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
-            <p className="text-slate-300 text-sm">
-              Esta política describe cómo <strong className="text-white">Inmobiliaria Rincón Bedoya y Asociados</strong>{' '}
+            <p className="text-[var(--color-text)] text-sm">
+              Esta política describe cómo <strong className="text-[var(--color-text)]">Inmobiliaria Rincón Bedoya y Asociados</strong>{' '}
               recopila, usa y protege tus datos personales, de conformidad con la{' '}
-              <strong className="text-white">Ley 1581 de 2012</strong> y el Decreto 1377 de 2013 de Colombia.
+              <strong className="text-[var(--color-text)]">Ley 1581 de 2012</strong> y el Decreto 1377 de 2013 de Colombia.
             </p>
           </div>
         </motion.div>
@@ -81,17 +81,17 @@ export default function PrivacyPolicyPage() {
 
           <Section icon={FaDatabase} title="1. Responsable del tratamiento">
             <p>
-              <strong className="text-slate-200">Razón social:</strong> Inmobiliaria Rincón Bedoya y Asociados
+              <strong className="text-[var(--color-text)]">Razón social:</strong> Inmobiliaria Rincón Bedoya y Asociados
             </p>
-            <p><strong className="text-slate-200">Dirección:</strong> Cra 5 N.º 9-28, Anserma, Caldas, Colombia</p>
+            <p><strong className="text-[var(--color-text)]">Dirección:</strong> Cra 5 N.º 9-28, Anserma, Caldas, Colombia</p>
             <p>
-              <strong className="text-slate-200">Correo:</strong>{' '}
+              <strong className="text-[var(--color-text)]">Correo:</strong>{' '}
               <a href="mailto:inmojuridi09@gmail.com" className="text-primary hover:underline">
                 inmojuridi09@gmail.com
               </a>
             </p>
             <p>
-              <strong className="text-slate-200">Teléfono:</strong> 310 596 8202 / 320 673 6391
+              <strong className="text-[var(--color-text)]">Teléfono:</strong> 310 596 8202 / 320 673 6391
             </p>
           </Section>
 
@@ -120,7 +120,7 @@ export default function PrivacyPolicyPage() {
               <li>Cumplir con obligaciones legales y contractuales</li>
             </ul>
             <p className="mt-2">
-              <strong className="text-slate-200">No vendemos ni compartimos</strong>{' '}
+              <strong className="text-[var(--color-text)]">No vendemos ni compartimos</strong>{' '}
               tus datos personales con terceros con fines comerciales.
             </p>
           </Section>
@@ -134,18 +134,18 @@ export default function PrivacyPolicyPage() {
             <p className="mt-2">
               Conservamos tus datos mientras sean necesarios para la prestación del servicio.
               Pasada la visita y sin actividad posterior, eliminamos tu información en un plazo
-              máximo de <strong className="text-slate-200">24 meses</strong>.
+              máximo de <strong className="text-[var(--color-text)]">24 meses</strong>.
             </p>
           </Section>
 
           <Section icon={FaTrash} title="5. Tus derechos">
             <p>Como titular de los datos tienes derecho a:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><strong className="text-slate-200">Conocer</strong> qué datos tenemos sobre ti</li>
-              <li><strong className="text-slate-200">Actualizar</strong> o corregir información inexacta</li>
-              <li><strong className="text-slate-200">Suprimir</strong> tus datos cuando ya no sean necesarios</li>
-              <li><strong className="text-slate-200">Revocar</strong> el consentimiento otorgado</li>
-              <li><strong className="text-slate-200">Presentar quejas</strong> ante la Superintendencia de Industria y Comercio (SIC)</li>
+              <li><strong className="text-[var(--color-text)]">Conocer</strong> qué datos tenemos sobre ti</li>
+              <li><strong className="text-[var(--color-text)]">Actualizar</strong> o corregir información inexacta</li>
+              <li><strong className="text-[var(--color-text)]">Suprimir</strong> tus datos cuando ya no sean necesarios</li>
+              <li><strong className="text-[var(--color-text)]">Revocar</strong> el consentimiento otorgado</li>
+              <li><strong className="text-[var(--color-text)]">Presentar quejas</strong> ante la Superintendencia de Industria y Comercio (SIC)</li>
             </ul>
             <p className="mt-2">
               Para ejercer estos derechos escríbenos a{' '}
@@ -153,7 +153,7 @@ export default function PrivacyPolicyPage() {
                 inmojuridi09@gmail.com
               </a>
               {' '}o comunícate al 310 596 8202. Responderemos en un plazo máximo de
-              <strong className="text-slate-200"> 15 días hábiles</strong>.
+              <strong className="text-[var(--color-text)]"> 15 días hábiles</strong>.
             </p>
           </Section>
 
@@ -186,8 +186,8 @@ export default function PrivacyPolicyPage() {
             className="bg-primary/10 border border-primary/25 rounded-2xl p-6 text-center"
           >
             <FaShieldAlt className="text-primary text-3xl mx-auto mb-3" />
-            <h2 className="text-white font-bold mb-2">¿Tienes preguntas sobre tus datos?</h2>
-            <p className="text-slate-400 text-sm mb-4">
+            <h2 className="text-[var(--color-text)] font-bold mb-2">¿Tienes preguntas sobre tus datos?</h2>
+            <p className="text-[var(--color-text-muted)] text-sm mb-4">
               Nuestro equipo está disponible para atender cualquier consulta sobre
               el tratamiento de tu información personal.
             </p>
@@ -205,8 +205,8 @@ export default function PrivacyPolicyPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5
-                  bg-slate-800 text-slate-200 font-semibold text-sm rounded-xl
-                  hover:bg-slate-700 transition-colors"
+                  bg-[var(--color-surface)] text-[var(--color-text)] font-semibold text-sm rounded-xl
+                  hover:bg-[var(--color-input-bg)] transition-colors"
               >
                 <FaPhone size={13} /> WhatsApp
               </a>
@@ -214,7 +214,7 @@ export default function PrivacyPolicyPage() {
           </motion.div>
         </div>
 
-        <p className="text-slate-600 text-xs text-center mt-8">
+        <p className="text-[var(--color-text-faint)] text-xs text-center mt-8">
           © {new Date().getFullYear()} Inmobiliaria Rincón Bedoya y Asociados ·{' '}
           Anserma, Caldas, Colombia
         </p>

@@ -43,8 +43,6 @@ const PAGE_SIZE = 12;
 const PropertyManagement = () => {
   const { currentUser, userData } = useAuth();
   const [activeContracts, setActiveContracts] = useState({}); // ✅
-
-  // ✅ Permisos granulares
   const canCreate = hasPermission(userData?.role, "properties", "create");
   const canUpdate = hasPermission(userData?.role, "properties", "update");
   const canDelete = hasPermission(userData?.role, "properties", "delete");
@@ -56,8 +54,6 @@ const PropertyManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
-
-  // ✅ ConfirmModal
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: "",
@@ -107,7 +103,7 @@ const PropertyManagement = () => {
     return (
       <span
         className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
-          styles[status] ?? "bg-slate-500/15 text-slate-300 border-slate-500/30"
+          styles[status] ?? "bg-slate-500/15 text-[var(--color-text)] border-slate-500/30"
         }`}
       >
         {labels[status] ?? status}
@@ -271,9 +267,6 @@ const PropertyManagement = () => {
       throw error;
     }
   };
-
-  // ✅ CAMBIO — antes eliminaba directo sin confirmación
-  // ★ FIX (auditoría): usar propertyService.deleteProperty para que se
   // apliquen las protecciones (verificar contratos activos, cancelar
   // visitas pendientes). Antes hacía deleteDoc directo y bypass.
   const handleDeleteProperty = (propertyId) => {
@@ -361,10 +354,10 @@ const handleDownloadPDF = (property) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-1">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-[var(--color-text)] mb-1">
             Gestión de Propiedades
           </h1>
-          <p className="text-slate-400 text-sm sm:text-base">
+          <p className="text-[var(--color-text-muted)] text-sm sm:text-base">
             Administra tu portafolio inmobiliario completo
           </p>
         </div>
@@ -382,17 +375,17 @@ const handleDownloadPDF = (property) => {
       </div>
 
       {/* Filtros */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 sm:p-5">
+      <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-2xl p-4 sm:p-5">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <div className="lg:col-span-2">
             <div className="relative">
-              <FaSearch className="absolute left-3 top-3 text-slate-400 text-sm" />
+              <FaSearch className="absolute left-3 top-3 text-[var(--color-text-muted)] text-sm" />
               <input
                 type="text"
                 placeholder="Buscar por título, ciudad, barrio... (en esta página)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl pl-9 pr-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
               />
             </div>
           </div>
@@ -401,7 +394,7 @@ const handleDownloadPDF = (property) => {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             >
               <option value="all">Todos los tipos</option>
               <option value="casa">Casa</option>
@@ -417,7 +410,7 @@ const handleDownloadPDF = (property) => {
             <select
               value={filterTransaction}
               onChange={(e) => setFilterTransaction(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             >
               <option value="all">Venta y Arriendo</option>
               <option value="venta">Solo Venta</option>
@@ -429,7 +422,7 @@ const handleDownloadPDF = (property) => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm text-light focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             >
               <option value="all">Todos los estados</option>
               <option value="disponible">Disponible</option>
@@ -440,12 +433,12 @@ const handleDownloadPDF = (property) => {
           </div>
         </div>
 
-        <div className="mt-3 text-slate-400 text-sm flex flex-wrap gap-2 items-center justify-between">
+        <div className="mt-3 text-[var(--color-text-muted)] text-sm flex flex-wrap gap-2 items-center justify-between">
           <span>
             Página <span className="text-primary font-semibold">{currentPage}</span> de{" "}
-            <span className="text-slate-200 font-semibold">{totalPages}</span>
+            <span className="text-[var(--color-text)] font-semibold">{totalPages}</span>
           </span>
-          <span className="text-slate-500 text-xs">
+          <span className="text-[var(--color-text-muted)] text-xs">
             Mostrando {filteredProperties.length} en esta página (12 por página)
           </span>
         </div>
@@ -455,12 +448,12 @@ const handleDownloadPDF = (property) => {
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400 mt-4">Cargando propiedades...</p>
+          <p className="text-[var(--color-text-muted)] mt-4">Cargando propiedades...</p>
         </div>
       ) : filteredProperties.length === 0 ? (
-        <div className="text-center py-12 bg-slate-900/50 border border-slate-800 rounded-2xl">
-          <FaHome className="text-6xl text-slate-700 mx-auto mb-4" />
-          <p className="text-slate-400 text-lg">No se encontraron propiedades en esta página</p>
+        <div className="text-center py-12 bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-2xl">
+          <FaHome className="text-6xl text-[var(--color-text-faint)] mx-auto mb-4" />
+          <p className="text-[var(--color-text-muted)] text-lg">No se encontraron propiedades en esta página</p>
           {canCreate && (
             <button
               onClick={() => setShowForm(true)}
@@ -478,7 +471,7 @@ const handleDownloadPDF = (property) => {
               key={property.id}
               {...cardAnim(index * 0.05)}
               onClick={() => handleViewDetail(property)}
-              className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden hover:border-primary/50 transition-all duration-300 group cursor-pointer"
+              className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-2xl overflow-hidden hover:border-primary/50 transition-all duration-300 group cursor-pointer"
             >
               <div className="relative h-44 sm:h-48 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
                 {property.images && property.images.length > 0 ? (
@@ -490,15 +483,15 @@ const handleDownloadPDF = (property) => {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <FaHome className="text-6xl text-slate-700" />
+                    <FaHome className="text-6xl text-[var(--color-text-faint)]" />
                   </div>
                 )}
 
-                <div className="absolute top-3 left-3 px-2.5 py-1 bg-slate-950/75 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-primary border border-primary/30">
+                <div className="absolute top-3 left-3 px-2.5 py-1 bg-[var(--color-bg)]/75 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-primary border border-primary/30">
                   {(property.type?.charAt(0).toUpperCase() ?? "") + (property.type?.slice(1) ?? "")}
                 </div>
 
-                <div className="absolute top-3 right-3 px-2.5 py-1 bg-slate-950/75 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-blue-300 border border-blue-500/30">
+                <div className="absolute top-3 right-3 px-2.5 py-1 bg-[var(--color-bg)]/75 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-blue-300 border border-blue-500/30">
                   {property.transactionType === "venta" ? "Venta" : "Arriendo"}
                 </div>
               </div>
@@ -508,7 +501,7 @@ const handleDownloadPDF = (property) => {
                   {property.title}
                 </h3>
 
-                <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
+                <div className="flex items-center gap-2 text-[var(--color-text-muted)] text-sm mb-3">
                   <FaMapMarkerAlt className="text-primary" />
                   <span className="truncate">
                     {property.city}
@@ -522,12 +515,12 @@ const handleDownloadPDF = (property) => {
                     {formatPrice(property.price)}
                   </span>
                   {property.transactionType === "arriendo" && (
-                    <span className="text-slate-400 text-sm">/mes</span>
+                    <span className="text-[var(--color-text-muted)] text-sm">/mes</span>
                   )}
                 </div>
 
                 {property.type !== "lote" && (
-                  <div className="flex items-center gap-4 text-slate-400 text-sm mb-3 pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-4 text-[var(--color-text-muted)] text-sm mb-3 pb-3 border-b border-[var(--color-border)]">
                     {property.rooms ? (
                       <div>
                         <span className="font-semibold text-light">{property.rooms}</span> hab.
@@ -557,16 +550,16 @@ const handleDownloadPDF = (property) => {
                   const isActive = c.statusGeneral === 'vigente';
                   return (
                     <div className={`mb-3 p-2.5 border rounded-xl ${isActive ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-500/10 border-slate-500/20'}`}>
-                      <div className={`flex items-center gap-1.5 text-[11px] font-semibold mb-1 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      <div className={`flex items-center gap-1.5 text-[11px] font-semibold mb-1 ${isActive ? 'text-emerald-400' : 'text-[var(--color-text-muted)]'}`}>
                         <FaFileContract size={10} />
                         {typeLabel[c.type] || c.type} · {sLabel[c.statusGeneral] || c.statusGeneral}
                       </div>
-                      <div className="flex items-center gap-1.5 text-slate-300 text-xs">
-                        <FaUser size={9} className="text-slate-500" />
+                      <div className="flex items-center gap-1.5 text-[var(--color-text)] text-xs">
+                        <FaUser size={9} className="text-[var(--color-text-muted)]" />
                         <span className="truncate">{c.clientName || c.clientEmail || '—'}</span>
                       </div>
                       {c.agentName && (
-                        <div className="flex items-center gap-1.5 text-slate-500 text-[10px] mt-0.5">
+                        <div className="flex items-center gap-1.5 text-[var(--color-text-muted)] text-[10px] mt-0.5">
                           <FaUserTie size={8} />
                           <span className="truncate">{c.agentName}</span>
                         </div>
@@ -582,7 +575,7 @@ const handleDownloadPDF = (property) => {
                       e.stopPropagation();
                       handleDownloadPDF(property);
                     }}
-                    className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-light rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 px-3 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-light rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
                     title="Descargar ficha técnica"
                   >
                     <FaFileDownload />
@@ -626,7 +619,7 @@ const handleDownloadPDF = (property) => {
         <button
           onClick={goPrev}
           disabled={loading || currentPage === 1}
-          className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
+          className="px-3 py-2 rounded-xl bg-[var(--color-surface)]/60 border border-[var(--color-border)] text-[var(--color-text)] disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
         >
           <FaChevronLeft />
           Anterior
@@ -640,7 +633,7 @@ const handleDownloadPDF = (property) => {
             className={`w-10 h-10 rounded-xl border transition font-semibold ${
               p === currentPage
                 ? "bg-primary text-slate-950 border-primary"
-                : "bg-slate-900/60 border-slate-800 text-slate-200 hover:border-primary/40"
+                : "bg-[var(--color-surface)]/60 border-[var(--color-border)] text-[var(--color-text)] hover:border-primary/40"
             }`}
           >
             {p}
@@ -650,7 +643,7 @@ const handleDownloadPDF = (property) => {
         <button
           onClick={goNext}
           disabled={loading || currentPage >= totalPages}
-          className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-200 disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
+          className="px-3 py-2 rounded-xl bg-[var(--color-surface)]/60 border border-[var(--color-border)] text-[var(--color-text)] disabled:opacity-40 hover:border-primary/40 transition inline-flex items-center gap-2"
         >
           Siguiente
           <FaChevronRight />

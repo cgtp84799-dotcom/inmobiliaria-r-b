@@ -49,7 +49,7 @@ const TYPE_COLORS = {
   reunion: 'text-purple-400 border-purple-400 bg-purple-400',
   llamada: 'text-green-400 border-green-400 bg-green-400',
   seguimiento: 'text-orange-400 border-orange-400 bg-orange-400',
-  otro: 'text-slate-400 border-slate-400 bg-slate-400',
+  otro: 'text-[var(--color-text-muted)] border-slate-400 bg-slate-400',
 };
 
 const TYPE_LABELS = {
@@ -226,7 +226,7 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
 
   if (loading) {
     return (
-      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+      <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-6">
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -235,14 +235,14 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
   }
 
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          <h3 className="text-xl font-bold text-[var(--color-text)] flex items-center gap-2">
             <FaHistory className="text-primary" />
             Historial de actividad
           </h3>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-[var(--color-text-muted)] text-sm mt-1">
             {items.length} {items.length === 1 ? 'evento registrado' : 'eventos registrados'}
           </p>
         </div>
@@ -257,8 +257,8 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
 
       {items.length === 0 ? (
         <div className="text-center py-12">
-          <FaCalendarAlt className="text-slate-600 text-5xl mx-auto mb-4" />
-          <p className="text-slate-400 mb-4">No hay eventos registrados para este cliente</p>
+          <FaCalendarAlt className="text-[var(--color-text-faint)] text-5xl mx-auto mb-4" />
+          <p className="text-[var(--color-text-muted)] mb-4">No hay eventos registrados para este cliente</p>
           <button
             onClick={() => onCreateEvent && onCreateEvent(clientId, clientName)}
             className="button-gold inline-flex items-center gap-2 px-4 py-2 text-sm"
@@ -285,24 +285,24 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className="relative pl-8 pb-6 border-l-2 border-slate-700 last:border-l-0 last:pb-0"
+                className="relative pl-8 pb-6 border-l-2 border-[var(--color-border)] last:border-l-0 last:pb-0"
               >
                 {/* Punto en línea de tiempo */}
                 <div className="absolute left-0 top-0 -translate-x-[9px]">
-                  <div className={`w-4 h-4 rounded-full bg-slate-900 border-2 ${borderColor} flex items-center justify-center`}>
+                  <div className={`w-4 h-4 rounded-full bg-[var(--color-surface)] border-2 ${borderColor} flex items-center justify-center`}>
                     <div className={`w-2 h-2 rounded-full ${bgColor}`} />
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:border-primary/50 transition-colors">
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-lg p-4 hover:border-primary/50 transition-colors">
                   {/* Cabecera */}
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <TypeIcon className={`${textColor} text-base`} />
-                        <h4 className="text-slate-100 font-semibold text-sm">{item.title}</h4>
+                        <h4 className="text-[var(--color-text)] font-semibold text-sm">{item.title}</h4>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
                         {(item.date || item.createdAt) && (
                           <span className="flex items-center gap-1">
                             <FaCalendarAlt size={10} />
@@ -325,7 +325,7 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
                   </div>
 
                   {/* Detalle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-slate-400 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-[var(--color-text-muted)] mt-2">
                     {item.propertyName && (
                       <span>🏠 {item.propertyName}</span>
                     )}
@@ -341,7 +341,7 @@ const ClientActivityHistory = ({ clientId, clientEmail, clientName, onCreateEven
                   </div>
 
                   {item.notes && (
-                    <p className="text-slate-300 text-xs mt-2 bg-slate-900/50 p-2 rounded border border-slate-700">
+                    <p className="text-[var(--color-text)] text-xs mt-2 bg-[var(--color-surface)]/50 p-2 rounded border border-[var(--color-border)]">
                       {item.notes}
                     </p>
                   )}

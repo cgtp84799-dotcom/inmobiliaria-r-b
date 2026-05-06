@@ -130,3 +130,122 @@ describe('/users — @known-issue: deuda técnica del email-as-id', () => {
     // de migración o forzar al usuario a contactar admin.
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Activación de staff en primer login (sistema de verificación custom)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('/users — activación de staff (pending → active)', () => {
+  it('✅ Staff member con status=pending puede auto-activarse al primer login', async () => {
+    const email = 'newmember@ryb.com';
+    await seedUser(env, email, { role: 'member', status: 'pending' });
+    const db = asUser(env, email, 'uid-newmember').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', email), {
+      status: 'active',
+      firstLoginAt: new Date(),
+      updatedAt: new Date(),
+    }));
+  });
+
+  it('✅ Staff admin con status=pending puede auto-activarse al primer login', async () => {
+    const email = 'newadmin@ryb.com';
+    await seedUser(env, email, { role: 'admin', status: 'pending' });
+    const db = asUser(env, email, 'uid-newadmin').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', email), {
+      status: 'active',
+      firstLoginAt: new Date(),
+      updatedAt: new Date(),
+    }));
+  });
+
+  it('🚫 Viewer con status=pending NO puede auto-activarse (debe usar emailVerified)', async () => {
+    const email = 'pendingviewer@ryb.com';
+    await seedUser(env, email, { role: 'viewer', status: 'pending' });
+    const db = asUser(env, email, 'uid-pv').firestore();
+    await assertFails(updateDoc(doc(db, 'users', email), {
+      status: 'active',
+      firstLoginAt: new Date(),
+      updatedAt: new Date(),
+    }));
+  });
+
+  it('🚫 Staff NO puede saltar pending → inactive (solo active)', async () => {
+    const email = 'pendingmember@ryb.com';
+    await seedUser(env, email, { role: 'member', status: 'pending' });
+    const db = asUser(env, email, 'uid-pm').firestore();
+    await assertFails(updateDoc(doc(db, 'users', email), {
+      status: 'inactive',
+    }));
+  });
+
+  it('🚫 Staff active NO puede volver a pending (regla solo cubre pending → active)', async () => {
+    const email = 'activemember@ryb.com';
+    await seedUser(env, email, { role: 'member', status: 'active' });
+    const db = asUser(env, email, 'uid-am').firestore();
+    await assertFails(updateDoc(doc(db, 'users', email), {
+      status: 'pending',
+    }));
+  });
+
+  it('🚫 Staff activación NO puede tocar campos fuera de status/firstLoginAt/updatedAt', async () => {
+    const email = 'pendingmember2@ryb.com';
+    await seedUser(env, email, { role: 'member', status: 'pending' });
+    const db = asUser(env, email, 'uid-pm2').firestore();
+    // Intenta colar role: 'admin' junto con la activación → debe fallar
+    await assertFails(updateDoc(doc(db, 'users', email), {
+      status: 'active',
+      role: 'admin',
+      firstLoginAt: new Date(),
+      updatedAt: new Date(),
+    }));
+  });
+
+  it('🚫 Otro usuario NO puede activar el doc de un staff pending', async () => {
+    const targetEmail = 'pendingmember3@ryb.com';
+    await seedUser(env, targetEmail, { role: 'member', status: 'pending' });
+    // Otro usuario diferente intenta activar
+    const db = asUser(env, 'attacker@ryb.com', 'uid-attacker').firestore();
+    await assertFails(updateDoc(doc(db, 'users', targetEmail), {
+      status: 'active',
+      firstLoginAt: new Date(),
+      updatedAt: new Date(),
+    }));
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// emailVerifications — colección cerrada (solo Admin SDK desde CFs)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('/emailVerifications — solo Admin SDK', () => {
+  it('🚫 Admin NO puede leer la colección desde el cliente', async () => {
+    // Sembramos un doc directamente bypaseando rules
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'emailVerifications', 'test-id'), {
+        email: 'foo@bar.com',
+        tokenHash: 'abc',
+      });
+    });
+    const db = asAdmin(env).firestore();
+    await assertFails(getDoc(doc(db, 'emailVerifications', 'test-id')));
+  });
+
+  it('🚫 Admin NO puede crear docs', async () => {
+    const db = asAdmin(env).firestore();
+    await assertFails(setDoc(doc(db, 'emailVerifications', 'mal-id'), {
+      email: 'foo@bar.com',
+      tokenHash: 'abc',
+    }));
+  });
+
+  it('🚫 Viewer NO puede leer', async () => {
+    const db = asUser(env, 'cliente@ryb.com', 'uid-cliente').firestore();
+    await assertFails(getDoc(doc(db, 'emailVerifications', 'test-id')));
+  });
+
+  it('🚫 Anónimo NO puede leer ni crear', async () => {
+    const db = asAnon(env).firestore();
+    await assertFails(getDoc(doc(db, 'emailVerifications', 'test-id')));
+    await assertFails(setDoc(doc(db, 'emailVerifications', 'mal'), { email: 'a@b.com' }));
+  });
+});

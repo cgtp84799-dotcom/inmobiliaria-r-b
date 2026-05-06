@@ -1,4 +1,3 @@
-// FIX [CALIDAD]: guard anti doble-submit para acciones de contrato concurrentes.
 // src/modules/contracts/hooks/useContracts.js
 //
 // Hook para la página de administración de contratos.
@@ -97,7 +96,6 @@ export function useContracts() {
       toast.success(`Estado: ${getStatusLabel(newStatus)}`);
     }).catch((e) => {
       console.error('[useContracts.updateStatus]', e);
-      // ★ FIX (auditoría): si el error proviene de la validación de
       // transiciones, mostrar el mensaje real en vez de uno genérico.
       const msg = e?.message?.includes('Transición no permitida')
         ? e.message

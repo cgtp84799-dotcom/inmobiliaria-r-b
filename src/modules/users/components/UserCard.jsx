@@ -75,7 +75,7 @@ const UserCard = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, transition: { duration: 0.18 } }}
-      className="card-soft border border-slate-800 hover:border-primary/40 transition-colors duration-300 flex flex-col"
+      className="card-soft border border-[var(--color-border)] hover:border-primary/40 transition-colors duration-300 flex flex-col"
     >
       <div className="p-5 flex items-start gap-4">
         <div className="relative flex-shrink-0">
@@ -92,7 +92,7 @@ const UserCard = ({
           )}
 
           {user.online && (
-            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-slate-900" />
+            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-[var(--color-border)]" />
           )}
         </div>
 
@@ -121,28 +121,28 @@ const UserCard = ({
 
       <div className="px-5 pb-3 space-y-1.5">
         <div className="flex items-center gap-2 text-sm">
-          <FaEnvelope className="text-slate-500 flex-shrink-0" />
-          <span className="text-slate-300 truncate text-xs">
+          <FaEnvelope className="text-[var(--color-text-muted)] flex-shrink-0" />
+          <span className="text-[var(--color-text)] truncate text-xs">
             {user.email || 'Sin email'}
           </span>
         </div>
 
         {user.phone && (
           <div className="flex items-center gap-2 text-sm">
-            <FaPhone className="text-slate-500 flex-shrink-0" />
-            <span className="text-slate-300 text-xs">{user.phone}</span>
+            <FaPhone className="text-[var(--color-text-muted)] flex-shrink-0" />
+            <span className="text-[var(--color-text)] text-xs">{user.phone}</span>
           </div>
         )}
 
         {lastSeen && (
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[var(--color-text-muted)] mt-1">
             Última vez: {lastSeen}
           </p>
         )}
       </div>
 
       {isAdmin && (
-        <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex flex-wrap gap-2 mt-auto">
+        <div className="px-5 pb-5 pt-3 border-t border-[var(--color-border)] flex flex-wrap gap-2 mt-auto">
           {onViewDetail && (
             <button
               onClick={() => onViewDetail(user)}
@@ -180,7 +180,7 @@ const UserCard = ({
           {onResetPassword && (
             <button
               onClick={() => onResetPassword(user)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-all"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-input-bg)]/50 hover:bg-[var(--color-input-bg)] text-[var(--color-text)] rounded-lg text-xs font-semibold transition-all"
               title="Resetear contraseña"
             >
               <FaKey />

@@ -90,7 +90,7 @@ export default function Footer() {
               className="inline-block mb-4"
             >
               <img
-                src="/logo.jpg.png"
+                src="/logo-dark.png"
                 alt="Rincón Bedoya & Asociados"
                 className="h-14 w-auto object-contain"
                 width={200}

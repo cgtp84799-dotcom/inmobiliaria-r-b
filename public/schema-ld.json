@@ -15,14 +15,14 @@
       "slogan": "Gestión inmobiliaria con respaldo jurídico",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://inmobiliaria-ryb-y-asociados.com/logo-ryb.png",
+        "url": "https://inmobiliaria-ryb-y-asociados.com/logo-light.png",
         "width": 512,
         "height": 512,
         "caption": "Logo Inmobiliaria Rincón Bedoya y Asociados"
       },
       "image": [
         "https://inmobiliaria-ryb-y-asociados.com/og-default.jpg",
-        "https://inmobiliaria-ryb-y-asociados.com/logo-ryb.png"
+        "https://inmobiliaria-ryb-y-asociados.com/logo-light.png"
       ],
       "hasMap": "https://maps.google.com/?q=5.23889,-75.78463",
       "address": {

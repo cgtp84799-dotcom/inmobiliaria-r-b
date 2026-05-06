@@ -25,7 +25,7 @@ const TYPE_META = {
   visit_completed:   { Icon: FaCalendarCheck,  color: 'text-sky-400',     ring: 'bg-sky-500/15'    },
   access_request:    { Icon: FaUserPlus,       color: 'text-purple-400',  ring: 'bg-purple-500/15' },
   contract_signed:   { Icon: FaFileContract,   color: 'text-teal-400',    ring: 'bg-teal-500/15'   },
-  system:            { Icon: FaExclamationCircle, color: 'text-slate-400', ring: 'bg-slate-500/15'  },
+  system:            { Icon: FaExclamationCircle, color: 'text-[var(--color-text-muted)]', ring: 'bg-slate-500/15'  },
 };
 
 const DEFAULT_META = { Icon: FaBell, color: 'text-primary', ring: 'bg-primary/15' };
@@ -69,10 +69,10 @@ export default function NotificationItem({ notification, onRead, onDelete, onClo
       transition={{ duration: 0.18 }}
       onClick={handleClick}
       className={`group relative flex items-start gap-3 px-4 py-3 cursor-pointer
-        border-b border-slate-800 transition-colors select-none
+        border-b border-[var(--color-border)] transition-colors select-none
         ${ notification.read
-          ? 'hover:bg-slate-800/50'
-          : 'bg-slate-800/70 hover:bg-slate-700/70'
+          ? 'hover:bg-[var(--color-surface)]/50'
+          : 'bg-[var(--color-surface)]/70 hover:bg-[var(--color-input-bg)]/70'
         }`}
     >
       {/* Indicador de no leída */}
@@ -88,15 +88,15 @@ export default function NotificationItem({ notification, onRead, onDelete, onClo
       {/* Contenido */}
       <div className="flex-1 min-w-0 pr-6">
         <p className={`text-sm leading-snug ${
-          notification.read ? 'text-slate-300 font-normal' : 'text-white font-semibold'
+          notification.read ? 'text-[var(--color-text)] font-normal' : 'text-[var(--color-text)] font-semibold'
         }`}>
           {notification.title}
         </p>
-        <p className="text-xs text-slate-400 mt-0.5 leading-snug line-clamp-2">
+        <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-snug line-clamp-2">
           {notification.message}
         </p>
         {timeAgo && (
-          <p className="text-[10px] text-slate-500 mt-1">{timeAgo}</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">{timeAgo}</p>
         )}
       </div>
 
@@ -107,7 +107,7 @@ export default function NotificationItem({ notification, onRead, onDelete, onClo
           <button
             onClick={(e) => { e.stopPropagation(); onRead(notification.id); }}
             title="Marcar como leída"
-            className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-md hover:bg-slate-600 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
           >
             <MdMarkEmailRead size={14} />
           </button>
@@ -115,7 +115,7 @@ export default function NotificationItem({ notification, onRead, onDelete, onClo
         <button
           onClick={handleDelete}
           title="Eliminar"
-          className="p-1.5 rounded-md hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+          className="p-1.5 rounded-md hover:bg-red-500/20 text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
         >
           <FaTrash size={11} />
         </button>

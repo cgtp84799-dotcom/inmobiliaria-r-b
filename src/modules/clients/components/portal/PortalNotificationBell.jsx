@@ -45,7 +45,7 @@ export default function PortalNotificationBell({
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notificaciones${unreadCount > 0 ? ` (${unreadCount} sin leer)` : ''}`}
-        className="relative p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-slate-800/60 transition"
+        className="relative p-2 rounded-xl text-[var(--color-text-muted)] hover:text-amber-400 hover:bg-[var(--color-surface)]/60 transition"
       >
         <FaBell className="text-lg" />
         {unreadCount > 0 && (
@@ -66,11 +66,11 @@ export default function PortalNotificationBell({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{ duration: 0.18 }}
-              className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden"
+              className="absolute right-0 top-full mt-2 w-80 bg-[var(--color-surface)] border border-[var(--color-border)]/60 rounded-2xl shadow-2xl shadow-black/50 z-40 overflow-hidden"
             >
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                <span className="text-sm font-semibold text-white">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+                <span className="text-sm font-semibold text-[var(--color-text)]">
                   Notificaciones
                   {unreadCount > 0 && (
                     <span className="ml-1.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -90,7 +90,7 @@ export default function PortalNotificationBell({
                   )}
                   <button
                     onClick={() => setOpen(false)}
-                    className="text-slate-600 hover:text-slate-400 transition"
+                    className="text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] transition"
                   >
                     <FaTimes className="text-xs" />
                   </button>
@@ -101,8 +101,8 @@ export default function PortalNotificationBell({
               <div className="max-h-96 overflow-y-auto divide-y divide-slate-800/60">
                 {notifications.length === 0 ? (
                   <div className="py-10 text-center">
-                    <FaBell className="text-slate-700 text-2xl mx-auto mb-2" />
-                    <p className="text-slate-500 text-sm">Sin notificaciones</p>
+                    <FaBell className="text-[var(--color-text-faint)] text-2xl mx-auto mb-2" />
+                    <p className="text-[var(--color-text-muted)] text-sm">Sin notificaciones</p>
                   </div>
                 ) : (
                   notifications.slice(0, 30).map((n) => {
@@ -110,7 +110,7 @@ export default function PortalNotificationBell({
                     return (
                       <div
                         key={n.id}
-                        className={`group flex items-start gap-2.5 px-4 py-3 hover:bg-slate-800/40 transition ${
+                        className={`group flex items-start gap-2.5 px-4 py-3 hover:bg-[var(--color-surface)]/40 transition ${
                           !n.read ? 'bg-amber-500/5' : ''
                         }`}
                       >
@@ -124,14 +124,14 @@ export default function PortalNotificationBell({
                           className="flex-1 min-w-0 text-left"
                           onClick={() => !n.read && onRead(n.id)}
                         >
-                          <p className={`text-xs font-semibold truncate ${!n.read ? 'text-white' : 'text-slate-300'}`}>
+                          <p className={`text-xs font-semibold truncate ${!n.read ? 'text-[var(--color-text)]' : 'text-[var(--color-text)]'}`}>
                             {n.title}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-[var(--color-text-muted)] mt-0.5 line-clamp-2 leading-relaxed">
                             {n.message}
                           </p>
                           {date && (
-                            <p className="text-[10px] text-slate-600 mt-1">
+                            <p className="text-[10px] text-[var(--color-text-faint)] mt-1">
                               {format(date, "d MMM, HH:mm", { locale: es })}
                             </p>
                           )}
@@ -143,7 +143,7 @@ export default function PortalNotificationBell({
                             <button
                               onClick={() => onRead(n.id)}
                               title="Marcar como leída"
-                              className="p-1 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition"
+                              className="p-1 rounded-lg text-[var(--color-text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition"
                             >
                               <FaCheck className="text-[10px]" />
                             </button>
@@ -151,7 +151,7 @@ export default function PortalNotificationBell({
                           <button
                             onClick={() => onDelete(n.id)}
                             title="Eliminar"
-                            className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition"
+                            className="p-1 rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition"
                           >
                             <FaTrash className="text-[10px]" />
                           </button>
@@ -168,8 +168,8 @@ export default function PortalNotificationBell({
               </div>
 
               {notifications.length > 0 && (
-                <div className="px-4 py-2.5 border-t border-slate-800 text-center">
-                  <p className="text-[10px] text-slate-600">
+                <div className="px-4 py-2.5 border-t border-[var(--color-border)] text-center">
+                  <p className="text-[10px] text-[var(--color-text-faint)]">
                     {notifications.length} notificación{notifications.length !== 1 ? 'es' : ''} en total
                   </p>
                 </div>

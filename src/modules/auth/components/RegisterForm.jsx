@@ -23,8 +23,6 @@ const RegisterForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
-
-    // ★ FIX (auditoría): validar antes de llamar a Firebase Auth.
     // Firebase rechaza < 6 chars con un error opaco.
     if (!formData.email.trim() || !formData.email.includes('@')) {
       toast.error('Correo inválido');

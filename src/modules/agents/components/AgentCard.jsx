@@ -33,7 +33,7 @@ export default function AgentCard({ agent, stats, index = 0 }) {
     admin:  { bg: 'bg-red-500/20',    text: 'text-red-400',    border: 'border-red-500/30'    },
     member: { bg: 'bg-blue-500/20',   text: 'text-blue-400',   border: 'border-blue-500/30'   },
     agent:  { bg: 'bg-green-500/20',  text: 'text-green-400',  border: 'border-green-500/30'  },
-    viewer: { bg: 'bg-slate-500/20',  text: 'text-slate-400',  border: 'border-slate-500/30'  },
+    viewer: { bg: 'bg-slate-500/20',  text: 'text-[var(--color-text-muted)]',  border: 'border-slate-500/30'  },
   };
   const rc = roleColors[agent.role] ?? roleColors.member;
 
@@ -47,7 +47,7 @@ export default function AgentCard({ agent, stats, index = 0 }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.4 }}
       whileHover={{ y: -4 }}
-      className="bg-slate-900/70 border border-slate-800 hover:border-primary/40
+      className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] hover:border-primary/40
         rounded-2xl p-5 flex flex-col gap-4 transition-colors relative overflow-hidden"
     >
       {/* Gradiente decorativo de fondo */}
@@ -58,20 +58,20 @@ export default function AgentCard({ agent, stats, index = 0 }) {
         <div className="relative flex-shrink-0">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/30 to-slate-700
             flex items-center justify-center font-bold text-primary text-sm overflow-hidden
-            border-2 border-slate-700">
+            border-2 border-[var(--color-border)]">
             {agent.photoURL
               ? <img src={agent.photoURL} alt={agent.displayName} className="w-full h-full object-cover" />
               : initials}
           </div>
           {/* Indicador de estado en tiempo real */}
           <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full
-            border-2 border-slate-900 ${statusDot} shadow-sm`} />
+            border-2 border-[var(--color-border)] ${statusDot} shadow-sm`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-slate-100 font-bold text-sm truncate">
+          <p className="text-[var(--color-text)] font-bold text-sm truncate">
             {agent.displayName || 'Sin nombre'}
           </p>
-          <p className="text-slate-500 text-xs truncate">{agent.email}</p>
+          <p className="text-[var(--color-text-muted)] text-xs truncate">{agent.email}</p>
           <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full
             text-[10px] font-semibold border ${rc.bg} ${rc.text} ${rc.border}`}>
             {agent.role === 'admin' ? 'Admin' :
@@ -90,15 +90,15 @@ export default function AgentCard({ agent, stats, index = 0 }) {
 
       {/* Revenue */}
       {(stats?.totalRevenue ?? 0) > 0 && (
-        <div className="flex items-center justify-between bg-slate-800/60 rounded-xl px-3 py-2">
-          <span className="text-slate-400 text-xs">Ingresos activos</span>
+        <div className="flex items-center justify-between bg-[var(--color-surface)]/60 rounded-xl px-3 py-2">
+          <span className="text-[var(--color-text-muted)] text-xs">Ingresos activos</span>
           <span className="text-green-400 text-xs font-bold">{formatCOP(stats.totalRevenue)}</span>
         </div>
       )}
 
       {/* Sparkline semanal */}
       <div className="flex items-end gap-2">
-        <span className="text-slate-500 text-[10px]">6 sem.</span>
+        <span className="text-[var(--color-text-muted)] text-[10px]">6 sem.</span>
         <svg width={W} height={H} className="overflow-visible">
           <defs>
             <linearGradient id={`spark-${agent.id}`} x1="0" y1="0" x2="1" y2="0">
@@ -124,7 +124,7 @@ export default function AgentCard({ agent, stats, index = 0 }) {
             />
           ))}
         </svg>
-        <span className="text-slate-500 text-[10px] ml-auto">
+        <span className="text-[var(--color-text-muted)] text-[10px] ml-auto">
           {spark[spark.length - 1]} esta sem.
         </span>
       </div>
@@ -133,8 +133,8 @@ export default function AgentCard({ agent, stats, index = 0 }) {
       <Link
         to={PRIVATE_ROUTES.AGENT_DETAIL.replace(':agentId', agent.id)}
         className="flex items-center justify-center gap-2 w-full py-2 rounded-xl
-          bg-slate-800 hover:bg-primary/20 border border-slate-700 hover:border-primary/50
-          text-slate-400 hover:text-primary text-xs font-semibold transition-all duration-200"
+          bg-[var(--color-surface)] hover:bg-primary/20 border border-[var(--color-border)] hover:border-primary/50
+          text-[var(--color-text-muted)] hover:text-primary text-xs font-semibold transition-all duration-200"
       >
         Ver perfil completo <FaArrowRight size={10} />
       </Link>
@@ -144,11 +144,11 @@ export default function AgentCard({ agent, stats, index = 0 }) {
 
 function Kpi({ icon: Icon, label, value, color }) {
   return (
-    <div className="bg-slate-800/60 rounded-xl p-2.5 flex items-center gap-2">
+    <div className="bg-[var(--color-surface)]/60 rounded-xl p-2.5 flex items-center gap-2">
       <Icon className={`${color} text-xs flex-shrink-0`} />
       <div>
-        <p className="text-slate-100 text-sm font-bold leading-none">{value}</p>
-        <p className="text-slate-500 text-[10px]">{label}</p>
+        <p className="text-[var(--color-text)] text-sm font-bold leading-none">{value}</p>
+        <p className="text-[var(--color-text-muted)] text-[10px]">{label}</p>
       </div>
     </div>
   );

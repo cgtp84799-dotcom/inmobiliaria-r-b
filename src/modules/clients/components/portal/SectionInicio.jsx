@@ -41,7 +41,7 @@ function Countdown({ dateStr, timeStr }) {
   const diffD = differenceInDays(dt, new Date());
 
   if (diffH < 0) return (
-    <span className="inline-flex items-center gap-1 bg-slate-700/50 text-slate-400 text-xs px-2.5 py-1 rounded-full font-semibold">
+    <span className="inline-flex items-center gap-1 bg-[var(--color-input-bg)]/50 text-[var(--color-text-muted)] text-xs px-2.5 py-1 rounded-full font-semibold">
       <FaClock className="text-[9px]" /> Pasada
     </span>
   );
@@ -83,20 +83,20 @@ function OnboardingStep({ number, title, desc, done, action }) {
     <div className={`flex items-start gap-3 p-3 rounded-xl border transition ${
       done
         ? 'bg-emerald-500/5 border-emerald-500/20 opacity-60'
-        : 'bg-slate-900/60 border-slate-800/60'
+        : 'bg-[var(--color-surface)]/60 border-[var(--color-border)]/60'
     }`}>
       <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold border-2 ${
         done
           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-          : 'bg-slate-800 border-slate-700 text-slate-400'
+          : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-muted)]'
       }`}>
         {done ? <FaCheckCircle className="text-[10px]" /> : number}
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-xs font-semibold ${done ? 'text-slate-500 line-through' : 'text-white'}`}>
+        <p className={`text-xs font-semibold ${done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text)]'}`}>
           {title}
         </p>
-        <p className="text-slate-500 text-[11px] mt-0.5">{desc}</p>
+        <p className="text-[var(--color-text-muted)] text-[11px] mt-0.5">{desc}</p>
       </div>
       {!done && action && (
         <div className="flex-shrink-0">{action}</div>
@@ -196,15 +196,15 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
 
       {/* ─── Saludo ─────────────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-white">
+        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--color-text)]">
           {getGreeting()},{' '}
           <span className="text-amber-400">{firstName}</span>! 👋
         </h2>
-        <p className="text-slate-400 text-sm mt-1">
+        <p className="text-[var(--color-text-muted)] text-sm mt-1">
           {format(new Date(), "EEEE d 'de' MMMM, yyyy", { locale: es })}
         </p>
         {hasActivity && (
-          <p className="text-slate-500 text-xs mt-1 italic">{getMotivationalPhrase()}</p>
+          <p className="text-[var(--color-text-muted)] text-xs mt-1 italic">{getMotivationalPhrase()}</p>
         )}
       </div>
 
@@ -223,8 +223,8 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
               className={`${k.bg} border ${k.border} rounded-2xl p-4 text-center cursor-pointer transition hover:opacity-90`}
             >
               <k.icon className={`${k.color} text-lg mx-auto mb-1.5`} />
-              <p className="text-2xl font-bold text-white leading-none">{k.value}</p>
-              <p className="text-xs text-slate-400 mt-1">{k.label}</p>
+              <p className="text-2xl font-bold text-[var(--color-text)] leading-none">{k.value}</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">{k.label}</p>
             </motion.button>
           ))}
         </div>
@@ -245,13 +245,13 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
               </span>
               <Countdown dateStr={nextVisit.requestedDate} timeStr={nextVisit.requestedTime} />
             </div>
-            <p className="text-white font-semibold">{nextVisit.propertyName || 'Propiedad'}</p>
+            <p className="text-[var(--color-text)] font-semibold">{nextVisit.propertyName || 'Propiedad'}</p>
             {nextVisit.propertyAddress && (
-              <p className="text-slate-400 text-sm mt-0.5 flex items-center gap-1">
+              <p className="text-[var(--color-text-muted)] text-sm mt-0.5 flex items-center gap-1">
                 <FaMapMarkerAlt className="text-[10px]" /> {nextVisit.propertyAddress}
               </p>
             )}
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-[var(--color-text-muted)] text-sm mt-1">
               {fmtDate(nextVisit.requestedDate)}
               {nextVisit.requestedTime && ` · ${nextVisit.requestedTime}`}
             </p>
@@ -287,8 +287,8 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
               Ver <FaArrowRight className="text-[9px]" />
             </button>
           </div>
-          <p className="text-white text-sm font-semibold">{activeContract.propertyName || 'Propiedad'}</p>
-          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
+          <p className="text-[var(--color-text)] text-sm font-semibold">{activeContract.propertyName || 'Propiedad'}</p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--color-text-muted)] flex-wrap">
             <span className="capitalize">{activeContract.type}</span>
             {activeContract.value > 0 && (
               <span className="text-amber-400 font-semibold">{formatCOP ? formatCOP(activeContract.value) : `$${activeContract.value.toLocaleString()}`}</span>
@@ -304,7 +304,7 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
       {favProps.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2">
               <FaHeart className="text-rose-400 text-xs" /> Tus favoritos
             </h3>
             <button
@@ -319,9 +319,9 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
               <Link
                 key={p.id}
                 to={`/propiedades/${p.slug || p.id}`}
-                className="group bg-slate-900/60 border border-slate-800/60 rounded-xl overflow-hidden hover:border-amber-500/30 transition"
+                className="group bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-xl overflow-hidden hover:border-amber-500/30 transition"
               >
-                <div className="h-24 bg-slate-800 overflow-hidden">
+                <div className="h-24 bg-[var(--color-surface)] overflow-hidden">
                   {p.images?.[0] ? (
                     <img
                       src={p.images[0]}
@@ -330,12 +330,12 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <FaHome className="text-slate-700 text-xl" />
+                      <FaHome className="text-[var(--color-text-faint)] text-xl" />
                     </div>
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="text-white text-xs font-semibold truncate">{p.title}</p>
+                  <p className="text-[var(--color-text)] text-xs font-semibold truncate">{p.title}</p>
                   <p className="text-amber-400 text-xs font-bold mt-0.5">{resolvePrice(p) || '—'}</p>
                 </div>
               </Link>
@@ -347,7 +347,7 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
       {/* ─── Acciones rápidas ────────────────────────────────────────────────── */}
       {quickActions.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide text-xs">
+          <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-3 uppercase tracking-wide text-xs">
             Acciones rápidas
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -367,10 +367,10 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
 
       {/* ─── Última visita realizada ─────────────────────────────────────────── */}
       {lastVisit && !nextVisit && (
-        <div className="p-4 bg-slate-900/40 border border-slate-800/40 rounded-2xl">
-          <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Última visita</p>
-          <p className="text-white text-sm font-semibold">{lastVisit.propertyName || 'Propiedad'}</p>
-          <p className="text-slate-500 text-xs mt-0.5">{fmtDate(lastVisit.requestedDate)}</p>
+        <div className="p-4 bg-[var(--color-surface)]/40 border border-[var(--color-border)]/40 rounded-2xl">
+          <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mb-1">Última visita</p>
+          <p className="text-[var(--color-text)] text-sm font-semibold">{lastVisit.propertyName || 'Propiedad'}</p>
+          <p className="text-[var(--color-text-muted)] text-xs mt-0.5">{fmtDate(lastVisit.requestedDate)}</p>
           <button
             onClick={() => setTab('visitas')}
             className="mt-2 text-xs text-amber-400 hover:underline flex items-center gap-1"
@@ -387,8 +387,8 @@ export default function SectionInicio({ clientData, visits, contracts, favProps,
             <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
               <FaHome className="text-amber-400 text-xl" />
             </div>
-            <h3 className="text-white font-semibold mb-1">¡Bienvenido a tu portal!</h3>
-            <p className="text-slate-400 text-sm max-w-xs mx-auto">
+            <h3 className="text-[var(--color-text)] font-semibold mb-1">¡Bienvenido a tu portal!</h3>
+            <p className="text-[var(--color-text-muted)] text-sm max-w-xs mx-auto">
               Sigue estos pasos para comenzar tu experiencia.
             </p>
           </div>

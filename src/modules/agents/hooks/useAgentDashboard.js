@@ -1,7 +1,6 @@
 // src/modules/agents/hooks/useAgentDashboard.js
 // Hook central del AgentDashboard — une Firestore en tiempo real con datos calculados
 //
-// ★ FIX (auditoría): este hook usaba campos inexistentes del esquema:
 //   - `scheduledAt` (no existe — el campo real es `requestedDate` string YYYY-MM-DD
 //     + `requestedTime`).
 //   - `status === 'active'` para propiedades (real: 'disponible' / 'reservada' / 'arrendada' / 'vendida').
@@ -34,8 +33,11 @@ const isThisMonth = (timestampOrDate) => {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 };
 
-// Estados públicos (visibles) de propiedad
-const ACTIVE_PROPERTY_STATUSES = new Set(['disponible', 'reservada', 'available', 'active']);
+// Estados públicos (visibles) de propiedad. Acepta canónicos + aliases legacy.
+const ACTIVE_PROPERTY_STATUSES = new Set([
+  'published', 'reserved',
+  'disponible', 'reservada', 'available', 'active',
+]);
 // Estados activos de contrato (corresponde a CONTRACT_STATUS)
 const ACTIVE_CONTRACT_STATUSES = new Set(['vigente', 'active']);
 // Visitas canceladas (admite ambos formatos: cliente cancela usa 'cancelada')

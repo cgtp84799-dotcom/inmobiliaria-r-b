@@ -28,8 +28,8 @@ const EVENT_CFG = {
   contract_created:    { icon: FaFileContract,  color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/20',  label: 'Contrato creado'    },
   contract_signed:     { icon: FaFileContract,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Contrato firmado'   },
   property_favorited:  { icon: FaHome,          color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/20',    label: 'Propiedad guardada' },
-  notification:        { icon: FaBell,          color: 'text-slate-400',   bg: 'bg-slate-500/10',   border: 'border-slate-700/40',   label: 'Notificación'       },
-  default:             { icon: FaHistory,       color: 'text-slate-500',   bg: 'bg-slate-800/60',   border: 'border-slate-700/40',   label: 'Actividad'          },
+  notification:        { icon: FaBell,          color: 'text-[var(--color-text-muted)]',   bg: 'bg-slate-500/10',   border: 'border-[var(--color-border)]/40',   label: 'Notificación'       },
+  default:             { icon: FaHistory,       color: 'text-[var(--color-text-muted)]',   bg: 'bg-[var(--color-surface)]/60',   border: 'border-[var(--color-border)]/40',   label: 'Actividad'          },
 };
 
 function getEventCfg(type) {
@@ -126,19 +126,19 @@ export default function SectionActividad({ clientId, notifications = [] }) {
           <FaHistory className="text-amber-400 text-sm" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-white">Mi actividad</h2>
-          <p className="text-slate-500 text-xs">Historial de visitas, contratos y notificaciones</p>
+          <h2 className="text-lg font-bold text-[var(--color-text)]">Mi actividad</h2>
+          <p className="text-[var(--color-text-muted)] text-xs">Historial de visitas, contratos y notificaciones</p>
         </div>
       </div>
 
       {/* Estado vacío */}
       {allEvents.length === 0 && (
         <div className="text-center py-14">
-          <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/40 flex items-center justify-center mx-auto mb-4">
-            <FaHistory className="text-slate-600 text-2xl" />
+          <div className="w-16 h-16 rounded-2xl bg-[var(--color-surface)]/60 border border-[var(--color-border)]/40 flex items-center justify-center mx-auto mb-4">
+            <FaHistory className="text-[var(--color-text-faint)] text-2xl" />
           </div>
-          <h3 className="text-white font-semibold mb-1">Sin actividad aún</h3>
-          <p className="text-slate-500 text-sm">
+          <h3 className="text-[var(--color-text)] font-semibold mb-1">Sin actividad aún</h3>
+          <p className="text-[var(--color-text-muted)] text-sm">
             Tu historial de visitas y contratos aparecerá aquí.
           </p>
         </div>
@@ -148,7 +148,7 @@ export default function SectionActividad({ clientId, notifications = [] }) {
       <div className="relative">
         {/* Línea vertical */}
         {allEvents.length > 0 && (
-          <div className="absolute left-4 top-4 bottom-4 w-px bg-slate-800/80" />
+          <div className="absolute left-4 top-4 bottom-4 w-px bg-[var(--color-surface)]/80" />
         )}
 
         <div className="space-y-3">
@@ -165,15 +165,15 @@ export default function SectionActividad({ clientId, notifications = [] }) {
                 </div>
 
                 {/* Contenido */}
-                <div className="flex-1 min-w-0 bg-slate-900/40 border border-slate-800/40 rounded-xl p-3.5">
+                <div className="flex-1 min-w-0 bg-[var(--color-surface)]/40 border border-[var(--color-border)]/40 rounded-xl p-3.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-white text-xs font-semibold">
+                      <p className="text-[var(--color-text)] text-xs font-semibold">
                         {event.title ||
                          (event.propertyName ? `${cfg.label}: ${event.propertyName}` : cfg.label)}
                       </p>
                       {event.message && (
-                        <p className="text-slate-400 text-xs mt-0.5 leading-relaxed line-clamp-2">
+                        <p className="text-[var(--color-text-muted)] text-xs mt-0.5 leading-relaxed line-clamp-2">
                           {event.message}
                         </p>
                       )}
@@ -181,18 +181,18 @@ export default function SectionActividad({ clientId, notifications = [] }) {
                       {event.source === 'history' && (
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
                           {event.date && (
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-[10px] text-[var(--color-text-muted)]">
                               📅 {event.date}
                               {event.time ? ` · ${event.time}` : ''}
                             </span>
                           )}
                           {event.agentName && (
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-[10px] text-[var(--color-text-muted)]">
                               👤 {event.agentName}
                             </span>
                           )}
                           {event.notes && (
-                            <span className="text-[10px] text-slate-500 italic">
+                            <span className="text-[10px] text-[var(--color-text-muted)] italic">
                               "{event.notes}"
                             </span>
                           )}
@@ -201,7 +201,7 @@ export default function SectionActividad({ clientId, notifications = [] }) {
                     </div>
                     {date && (
                       <span
-                        className="text-[10px] text-slate-600 flex-shrink-0 whitespace-nowrap"
+                        className="text-[10px] text-[var(--color-text-faint)] flex-shrink-0 whitespace-nowrap"
                         title={fmtFull(event.createdAt)}
                       >
                         {fmtRelative(event.createdAt)}
@@ -216,7 +216,7 @@ export default function SectionActividad({ clientId, notifications = [] }) {
       </div>
 
       {allEvents.length >= 30 && (
-        <p className="text-center text-xs text-slate-600">
+        <p className="text-center text-xs text-[var(--color-text-faint)]">
           Mostrando los 30 eventos más recientes
         </p>
       )}

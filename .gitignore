@@ -33,6 +33,8 @@ lerna-debug.log*
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+scripts/service-account.json
+scripts/service-account*.json
 
 # Local
 .cache
