@@ -6,9 +6,9 @@ import { PRIVATE_ROUTES, PUBLIC_ROUTES } from '../../core/config/routes.config';
 
 // ─── Pantalla de carga ─────────────────────────────────────────────────────────
 const LoadingScreen = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
+  <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-bg)] gap-4">
     <img
-      src="/logo.jpg.png"
+      src="/logo-light.png"
       alt="Rincón Bedoya"
       className="h-16 w-auto object-contain animate-pulse"
     />
@@ -22,11 +22,11 @@ const LoadingScreen = () => (
 
 // ─── Acceso denegado (agente sin permisos suficientes) ─────────────────────────
 const AccessDenied = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-950">
+  <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
     <div className="text-center px-6">
       <div className="text-5xl mb-4">🔒</div>
       <h2 className="text-2xl font-bold text-primary mb-2">Acceso denegado</h2>
-      <p className="text-slate-400 mb-6">No tienes permisos para ver esta sección.</p>
+      <p className="text-[var(--color-text-muted)] mb-6">No tienes permisos para ver esta sección.</p>
       <a
         href="/dashboard"
         className="inline-block bg-primary text-slate-950 font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition"
@@ -99,17 +99,32 @@ const ProtectedRoute = ({
     return <Navigate to="/login" replace />;
   }
 
-  // ★ FIX (auditoría): rechazar usuarios bloqueados/inactivos.
+  // 3.b — Email no verificado:
+  //   • Solo aplica a cuentas creadas con email/password (provider 'password').
+  //   • Cuentas de Google ya vienen verificadas.
+  //   • Excepción: la propia ruta de verificación NO se bloquea, si no
+  //     entraríamos en loop de redirects.
+  const authUser = currentUser?._authUser ?? currentUser;
+  const providerId = authUser?.providerData?.[0]?.providerId;
+  const usesPassword = providerId === 'password';
+  const isVerified = authUser?.emailVerified === true ||
+                     userData?.emailVerified === true;
+  const isOnVerifyRoute = location.pathname.startsWith(PUBLIC_ROUTES.EMAIL_VERIFICATION);
+
+  if (usesPassword && !isVerified && !isOnVerifyRoute) {
+    return <Navigate to={PUBLIC_ROUTES.EMAIL_VERIFICATION} replace />;
+  }
+
   // Antes solo se validaba el rol — un admin que bloqueaba un usuario en
   // /usuarios no surtía efecto hasta que el usuario perdía sesión por
   // expiración natural del token (~1h). Ahora se rechaza al instante.
   if (status === 'blocked' || status === 'inactive') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
         <div className="text-center px-6">
           <div className="text-5xl mb-4">🚫</div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">Cuenta inhabilitada</h2>
-          <p className="text-slate-400 mb-6">Tu cuenta ha sido pausada o bloqueada. Contacta al administrador.</p>
+          <p className="text-[var(--color-text-muted)] mb-6">Tu cuenta ha sido pausada o bloqueada. Contacta al administrador.</p>
           <a href="/login" className="inline-block bg-primary text-slate-950 font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition">
             Volver al inicio
           </a>

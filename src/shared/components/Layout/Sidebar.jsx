@@ -1,5 +1,5 @@
 // src/shared/components/Layout/Sidebar.jsx
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { Link, useLocation }     from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -113,8 +113,7 @@ export default function Sidebar({
     },
   ];
 
-  // Flatten for collapsed view
-  const menuItems = menuSections.flatMap(s => s.items).filter(i => i.visible);
+  // (menuSections se itera directamente en renderNavItems; no se necesita flatten.)
 
   const handleNavigation = useCallback(() => {
     if (!isDesktop) onClose();
@@ -128,11 +127,14 @@ export default function Sidebar({
   }, [signOut, isDesktop, onClose, onRequestCloseOverlay]);
 
   /* ─────────────────────────────────────────────────────────────
-     SUB-COMPONENTES (definidos dentro para acceder a closures)
+     SUB-RENDERS — son funciones que retornan JSX, no componentes.
+     Se llaman como { renderHeader(...) }, no como <Header />.
+     Esto evita el warning react-hooks/static-components que se
+     dispara cuando un componente se define dentro de otro.
   ───────────────────────────────────────────────────────────── */
 
   /* Badge de rol */
-  const RoleBadge = () => (
+  const renderRoleBadge = () => (
     <span
       className={[
         "inline-flex items-center gap-1 px-2 py-0.5 mt-1",
@@ -148,7 +150,7 @@ export default function Sidebar({
   );
 
   /* Header del sidebar */
-  const SidebarHeader = ({ showClose = false }) => (
+  const renderSidebarHeader = ({ showClose = false } = {}) => (
     <div
       className="px-4 sm:px-6 h-20 flex items-center justify-between shrink-0 border-b"
       style={{
@@ -157,7 +159,7 @@ export default function Sidebar({
       }}
     >
       <img
-        src="/logo.jpg.png"
+        src="/logo-dark.png"
         alt="Rincón Bedoya & Asociados"
         className="h-12 w-auto object-contain max-w-[210px]"
         width={210}
@@ -184,7 +186,7 @@ export default function Sidebar({
   );
 
   /* Tarjeta del usuario */
-  const UserCard = ({ mini = false }) => (
+  const renderUserCard = ({ mini = false } = {}) => (
     <div
       className="p-4 shrink-0 border-b"
       style={{ background: "rgba(255,255,255,0.03)", borderColor: SB.border }}
@@ -222,7 +224,7 @@ export default function Sidebar({
             >
               {currentUser?.email}
             </p>
-            <RoleBadge />
+            {renderRoleBadge()}
           </div>
         )}
       </div>
@@ -230,7 +232,7 @@ export default function Sidebar({
   );
 
   /* Ítems de navegación con secciones */
-  const NavItems = ({ showLabel = true }) => (
+  const renderNavItems = ({ showLabel = true } = {}) => (
     <nav
       className="flex-1 min-h-0 overflow-y-auto px-2 py-3"
       aria-label="Menú de navegación"
@@ -323,7 +325,7 @@ export default function Sidebar({
   );
 
   /* Botón cerrar sesión */
-  const SignOutBtn = ({ compact = false }) => (
+  const renderSignOutBtn = ({ compact = false } = {}) => (
     <div
       className="p-3 shrink-0 border-t"
       style={{ background: "rgba(255,255,255,0.02)", borderColor: SB.border }}
@@ -377,10 +379,10 @@ export default function Sidebar({
               className="fixed top-0 left-0 h-full w-72 z-50 flex flex-col shadow-2xl"
               style={{ background: SB.bg }}
             >
-              <SidebarHeader showClose />
-              <UserCard />
-              <NavItems />
-              <SignOutBtn />
+              {renderSidebarHeader({ showClose: true })}
+              {renderUserCard()}
+              {renderNavItems()}
+              {renderSignOutBtn()}
             </motion.aside>
           </>
         )}
@@ -412,9 +414,9 @@ export default function Sidebar({
             <FaChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
-        <UserCard mini />
-        <NavItems showLabel={false} />
-        <SignOutBtn compact />
+        {renderUserCard({ mini: true })}
+        {renderNavItems({ showLabel: false })}
+        {renderSignOutBtn({ compact: true })}
       </aside>
     );
   }
@@ -428,10 +430,10 @@ export default function Sidebar({
       style={{ background: SB.bg, borderColor: SB.border }}
       aria-label="Menú lateral"
     >
-      <SidebarHeader showClose />
-      <UserCard />
-      <NavItems />
-      <SignOutBtn />
+      {renderSidebarHeader({ showClose: true })}
+      {renderUserCard()}
+      {renderNavItems()}
+      {renderSignOutBtn()}
     </aside>
   );
 }

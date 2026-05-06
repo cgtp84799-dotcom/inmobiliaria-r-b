@@ -1,4 +1,3 @@
-// FIX [SEO]: sitemap ajustado a status published, prioridades y frecuencias objetivo para indexación inmobiliaria.
 // functions/src/sitemap.js
 // ═══════════════════════════════════════════════════════════════════════════
 //  Sitemap engine — Inmobiliaria Rincón Bedoya y Asociados
@@ -18,8 +17,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const admin = require("firebase-admin");
+const { SITE_URL: BASE_URL } = require('./site.config');
 
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const PAGE_SIZE = 5000;              // URLs por sub-sitemap de propiedades
 const CACHE_SECONDS = 1800;          // 30 min en CDN
 const PUBLIC_STATUS = new Set(["published"]);

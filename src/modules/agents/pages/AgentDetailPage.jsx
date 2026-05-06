@@ -115,16 +115,16 @@ export default function AgentDetailPage() {
     admin:  'text-red-400    bg-red-500/10    border-red-500/30',
     member: 'text-blue-400   bg-blue-500/10   border-blue-500/30',
     agent:  'text-green-400  bg-green-500/10  border-green-500/30',
-    viewer: 'text-slate-400  bg-slate-500/10  border-slate-500/30',
+    viewer: 'text-[var(--color-text-muted)]  bg-slate-500/10  border-slate-500/30',
   };
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-32 bg-slate-900/60 rounded-2xl animate-pulse" />
+        <div className="h-32 bg-[var(--color-surface)]/60 rounded-2xl animate-pulse" />
         <div className="grid grid-cols-3 gap-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-20 bg-slate-900/60 rounded-2xl animate-pulse" />
+            <div key={i} className="h-20 bg-[var(--color-surface)]/60 rounded-2xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -134,8 +134,8 @@ export default function AgentDetailPage() {
   if (!agent) {
     return (
       <div className="py-20 text-center">
-        <FaUser className="mx-auto text-5xl text-slate-700 mb-4" />
-        <p className="text-slate-400">Agente no encontrado</p>
+        <FaUser className="mx-auto text-5xl text-[var(--color-text-faint)] mb-4" />
+        <p className="text-[var(--color-text-muted)]">Agente no encontrado</p>
         <Link to={PRIVATE_ROUTES.AGENTS}
           className="mt-4 inline-flex items-center gap-2 text-primary text-sm hover:underline">
           <FaArrowLeft size={12} /> Volver a agentes
@@ -150,7 +150,7 @@ export default function AgentDetailPage() {
       {/* ── Botón volver ── */}
       <Link
         to={PRIVATE_ROUTES.AGENTS}
-        className="inline-flex items-center gap-2 text-slate-400 hover:text-primary
+        className="inline-flex items-center gap-2 text-[var(--color-text-muted)] hover:text-primary
           text-sm transition-colors"
       >
         <FaArrowLeft size={12} /> Todos los agentes
@@ -160,7 +160,7 @@ export default function AgentDetailPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6
+        className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-6
           flex flex-col sm:flex-row items-start sm:items-center gap-5
           relative overflow-hidden"
       >
@@ -171,12 +171,12 @@ export default function AgentDetailPage() {
         <div className="relative flex-shrink-0">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/30 to-slate-700
             flex items-center justify-center text-2xl font-bold text-primary
-            border-2 border-slate-700 overflow-hidden">
+            border-2 border-[var(--color-border)] overflow-hidden">
             {agent.photoURL
               ? <img src={agent.photoURL} alt={agent.displayName} className="w-full h-full object-cover" />
               : initials}
           </div>
-          <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900
+          <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[var(--color-border)]
             shadow-sm ${
               agent.status === 'active' ? 'bg-green-400 shadow-green-400/40' : 'bg-slate-500'
             }`}
@@ -185,12 +185,12 @@ export default function AgentDetailPage() {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white truncate">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[var(--color-text)] truncate">
             {agent.displayName || 'Sin nombre'}
           </h1>
           <div className="flex items-center gap-2 mt-1">
-            <FaEnvelope className="text-slate-500" size={11} />
-            <span className="text-slate-400 text-sm">{agent.email}</span>
+            <FaEnvelope className="text-[var(--color-text-muted)]" size={11} />
+            <span className="text-[var(--color-text-muted)] text-sm">{agent.email}</span>
           </div>
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
@@ -201,7 +201,7 @@ export default function AgentDetailPage() {
               text-xs font-semibold border ${
                 agent.status === 'active'
                   ? 'text-green-400 bg-green-500/10 border-green-500/30'
-                  : 'text-slate-400 bg-slate-500/10 border-slate-500/30'
+                  : 'text-[var(--color-text-muted)] bg-slate-500/10 border-slate-500/30'
               }`}>
               {agent.status === 'active' ? 'Activo' : 'Inactivo'}
             </span>
@@ -216,7 +216,7 @@ export default function AgentDetailPage() {
               {metrics.conversionRate}%
             </p>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5">Tasa de conversión</p>
+          <p className="text-[var(--color-text-muted)] text-xs mt-0.5">Tasa de conversión</p>
         </div>
       </motion.div>
 
@@ -235,11 +235,11 @@ export default function AgentDetailPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06 }}
-            className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 text-center"
+            className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-4 text-center"
           >
             <Icon className={`${color} text-lg mx-auto mb-1.5`} />
             <p className={`text-lg font-extrabold ${color} leading-none`}>{value}</p>
-            <p className="text-slate-500 text-[11px] mt-1 leading-tight">{label}</p>
+            <p className="text-[var(--color-text-muted)] text-[11px] mt-1 leading-tight">{label}</p>
           </motion.div>
         ))}
       </div>
@@ -247,16 +247,16 @@ export default function AgentDetailPage() {
       {/* ── Gráfica + Feed ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Gráfica de rendimiento */}
-        <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
-          <h2 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+        <div className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-5">
+          <h2 className="text-[var(--color-text)] font-bold text-sm mb-4 flex items-center gap-2">
             <FaChartLine className="text-primary" /> Rendimiento últimos 6 meses
           </h2>
           <AgentPerformanceChart monthlyData={metrics.monthlyData} loading={loading} />
         </div>
 
         {/* Feed de actividad */}
-        <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 max-h-[400px] overflow-y-auto">
-          <h2 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+        <div className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-5 max-h-[400px] overflow-y-auto">
+          <h2 className="text-[var(--color-text)] font-bold text-sm mb-4 flex items-center gap-2">
             <FaCalendarCheck className="text-blue-400" /> Actividad reciente
           </h2>
           <AgentActivityFeed activities={metrics.recentActivity} loading={loading} />
@@ -264,8 +264,8 @@ export default function AgentDetailPage() {
       </div>
 
       {/* ── Desglose visitas por estado ── */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
-        <h2 className="text-white font-bold text-sm mb-4">Visitas por estado</h2>
+      <div className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-5">
+        <h2 className="text-[var(--color-text)] font-bold text-sm mb-4">Visitas por estado</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Pendientes',    count: metrics.pendingVisits,   color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },

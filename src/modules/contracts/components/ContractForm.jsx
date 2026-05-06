@@ -54,7 +54,7 @@ function AutocompleteField({
           <div className="flex-1 min-w-0">{renderSelected(value)}</div>
           <button
             onClick={onClear}
-            className="text-slate-500 hover:text-red-400 transition-colors ml-2"
+            className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors ml-2"
           >
             <FaTimes size={12} />
           </button>
@@ -63,31 +63,31 @@ function AutocompleteField({
         <>
           <div className="relative">
             <FaSearch
-              className="absolute left-3 top-3 text-slate-400"
+              className="absolute left-3 top-3 text-[var(--color-text-muted)]"
               size={12}
             />
             <input
               type="text"
               placeholder={placeholder}
               onChange={(e) => onSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl
-                pl-9 pr-10 py-2.5 text-sm text-slate-200 placeholder-slate-500
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl
+                pl-9 pr-10 py-2.5 text-sm text-[var(--color-text)] placeholder-slate-500
                 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
             />
             {loading && (
               <FaSpinner
-                className="absolute right-3 top-3 animate-spin text-slate-400"
+                className="absolute right-3 top-3 animate-spin text-[var(--color-text-muted)]"
                 size={12}
               />
             )}
           </div>
           {results.length > 0 && (
-            <ul className="bg-slate-950 border border-slate-700 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+            <ul className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl overflow-hidden max-h-48 overflow-y-auto">
               {results.map((item, i) => (
                 <li key={item.id ?? i}>
                   <button
                     onClick={() => onSelect(item)}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0"
+                    className="w-full text-left px-4 py-3 hover:bg-[var(--color-surface)] transition-colors border-b border-[var(--color-border)] last:border-0"
                   >
                     {renderItem(item)}
                   </button>
@@ -103,7 +103,7 @@ function AutocompleteField({
 
 function ContractTypeFields({ type, form, setForm }) {
   const inputCls =
-    'w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-primary outline-none transition-colors';
+    'w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] placeholder-slate-500 focus:border-primary outline-none transition-colors';
 
   if (type === CONTRACT_TYPE.RENT) {
     return (
@@ -118,7 +118,7 @@ function ContractTypeFields({ type, form, setForm }) {
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Cánon mensual (COP) *
           </label>
           <input
@@ -132,14 +132,14 @@ function ContractTypeFields({ type, form, setForm }) {
             className={inputCls}
           />
           {Number(form.value) > 0 && (
-            <p className="text-slate-500 text-xs mt-1">
+            <p className="text-[var(--color-text-muted)] text-xs mt-1">
               {formatCOP(form.value)} / mes
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Duración del contrato
           </label>
           <select
@@ -168,7 +168,7 @@ function ContractTypeFields({ type, form, setForm }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Inicio del arriendo *
             </label>
             <input
@@ -189,7 +189,7 @@ function ContractTypeFields({ type, form, setForm }) {
             />
           </div>
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Fin del arriendo
             </label>
             <input
@@ -202,7 +202,7 @@ function ContractTypeFields({ type, form, setForm }) {
               className={inputCls}
             />
             {form.endDate && form.startDate && (
-              <p className="text-slate-500 text-xs mt-1">
+              <p className="text-[var(--color-text-muted)] text-xs mt-1">
                 {Math.round(
                   (new Date(form.endDate) - new Date(form.startDate)) /
                     (1000 * 60 * 60 * 24 * 30)
@@ -214,9 +214,9 @@ function ContractTypeFields({ type, form, setForm }) {
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Incremento anual pactado
-            <span className="text-slate-500 font-normal ml-1">
+            <span className="text-[var(--color-text-muted)] font-normal ml-1">
               (opcional, solo informativo)
             </span>
           </label>
@@ -236,7 +236,7 @@ function ContractTypeFields({ type, form, setForm }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Día de pago mensual
             </label>
             <input
@@ -250,12 +250,12 @@ function ContractTypeFields({ type, form, setForm }) {
               max="28"
               className={inputCls}
             />
-            <p className="text-slate-600 text-[10px] mt-0.5">Día del mes para cobrar el canon</p>
+            <p className="text-[var(--color-text-faint)] text-[10px] mt-0.5">Día del mes para cobrar el canon</p>
           </div>
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Administración mensual
-              <span className="text-slate-500 font-normal ml-1">(opc)</span>
+              <span className="text-[var(--color-text-muted)] font-normal ml-1">(opc)</span>
             </label>
             <input
               type="number"
@@ -268,7 +268,7 @@ function ContractTypeFields({ type, form, setForm }) {
               className={inputCls}
             />
             {Number(form.adminFee) > 0 && (
-              <p className="text-slate-500 text-xs mt-1">
+              <p className="text-[var(--color-text-muted)] text-xs mt-1">
                 {formatCOP(form.adminFee)} / mes
               </p>
             )}
@@ -291,7 +291,7 @@ function ContractTypeFields({ type, form, setForm }) {
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Precio total de venta (COP) *
           </label>
           <input
@@ -305,14 +305,14 @@ function ContractTypeFields({ type, form, setForm }) {
             className={inputCls}
           />
           {Number(form.value) > 0 && (
-            <p className="text-slate-500 text-xs mt-1">
+            <p className="text-[var(--color-text-muted)] text-xs mt-1">
               {formatCOP(form.value)}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Forma de pago
           </label>
           <select
@@ -333,7 +333,7 @@ function ContractTypeFields({ type, form, setForm }) {
         {form.paymentMethod === 'cuotas' && (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+              <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                 Número de cuotas
               </label>
               <input
@@ -348,7 +348,7 @@ function ContractTypeFields({ type, form, setForm }) {
               />
             </div>
             <div>
-              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+              <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                 Valor por cuota
               </label>
               <input
@@ -366,7 +366,7 @@ function ContractTypeFields({ type, form, setForm }) {
               {form.installments &&
                 Number(form.value) > 0 &&
                 !form.installmentValue && (
-                  <p className="text-slate-500 text-xs mt-1">
+                  <p className="text-[var(--color-text-muted)] text-xs mt-1">
                     Aprox.{' '}
                     {formatCOP(
                       Math.round(
@@ -382,7 +382,7 @@ function ContractTypeFields({ type, form, setForm }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Fecha promesa / inicio *
             </label>
             <input
@@ -395,7 +395,7 @@ function ContractTypeFields({ type, form, setForm }) {
             />
           </div>
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Fecha escritura estimada
             </label>
             <input
@@ -411,9 +411,9 @@ function ContractTypeFields({ type, form, setForm }) {
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Notaría
-            <span className="text-slate-500 font-normal ml-1">
+            <span className="text-[var(--color-text-muted)] font-normal ml-1">
               (opcional)
             </span>
           </label>
@@ -444,7 +444,7 @@ function ContractTypeFields({ type, form, setForm }) {
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Valor prometido (COP) *
           </label>
           <input
@@ -458,16 +458,16 @@ function ContractTypeFields({ type, form, setForm }) {
             className={inputCls}
           />
           {Number(form.value) > 0 && (
-            <p className="text-slate-500 text-xs mt-1">
+            <p className="text-[var(--color-text-muted)] text-xs mt-1">
               {formatCOP(form.value)}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+          <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
             Arras / Anticipo
-            <span className="text-slate-500 font-normal ml-1">
+            <span className="text-[var(--color-text-muted)] font-normal ml-1">
               (opcional)
             </span>
           </label>
@@ -481,7 +481,7 @@ function ContractTypeFields({ type, form, setForm }) {
             className={inputCls}
           />
           {Number(form.earnestMoney) > 0 && (
-            <p className="text-slate-500 text-xs mt-1">
+            <p className="text-[var(--color-text-muted)] text-xs mt-1">
               {formatCOP(form.earnestMoney)}
             </p>
           )}
@@ -489,7 +489,7 @@ function ContractTypeFields({ type, form, setForm }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Fecha de la promesa *
             </label>
             <input
@@ -502,7 +502,7 @@ function ContractTypeFields({ type, form, setForm }) {
             />
           </div>
           <div>
-            <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+            <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
               Plazo para escritura *
             </label>
             <input
@@ -523,7 +523,7 @@ function ContractTypeFields({ type, form, setForm }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
-        <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+        <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
           Valor *
         </label>
         <input
@@ -533,11 +533,11 @@ function ContractTypeFields({ type, form, setForm }) {
             setForm((f) => ({ ...f, value: e.target.value }))
           }
           placeholder="Valor del contrato"
-          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
         />
       </div>
       <div>
-        <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+        <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
           Fecha inicio *
         </label>
         <input
@@ -546,7 +546,7 @@ function ContractTypeFields({ type, form, setForm }) {
           onChange={(e) =>
             setForm((f) => ({ ...f, startDate: e.target.value }))
           }
-          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none"
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none"
         />
       </div>
     </div>
@@ -886,7 +886,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
   ];
 
   const inputCls =
-    'w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-primary outline-none transition-colors';
+    'w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-primary outline-none transition-colors';
 
   return (
     <div className="flex flex-col gap-5">
@@ -902,7 +902,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
                     ? 'bg-primary text-slate-950'
                     : n < step
                     ? 'bg-green-500/20 text-green-400 cursor-pointer hover:bg-green-500/30'
-                    : 'bg-slate-800 text-slate-500 cursor-default'
+                    : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] cursor-default'
                 }`}
             >
               {n < step ? (
@@ -914,7 +914,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
             </button>
             {idx < STEPS.length - 1 && (
               <FaChevronRight
-                className="text-slate-600 flex-shrink-0"
+                className="text-[var(--color-text-faint)] flex-shrink-0"
                 size={10}
               />
             )}
@@ -931,9 +931,9 @@ export default function ContractForm({ onSuccess, onCancel }) {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-3"
           >
-            <label className="block text-slate-300 text-sm font-semibold">
+            <label className="block text-[var(--color-text)] text-sm font-semibold">
               <FaBuilding
-                className="inline mr-1.5 text-slate-500"
+                className="inline mr-1.5 text-[var(--color-text-muted)]"
                 size={12}
               />
               Selecciona la propiedad
@@ -970,10 +970,10 @@ export default function ContractForm({ onSuccess, onCancel }) {
               loading={propLoading}
               renderItem={(p) => (
                 <>
-                  <p className="text-slate-200 text-sm font-medium">
+                  <p className="text-[var(--color-text)] text-sm font-medium">
                     {p.title}
                   </p>
-                  <p className="text-slate-500 text-xs">
+                  <p className="text-[var(--color-text-muted)] text-xs">
                     {p.address ?? p.city}
                   </p>
                 </>
@@ -983,7 +983,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
                   <p className="text-green-300 text-sm font-semibold">
                     {p.title}
                   </p>
-                  <p className="text-slate-400 text-xs">
+                  <p className="text-[var(--color-text-muted)] text-xs">
                     {p.address ?? p.city}
                   </p>
                 </>
@@ -1008,9 +1008,9 @@ export default function ContractForm({ onSuccess, onCancel }) {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-3"
           >
-            <label className="block text-slate-300 text-sm font-semibold">
+            <label className="block text-[var(--color-text)] text-sm font-semibold">
               <FaUser
-                className="inline mr-1.5 text-slate-500"
+                className="inline mr-1.5 text-[var(--color-text-muted)]"
                 size={12}
               />
               Selecciona el cliente
@@ -1031,10 +1031,10 @@ export default function ContractForm({ onSuccess, onCancel }) {
               loading={clientLoading}
               renderItem={(c) => (
                 <>
-                  <p className="text-slate-200 text-sm font-medium">
+                  <p className="text-[var(--color-text)] text-sm font-medium">
                     {c.displayName || c.email}
                   </p>
-                  <p className="text-slate-500 text-xs">
+                  <p className="text-[var(--color-text-muted)] text-xs">
                     {c.email} {c.phone ? `· ${c.phone}` : ''}
                   </p>
                 </>
@@ -1044,14 +1044,14 @@ export default function ContractForm({ onSuccess, onCancel }) {
                   <p className="text-green-300 text-sm font-semibold">
                     {c.displayName || c.email}
                   </p>
-                  <p className="text-slate-400 text-xs">{c.email}</p>
+                  <p className="text-[var(--color-text-muted)] text-xs">{c.email}</p>
                 </>
               )}
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setStep(1)}
-                className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-input-bg)] transition-colors flex items-center justify-center gap-2"
               >
                 <FaChevronLeft size={11} /> Atrás
               </button>
@@ -1076,19 +1076,19 @@ export default function ContractForm({ onSuccess, onCancel }) {
             className="space-y-4"
           >
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                <p className="text-slate-500 text-xs mb-0.5">
+              <div className="p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                <p className="text-[var(--color-text-muted)] text-xs mb-0.5">
                   Propiedad
                 </p>
-                <p className="text-slate-200 text-sm font-semibold truncate">
+                <p className="text-[var(--color-text)] text-sm font-semibold truncate">
                   {selectedProp?.title}
                 </p>
               </div>
-              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                <p className="text-slate-500 text-xs mb-0.5">
+              <div className="p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+                <p className="text-[var(--color-text-muted)] text-xs mb-0.5">
                   Cliente
                 </p>
-                <p className="text-slate-200 text-sm font-semibold truncate">
+                <p className="text-[var(--color-text)] text-sm font-semibold truncate">
                   {selectedClient?.displayName ||
                     selectedClient?.email}
                 </p>
@@ -1097,7 +1097,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+                <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                   Tipo *
                 </label>
                 <select
@@ -1147,7 +1147,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
                 </select>
               </div>
               <div>
-                <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+                <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                   Estado inicial
                 </label>
                 <select
@@ -1178,7 +1178,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
             />
 
             <div>
-              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+              <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                 <FaUserTie className="inline mr-1" size={10} />
                 Agente responsable
               </label>
@@ -1203,7 +1203,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+              <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                 Notas internas
               </label>
               <textarea
@@ -1218,16 +1218,16 @@ export default function ContractForm({ onSuccess, onCancel }) {
             </div>
 
             <div>
-              <label className="block text-slate-300 text-xs font-semibold mb-1.5">
+              <label className="block text-[var(--color-text)] text-xs font-semibold mb-1.5">
                 Documento PDF (opcional)
               </label>
               <div
                 onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-slate-700 rounded-xl p-4
+                className="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4
                   flex items-center gap-3 cursor-pointer hover:border-primary/50 transition-colors"
               >
-                <FaUpload className="text-slate-500" size={14} />
-                <span className="text-slate-400 text-xs flex-1 truncate">
+                <FaUpload className="text-[var(--color-text-muted)]" size={14} />
+                <span className="text-[var(--color-text-muted)] text-xs flex-1 truncate">
                   {docFile
                     ? docFile.name
                     : 'Haz clic para adjuntar el contrato en PDF'}
@@ -1239,7 +1239,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
                       e.stopPropagation();
                       setDocFile(null);
                     }}
-                    className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                    className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors flex-shrink-0"
                   >
                     <FaTimes size={12} />
                   </button>
@@ -1259,7 +1259,7 @@ export default function ContractForm({ onSuccess, onCancel }) {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setStep(2)}
-                className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-input-bg)] transition-colors flex items-center justify-center gap-2"
               >
                 <FaChevronLeft size={11} /> Atrás
               </button>

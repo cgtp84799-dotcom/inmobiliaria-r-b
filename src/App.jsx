@@ -1,29 +1,21 @@
-// FIX [PERFORMANCE]: carga diferida de páginas públicas/no críticas para reducir JS inicial.
 // src/App.jsx
-// ─────────────────────────────────────────────────────────────
-// Árbol de rutas — versión con todos los fixes.
 //
-// FIXES APLICADOS:
-//   1. HomeOrRedirect: la home pública es accesible para cualquier usuario
-//      autenticado que navegue directamente a "/". Solo redirige automáti-
-//      camente al dashboard si REDIRECT_HOME_WHEN_AUTHED = true.
-//      Esto evita que un admin no pueda ver su propio sitio público.
+// Árbol de rutas y wrappers globales.
 //
-//   2. AuthenticatedRootRedirect: añadido loading guard para no redirigir
-//      mientras userData aún no cargó desde Firestore.
+// Comportamiento:
+//   - HomeOrRedirect: la home pública es accesible para cualquier usuario
+//     autenticado que navegue directamente a "/". Solo redirige automáti-
+//     camente al dashboard cuando REDIRECT_HOME_WHEN_AUTHED = true.
+//   - AuthenticatedRootRedirect: espera a que userData llegue de Firestore
+//     antes de redirigir según el rol.
+//   - NotificationInitializer: efectos separados para que un fallo del SW
+//     no bloquee Firebase Messaging.
+//   - ConditionalSettingsFab: oculta el FAB de ajustes en rutas auth.
 //
-//   3. Ruta duplicada eliminada: TYPE_CITY_PROPERTIES y CITY_PROPERTIES
-//      tenían el mismo patrón. React Router usaba solo la primera.
-//      LocationPage ya parsea el slug internamente — una sola ruta basta.
-//
-//   4. NotificationInitializer: efectos separados para que un fallo de SW
-//      no bloquee Firebase Messaging.
-//
-// NOTA: HelmetProvider está en src/main.jsx — NO se duplica aquí.
-// ─────────────────────────────────────────────────────────────
+// NOTA: HelmetProvider vive en src/main.jsx — no se duplica aquí.
 
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider, useAuth } from './core/contexts/AuthContext';
@@ -36,7 +28,30 @@ import SettingsFab    from './shared/components/UI/SettingsFab';
 import PublicLayout   from './shared/components/Layout/PublicLayout';
 import AdminLayout    from './shared/components/Layout/AdminLayout';
 import ProtectedRoute from './shared/components/ProtectedRoute';
-import ErrorBoundary from './shared/components/UI/ErrorBoundary';
+import ErrorBoundary  from './shared/components/UI/ErrorBoundary';
+
+// Boundary ligero para rutas individuales — muestra mensaje sin tumbar el layout
+const RouteError = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 px-4 text-center">
+    <div className="text-4xl">⚠️</div>
+    <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+      No se pudo cargar esta sección
+    </h2>
+    <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+      Recarga la página o vuelve al inicio.
+    </p>
+    <button
+      onClick={() => window.location.reload()}
+      className="px-5 py-2 rounded-xl text-sm font-semibold bg-primary text-slate-950 hover:opacity-90 transition"
+    >
+      Recargar
+    </button>
+  </div>
+);
+
+const RE = ({ children }) => (
+  <ErrorBoundary fallback={<RouteError />}>{children}</ErrorBoundary>
+);
 
 // ── Páginas públicas (Home eager, resto lazy) ───────────────────────────────
 import HomePage           from './modules/public/pages/HomePage';
@@ -55,6 +70,8 @@ const PropertyDetailPage= lazy(() => import('./modules/public/pages/PropertyDeta
 
 // ── Páginas lazy privadas ──────────────────────────────────────────────────
 const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
+const EmailVerificationPage = lazy(() => import('./modules/auth/pages/EmailVerificationPage'));
+const EmailVerifyTokenPage  = lazy(() => import('./modules/auth/pages/EmailVerifyTokenPage'));
 const ClientPortal       = lazy(() => import('./modules/clients/pages/ClientPortal'));
 const DashboardPage      = lazy(() => import('./modules/dashboard/pages/DashboardPage'));
 const PropertyManagement = lazy(() => import('./modules/properties/pages/PropertyManagement'));
@@ -140,6 +157,23 @@ function HomeOrRedirect() {
   return <HomePage />;
 }
 
+// ── SettingsFab condicional ────────────────────────────────────────────────
+// Oculta el FAB de ajustes en rutas de autenticación, donde no aplica y
+// puede confundir a usuarios sin sesión.
+const FAB_HIDDEN_ROUTES = [
+  '/login',
+  '/acceso-clientes',
+  '/solicitar-acceso',
+  '/verificar-email',
+];
+
+function ConditionalSettingsFab() {
+  const { pathname } = useLocation();
+  const hide = FAB_HIDDEN_ROUTES.some((r) => pathname.startsWith(r));
+  if (hide) return null;
+  return <SettingsFab />;
+}
+
 // ── Árbol de rutas ─────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
@@ -161,27 +195,18 @@ function AppRoutes() {
         {/* ═══════════════════════════════════════════════════════════════ */}
         <Route element={<PublicLayout />}>
           <Route path={PUBLIC_ROUTES.HOME}    element={<HomeOrRedirect />} />
-          <Route path={PUBLIC_ROUTES.CATALOG} element={<S><CatalogPage /></S>} />
+          <Route path={PUBLIC_ROUTES.CATALOG} element={<RE><S><CatalogPage /></S></RE>} />
 
-          {/*
-            FIX: una sola ruta de zona.
-            CITY_PROPERTIES y TYPE_CITY_PROPERTIES comparten el mismo
-            patrón (/propiedades/zona/:param) — React Router solo matchea
-            la primera declarada. LocationPage ya distingue internamente
-            "manizales" de "casas-en-venta-manizales" por lo que una
-            sola ruta es correcta y suficiente.
-          */}
-          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<S><LocationPage /></S>} />
+          <Route path={PUBLIC_ROUTES.CITY_PROPERTIES} element={<RE><S><LocationPage /></S></RE>} />
 
           <Route
             path={PUBLIC_ROUTES.DEPARTMENT_HUB}
-            element={<S><DepartmentHubPage /></S>}
+            element={<RE><S><DepartmentHubPage /></S></RE>}
           />
 
-          {/* DESPUÉS de /zona/* y /departamento/* para evitar colisiones */}
           <Route
             path={PUBLIC_ROUTES.PROPERTY_DETAIL}
-            element={<S><PropertyDetailPage /></S>}
+            element={<RE><S><PropertyDetailPage /></S></RE>}
           />
 
           <Route path={PUBLIC_ROUTES.CONTACT}        element={<S><ContactPage /></S>} />
@@ -213,6 +238,23 @@ function AppRoutes() {
           element={<S><ClientAuthPage /></S>}
         />
 
+        {/* Verificación de email — autocontenida, sin ProtectedRoute para
+            evitar loop. La propia página verifica que haya sesión activa
+            y redirige al portal cuando emailVerified === true. */}
+        <Route
+          path={PUBLIC_ROUTES.EMAIL_VERIFICATION}
+          element={<S><EmailVerificationPage /></S>}
+        />
+
+        {/* Aterrizaje del link enviado por email. Llama a la Cloud Function
+            confirmEmailVerification con el token de la URL. NO requiere
+            sesión activa — el usuario puede aterrizar desde otro
+            dispositivo. */}
+        <Route
+          path={PUBLIC_ROUTES.EMAIL_VERIFY_TOKEN}
+          element={<S><EmailVerifyTokenPage /></S>}
+        />
+
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* PORTAL DE CLIENTES                                              */}
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -235,17 +277,17 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         >
-          <Route path={PRIVATE_ROUTES.DASHBOARD}    element={<S><DashboardPage /></S>} />
-          <Route path={PRIVATE_ROUTES.PROPERTIES}   element={<S><PropertyManagement /></S>} />
-          <Route path={PRIVATE_ROUTES.CLIENTS}      element={<S><ClientManagement /></S>} />
-          <Route path={PRIVATE_ROUTES.CONTRACTS}    element={<S><ContractsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.DOCUMENTS}    element={<S><DocumentsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.QUERIES}      element={<S><ContactsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.CALENDAR}     element={<S><CalendarPage /></S>} />
-          <Route path={PRIVATE_ROUTES.VISITS}       element={<S><VisitsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.PROFILE}      element={<S><ProfilePage /></S>} />
-          <Route path={PRIVATE_ROUTES.AGENTS}       element={<S><AgentsPage /></S>} />
-          <Route path={PRIVATE_ROUTES.AGENT_DETAIL} element={<S><AgentDetailPage /></S>} />
+          <Route path={PRIVATE_ROUTES.DASHBOARD}    element={<RE><S><DashboardPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.PROPERTIES}   element={<RE><S><PropertyManagement /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.CLIENTS}      element={<RE><S><ClientManagement /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.CONTRACTS}    element={<RE><S><ContractsPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.DOCUMENTS}    element={<RE><S><DocumentsPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.QUERIES}      element={<RE><S><ContactsPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.CALENDAR}     element={<RE><S><CalendarPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.VISITS}       element={<RE><S><VisitsPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.PROFILE}      element={<RE><S><ProfilePage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.AGENTS}       element={<RE><S><AgentsPage /></S></RE>} />
+          <Route path={PRIVATE_ROUTES.AGENT_DETAIL} element={<RE><S><AgentDetailPage /></S></RE>} />
 
           <Route
             path={PRIVATE_ROUTES.USERS}
@@ -275,7 +317,7 @@ function AppRoutes() {
 
       </Routes>
 
-      <SettingsFab />
+      <ConditionalSettingsFab />
     </>
   );
 }

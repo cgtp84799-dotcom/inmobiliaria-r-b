@@ -73,7 +73,7 @@ const AgentDashboard = () => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Cargando tu panel...</p>
+          <p className="text-[var(--color-text-muted)]">Cargando tu panel...</p>
         </div>
       </div>
     );
@@ -92,7 +92,7 @@ const AgentDashboard = () => {
           <h1 className="text-3xl md:text-4xl font-bold text-primary">
             {greeting}, {nombre} 👋
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-[var(--color-text-muted)] text-sm mt-1">
             Aquí está el resumen de tu actividad hoy —{' '}
             {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
@@ -107,7 +107,7 @@ const AgentDashboard = () => {
 
       {/* ── KPIs principales ─────────────────────────────────────────────── */}
       <section>
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Resumen general</h2>
+        <h2 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-4">Resumen general</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <AgentKPICard
             icon={FaCalendarCheck}
@@ -161,7 +161,7 @@ const AgentDashboard = () => {
               </div>
               <div>
                 <h3 className="font-bold text-light">Visitas de hoy</h3>
-                <p className="text-xs text-slate-400">{visitsHoy.length} programadas</p>
+                <p className="text-xs text-[var(--color-text-muted)]">{visitsHoy.length} programadas</p>
               </div>
             </div>
             <Link to="/visitas" className="text-xs text-primary hover:underline flex items-center gap-1">
@@ -171,8 +171,8 @@ const AgentDashboard = () => {
 
           {visitsHoy.length === 0 ? (
             <div className="py-10 text-center">
-              <FaCalendarCheck className="text-slate-700 text-4xl mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">No tienes visitas programadas para hoy.</p>
+              <FaCalendarCheck className="text-[var(--color-text-faint)] text-4xl mx-auto mb-3" />
+              <p className="text-[var(--color-text-muted)] text-sm">No tienes visitas programadas para hoy.</p>
               <Link to="/visitas/nueva" className="text-primary text-xs hover:underline mt-2 inline-block">
                 ¿Agendamos una?
               </Link>
@@ -197,7 +197,7 @@ const AgentDashboard = () => {
             </div>
             <div>
               <h3 className="font-bold text-light">Metas del mes</h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[var(--color-text-muted)]">
                 {new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}
               </p>
             </div>
@@ -248,15 +248,15 @@ const AgentDashboard = () => {
           </div>
 
           {propertiesRecent.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-8">Aún no has registrado propiedades.</p>
+            <p className="text-[var(--color-text-muted)] text-sm text-center py-8">Aún no has registrado propiedades.</p>
           ) : (
             <div className="space-y-2">
               {propertiesRecent.slice(0, 5).map(p => {
                 const s = PROPERTY_STATUS_LABEL[p.status] || { label: p.status, color: 'slate-400' };
                 return (
-                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 gap-2">
+                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0 gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <FaHome className="text-slate-600 text-xs flex-shrink-0" />
+                      <FaHome className="text-[var(--color-text-faint)] text-xs flex-shrink-0" />
                       <span className="text-sm text-light truncate">{p.title || p.address || 'Propiedad'}</span>
                     </div>
                     <span className={`text-xs text-${s.color} bg-${s.color}/10 px-2 py-0.5 rounded-full flex-shrink-0`}>
@@ -289,13 +289,13 @@ const AgentDashboard = () => {
           </div>
 
           {contractsRecent.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-8">Aún no tienes contratos registrados.</p>
+            <p className="text-[var(--color-text-muted)] text-sm text-center py-8">Aún no tienes contratos registrados.</p>
           ) : (
             <div className="space-y-2">
               {contractsRecent.map(c => {
                 const s = CONTRACT_STATUS_LABEL[c.status] || { label: c.status, color: 'slate-400' };
                 return (
-                  <div key={c.id} className="py-2 border-b border-slate-800 last:border-0">
+                  <div key={c.id} className="py-2 border-b border-[var(--color-border)] last:border-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-light truncate flex-1">
                         {c.clientName || c.propertyTitle || 'Contrato'}
@@ -305,7 +305,7 @@ const AgentDashboard = () => {
                       </span>
                     </div>
                     {c.value && (
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                         {fmtCOP(c.value)} · {fmtDate(c.startDate)}
                       </p>
                     )}
@@ -331,7 +331,7 @@ const AgentDashboard = () => {
           </div>
 
           {activity.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-8">Sin actividad reciente.</p>
+            <p className="text-[var(--color-text-muted)] text-sm text-center py-8">Sin actividad reciente.</p>
           ) : (
             <div className="space-y-3">
               {activity.slice(0, 8).map((a, i) => (
@@ -339,12 +339,12 @@ const AgentDashboard = () => {
                   <div className="relative flex-shrink-0 mt-1">
                     <div className="w-2 h-2 rounded-full bg-primary" />
                     {i < activity.length - 1 && (
-                      <div className="absolute left-[3px] top-3 w-px h-full bg-slate-800" />
+                      <div className="absolute left-[3px] top-3 w-px h-full bg-[var(--color-surface)]" />
                     )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm text-light leading-snug">{a.message || a.title || 'Evento'}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{fmtDate(a.createdAt)}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{fmtDate(a.createdAt)}</p>
                   </div>
                 </div>
               ))}
@@ -368,7 +368,7 @@ const AgentDashboard = () => {
           <div key={label} className="card-soft p-4 text-center">
             <Icon className={`text-${color} text-2xl mx-auto mb-2`} />
             <p className={`text-3xl font-bold text-${color} tabular-nums`}>{value}</p>
-            <p className="text-xs text-slate-400 mt-1">{label}</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">{label}</p>
           </div>
         ))}
       </motion.div>

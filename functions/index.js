@@ -27,12 +27,10 @@ const {
   accessRequestNotificationEmail,
   accessRequestApprovedEmail,
   accessRequestRejectedEmail,
-  clientInviteEmail,
   accountDeletionRequestEmail,
   // Contratos
   contractCreatedEmail,
   contractCreatedAgentEmail,
-  contractUpdatedEmail,
   contractStageAgentEmail,
   contractStageAdminEmail,
   getContractStageEmail,
@@ -60,11 +58,20 @@ const {
   contractDocumentUploadedClientEmail,
 } = require("./src/emails");
 
+// ─── Email Verification (sistema custom) ───────────────────────────────────
+const {
+  buildRequestEmailVerification,
+  buildConfirmEmailVerification,
+  sendStaffPasswordSetup,
+} = require("./src/emailVerification");
+
 // ─── Utils ────────────────────────────────────────────────────────────────────
-const { ymd, diffDays, fmtDate, parseDate, statusLabel, stageLabel } = require("./src/emails/utils");
+const { ymd, diffDays, parseDate } = require("./src/emails/utils");
 
 // ─── Rate Limiter ───────────────────────────────────────────────────────────
-const { writeRateLimit, readRateLimit, authRateLimit } = require("./src/utils/rateLimiter");
+const { rateLimiter } = require("./src/utils/rateLimiter");
+
+const { SITE_URL: BASE_URL } = require('./src/site.config');
 
 // ─── Opciones globales ────────────────────────────────────────────────────────
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
@@ -72,22 +79,43 @@ setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 if (!admin.apps.length) admin.initializeApp();
 
 // ─── Secrets ──────────────────────────────────────────────────────────────────
-const GMAIL_USER = defineSecret("GMAIL_USER");
+const PRERENDER_TOKEN = defineSecret("PRERENDER_TOKEN");
+const GMAIL_USER = defineSecret("GMAIL_USER");  
 const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-const BASE_URL   = "https://inmobiliaria-ryb-y-asociados.com";
 const FROM_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
 
-const PUBLIC_STATUS = new Set(["", "disponible", "reservada", "published", "active", "available"]);
+// Status que se publican en el catálogo. Acepta canónicos + aliases legacy
+// para data antigua.
+const PUBLIC_STATUS = new Set([
+  "", "published", "reserved",
+  "disponible", "reservada", "active", "available",
+]);
+
+// Orígenes permitidos para CORS — solo dominios de producción y desarrollo local.
+// Rechaza cualquier otro origen para prevenir llamadas cross-origin no autorizadas.
+const ALLOWED_ORIGINS = new Set([
+  "https://inmobiliaria-ryb-y-asociados.com",
+  "https://www.inmobiliaria-ryb-y-asociados.com",
+  "https://inmobiliaria-ryb-y-asociados.web.app",
+  "https://inmobiliaria-ryb-y-asociados.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 function setCorsHeaders(req, res) {
-  res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.set("Vary", "Origin");
+  const origin = req.headers.origin || "";
+  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : "";
+  if (allowed) {
+    res.set("Access-Control-Allow-Origin", allowed);
+    res.set("Vary", "Origin");
+  }
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
@@ -105,7 +133,6 @@ async function assertAdminFromRequest(req) {
   if (!authHeader?.startsWith("Bearer ")) {
     const err = new Error("No autenticado"); err.status = 401; throw err;
   }
-  // ★ FIX: verifyIdToken con checkRevoked=true → rechaza tokens de sesiones
   // revocadas o usuarios deshabilitados desde Admin. Antes: bastaba con que
   // el token no hubiera expirado (~1h) aunque el admin ya hubiera bloqueado
   // la cuenta desde la consola.
@@ -115,13 +142,11 @@ async function assertAdminFromRequest(req) {
       authHeader.split("Bearer ")[1],
       true,
     );
-  } catch (e) {
+  } catch (_e) {
     const err = new Error("Token inválido o revocado"); err.status = 401; throw err;
   }
   const callerEmail = String(decoded.email || "").trim().toLowerCase();
   if (!callerEmail) { const err = new Error("Token sin email"); err.status = 401; throw err; }
-
-  // ★ FIX: intentar buscar por email tal cual (case-insensitive). Si no
   // existe, probar versión lowercased. Evita DoS cuando un doc legacy
   // quedó con mayúsculas (migraciones antiguas).
   const users = admin.firestore().collection("users");
@@ -137,8 +162,6 @@ async function assertAdminFromRequest(req) {
   }
   return { callerEmail };
 }
-
-// ★ FIX: whitelist de roles válidos para creación — evita que un admin
 // cree usuarios con roles arbitrarios ("superadmin", "root", etc.).
 const VALID_ROLES = new Set(["admin", "member", "viewer"]);
 const VALID_STATUSES = new Set(["active", "inactive", "pending", "blocked"]);
@@ -165,9 +188,7 @@ async function sendMail(transporter, gmailUser, { to, subject, html }, tag = "")
 // FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
-  // ★ FIX (auditoría): Rate limiting para operaciones de escritura
-  const { rateLimiter } = require('./src/utils/rateLimiter');
-  const rateKey = req.headers.authorization 
+  const rateKey = req.headers.authorization
     ? `user:${req.headers.authorization}` 
     : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
   const rateCheck = rateLimiter.check(rateKey, 20, 60000);
@@ -185,7 +206,6 @@ exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
     const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
     if (!userId) return res.status(400).json({ error: "userId es requerido" });
     if (!isValidEmail(userId)) return res.status(400).json({ error: "userId debe ser un email válido" });
-    // ★ FIX: impedir auto-eliminación (el admin se quedaría sin acceso).
     if (userId === callerEmail) {
       return res.status(400).json({ error: "No puedes eliminar tu propia cuenta" });
     }
@@ -215,10 +235,23 @@ exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN 2: createUserByAdmin  (v2 HTTP) — CON RATE LIMITING
 // ═════════════════════════════════════════════════════════════════════════════
-exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
-  // ★ FIX (auditoría): Rate limiting para operaciones de escritura
-  const { rateLimiter } = require('./src/utils/rateLimiter');
-  const rateKey = req.headers.authorization 
+//
+// REFACTOR (sistema de verificación custom):
+//   • El usuario se crea con status='pending' (no 'active') si no se pasó
+//     password explícitamente activable. Antes recibía el welcome al
+//     instante aunque aún no hubiera entrado al panel.
+//   • Si el admin pasó status='active' explícitamente Y un password, se
+//     respeta el flujo antiguo (welcome inmediato vía onUserCreated).
+//   • En el flujo nuevo (status='pending'), se envía un correo de
+//     "configura tu contraseña" con plantilla corporativa (en lugar de
+//     usar la plantilla de Firebase Auth que no se puede personalizar).
+//   • El welcome del equipo se enviará después, cuando el usuario haga
+//     login por primera vez y el frontend marque status='active'.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.createUserByAdmin = onRequest(
+  { cors: true, secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (req, res) => {
+  const rateKey = req.headers.authorization
     ? `user:${req.headers.authorization}` 
     : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
   const rateCheck = rateLimiter.check(rateKey, 20, 60000);
@@ -239,9 +272,10 @@ exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
     const displayName = String(data.displayName || "").trim();
     const phone       = String(data.phone || "").trim();
     const role        = String(data.role || "member").trim();
-    const status      = String(data.status || "active").trim();
+    // Cambio de default: si el admin no especifica status, usamos 'pending'
+    // para que el welcome se difiera al primer login del usuario.
+    const status      = String(data.status || "pending").trim();
     if (!email || !password) return res.status(400).json({ error: "email y password son requeridos" });
-    // ★ FIX: validaciones previas a cualquier operación
     if (!isValidEmail(email)) return res.status(400).json({ error: "email inválido" });
     if (password.length < 8)  return res.status(400).json({ error: "password debe tener al menos 8 caracteres" });
     if (!VALID_ROLES.has(role))     return res.status(400).json({ error: "role inválido" });
@@ -259,7 +293,6 @@ exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
         throw e;
       }
     }
-    // ★ FIX (auditoría): si el usuario ya existía en Auth Y ya tiene doc en
     // Firestore, NO sobreescribir — el admin debe usar updateUser. Esto
     // evita "account takeover" pasivo donde un admin cambia el role/status
     // de una cuenta existente sin pasar por flujos de auditoría.
@@ -272,11 +305,45 @@ exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
     }
     await admin.firestore().collection("users").doc(email).set(
       { uid: userRecord.uid, email, displayName, phone, role, status,
+        // Email de cuenta interna: marcamos verificado en Auth para que el
+        // staff no tenga que pasar por el flujo de verificación de cliente.
+        emailVerified: true,
+        emailVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
-    return res.status(200).json({ result: { success: true, uid: userRecord.uid, email } });
+
+    // Marcar emailVerified=true también en Firebase Auth (best effort).
+    try {
+      await admin.auth().updateUser(userRecord.uid, { emailVerified: true });
+    } catch (e) {
+      console.warn("[createUserByAdmin] no se pudo marcar emailVerified en Auth:", e.message);
+    }
+
+    // Enviar email custom de "configura tu contraseña" con plantilla
+    // corporativa. NO usamos sendPasswordResetEmail nativo porque su
+    // plantilla no se puede personalizar.
+    if (status === "pending") {
+      try {
+        const gmailUser = GMAIL_USER.value();
+        const gmailPass = GMAIL_PASS.value();
+        if (gmailUser && gmailPass) {
+          await sendStaffPasswordSetup({
+            email, displayName, role,
+            gmailUser, gmailPass,
+          });
+        } else {
+          console.warn("[createUserByAdmin] credenciales SMTP no configuradas — email de setup no enviado.");
+        }
+      } catch (e) {
+        // No bloqueamos la creación si el email falla — el admin puede
+        // reenviar manualmente desde la UI.
+        console.error("[createUserByAdmin] error enviando email de setup:", e);
+      }
+    }
+
+    return res.status(200).json({ result: { success: true, uid: userRecord.uid, email, status } });
   } catch (error) {
     setCorsHeaders(req, res);
     console.error("createUserByAdmin Error:", error);
@@ -285,22 +352,9 @@ exports.createUserByAdmin = onRequest({ cors: true }, async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 3: redirectToCustomDomain  (v2 HTTP)
-// ═════════════════════════════════════════════════════════════════════════════
-exports.redirectToCustomDomain = onRequest({ cors: true }, (req, res) => {
-  const host = String(req.headers.host || "");
-  if (host.includes("web.app") || host.includes("firebaseapp.com")) {
-    return res.redirect(301, `${BASE_URL}${req.url}`);
-  }
-  return res.status(200).send("OK");
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 4: generateSitemap  (v2 HTTP) — CON RATE LIMITING (lectura)
+// FUNCIÓN 3: generateSitemap  (v2 HTTP) — CON RATE LIMITING (lectura)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.generateSitemap = onRequest({ cors: true }, async (req, res) => {
-  // ★ FIX (auditoría): Rate limiting para operaciones de lectura (200 req/min)
-  const { rateLimiter } = require('./src/utils/rateLimiter');
   const rateKey = `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
   const rateCheck = rateLimiter.check(rateKey, 200, 60000);
   res.set('X-RateLimit-Limit', 200);
@@ -313,15 +367,15 @@ exports.generateSitemap = onRequest({ cors: true }, async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 5: serveApp — Prerender para crawlers, SPA para usuarios
+// FUNCIÓN 4: serveApp — Prerender para crawlers, SPA para usuarios
 // ═════════════════════════════════════════════════════════════════════════════
 exports.serveApp = onRequest(
-  { cors: false, timeoutSeconds: 30, memory: "256MiB", secrets: [] },
+  { cors: false, timeoutSeconds: 30, memory: "256MiB", secrets: [PRERENDER_TOKEN] },
   handlePrerenderRequest
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 6: onVisitStatusChanged  (v2 Firestore trigger)
+// FUNCIÓN 5: onVisitStatusChanged  (v2 Firestore trigger)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.onVisitStatusChanged = onDocumentWritten(
   { document: "visits/{visitId}", secrets: [GMAIL_USER, GMAIL_PASS] },
@@ -369,8 +423,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
       await send({ to: d.clientEmail, ...mail });
       return;
     }
-
-    // ★ FIX (auditoría — usuario reportó que estos emails no llegaban):
     // Los emails de approved/rejected/rescheduled antes los enviaba el frontend
     // vía la extensión /mail. Si la extensión está mal configurada o las rules
     // bloquean el doc, el email se pierde sin trazabilidad. Ahora también los
@@ -406,7 +458,6 @@ exports.onVisitStatusChanged = onDocumentWritten(
     }
 
     // ── Cancelación del cliente desde el portal ───────────────────────────────
-    // ★ FIX (auditoría): client.portal.service.js setea status = "cancelada"
     // y cancelledByClient = true. Antes solo había notif in-app — agente y
     // admin se enteraban solo si abrían el panel. Ahora reciben email.
     const isCancelByClient =
@@ -457,7 +508,25 @@ exports.onVisitStatusChanged = onDocumentWritten(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 7: onUserCreated  (v2 Firestore trigger)
+// FUNCIÓN 6: onUserCreated  (v2 Firestore trigger)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// REFACTOR (sistema de verificación custom):
+//   El welcome email YA NO se envía aquí indiscriminadamente. Antes, llegaba
+//   al mismo tiempo que el correo de verificación de Firebase Auth → confuso.
+//
+//   Ahora:
+//     • viewer (cliente) sin emailVerified → NO se envía nada. El welcome
+//       se dispara en onUserUpdated cuando emailVerified pasa de false→true
+//       (después de que el usuario haga click en el link de verificación).
+//     • viewer con emailVerified=true al crearse (caso Google sign-in
+//       directo) → se envía welcome inmediato.
+//     • admin/member con status=pending → NO se envía welcome (el usuario
+//       aún tiene que configurar su contraseña). El welcome del equipo
+//       se dispara en onUserUpdated cuando status pasa de pending→active
+//       (primer login del staff).
+//     • admin/member con status=active al crearse (caso legacy / docs
+//       directos) → se envía welcome inmediato.
 // ═════════════════════════════════════════════════════════════════════════════
 exports.onUserCreated = onDocumentCreated(
   { document: "users/{email}", secrets: [GMAIL_USER, GMAIL_PASS] },
@@ -468,12 +537,31 @@ exports.onUserCreated = onDocumentCreated(
     const email = String(data.email || event.params.email || "").trim();
     if (!email) return;
 
-    // ★ FIX (auditoría): antes solo se enviaba bienvenida a viewers, dejando
-    // a admins y members (agentes) sin notificación. Ahora todos los roles
-    // reciben welcome — el template ya diferencia internamente según el rol.
     const validRoles = ["viewer", "admin", "member", "agent"];
     if (!validRoles.includes(role)) {
       console.log(`[onUserCreated] role="${role}" no reconocido — bienvenida omitida.`);
+      return;
+    }
+
+    const status = String(data.status || "").toLowerCase();
+    const emailVerified = data.emailVerified === true;
+
+    // Decisión de cuándo enviar welcome al CREARSE el doc:
+    //
+    //   viewer + emailVerified=true → enviar (Google login)
+    //   viewer + emailVerified=false → NO enviar (esperar verificación)
+    //   admin/member + status=active → enviar (creación manual sin pending)
+    //   admin/member + status=pending → NO enviar (esperar primer login)
+    //
+    let shouldSendNow = false;
+    if (role === "viewer") {
+      shouldSendNow = emailVerified;
+    } else {
+      shouldSendNow = status === "active";
+    }
+
+    if (!shouldSendNow) {
+      console.log(`[onUserCreated] ${email} (role=${role}, status=${status}, emailVerified=${emailVerified}) — welcome diferido a onUserUpdated.`);
       return;
     }
 
@@ -488,7 +576,113 @@ exports.onUserCreated = onDocumentCreated(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 8: onContractWritten  (v2 Firestore trigger)
+// FUNCIÓN 6.B: onUserUpdated  (v2 Firestore trigger)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Detecta dos transiciones que disparan el welcome corporativo:
+//
+//   1. CLIENTE: emailVerified false → true
+//      Sucede cuando el cliente hace click en el link y la CF
+//      confirmEmailVerification actualiza /users/{email}. Le enviamos el
+//      welcome del portal cliente.
+//
+//   2. STAFF: status pending → active
+//      Sucede cuando un admin/member configura su contraseña por primera
+//      vez y entra al panel (el frontend marca status=active al detectar
+//      primer login de un usuario pending). Le enviamos el welcome del
+//      equipo.
+//
+// Esta función reemplaza el comportamiento antiguo de onUserCreated, que
+// enviaba el welcome inmediatamente al crearse el doc (causando que el
+// cliente recibiera dos correos a la vez).
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onUserWelcomeOnReady = onDocumentUpdated(
+  { document: "users/{email}", secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (event) => {
+    const before = event.data?.before?.data() ?? null;
+    const after  = event.data?.after?.data()  ?? null;
+    if (!before || !after) return;
+
+    const role = String(after.role || "").toLowerCase();
+    const email = String(after.email || event.params.email || "").trim();
+    if (!email) return;
+
+    const validRoles = ["viewer", "admin", "member", "agent"];
+    if (!validRoles.includes(role)) return;
+
+    // ── Detectar transición que dispara welcome ─────────────────────────────
+    let triggered = false;
+    let reason = "";
+
+    if (role === "viewer") {
+      // Cliente: emailVerified false → true
+      const wasVerified = before.emailVerified === true;
+      const isVerified  = after.emailVerified  === true;
+      if (!wasVerified && isVerified) {
+        triggered = true;
+        reason = "viewer-email-verified";
+      }
+    } else {
+      // Staff: status pending → active
+      const wasPending = String(before.status || "").toLowerCase() === "pending";
+      const isActive   = String(after.status  || "").toLowerCase() === "active";
+      if (wasPending && isActive) {
+        triggered = true;
+        reason = "staff-activated";
+      }
+    }
+
+    if (!triggered) return;
+
+    // ── Idempotencia: si ya enviamos welcome, no reenviamos ─────────────────
+    if (after.welcomeEmailSentAt) {
+      console.log(`[onUserWelcomeOnReady] ${email}: welcome ya enviado previamente (${reason}) — ignorado.`);
+      return;
+    }
+
+    const gmailUser = GMAIL_USER.value();
+    const gmailPass = GMAIL_PASS.value();
+    if (!gmailUser || !gmailPass) return;
+
+    try {
+      const transporter = createTransport(gmailUser, gmailPass);
+      const mail = welcomeEmail(after);
+      await sendMail(transporter, gmailUser, { to: email, ...mail }, `onUserWelcomeOnReady:${reason}`);
+
+      // Marcar como enviado para evitar reenvíos por updates posteriores.
+      await admin.firestore().collection("users").doc(email).set({
+        welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      console.log(`[onUserWelcomeOnReady] ${email}: welcome enviado (${reason}).`);
+    } catch (e) {
+      console.error(`[onUserWelcomeOnReady] error enviando welcome a ${email}:`, e);
+    }
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIONES 6.C / 6.D: Verificación de email (sistema custom)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Reemplazan a sendEmailVerification de Firebase Auth (cuya plantilla NO
+// puede personalizarse). El frontend llama:
+//
+//   • requestEmailVerification (POST, requires ID token)
+//     → genera token único, lo guarda hasheado en /emailVerifications,
+//       envía email con plantilla corporativa.
+//
+//   • confirmEmailVerification (POST, no requires ID token)
+//     → valida token, marca emailVerified=true en Auth y Firestore.
+//       onUserWelcomeOnReady detecta el cambio y envía welcome.
+//
+// Implementación detallada en ./src/emailVerification.js.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.requestEmailVerification = buildRequestEmailVerification(onRequest, GMAIL_USER, GMAIL_PASS);
+exports.confirmEmailVerification = buildConfirmEmailVerification(onRequest);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 7: onContractWritten  (v2 Firestore trigger)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.onContractWritten = onDocumentWritten(
   { document: "contracts/{contractId}", secrets: [GMAIL_USER, GMAIL_PASS] },
@@ -536,7 +730,6 @@ exports.onContractWritten = onDocumentWritten(
         const mail = contractCreatedAgentEmail(after);
         await send({ to: agentEmail, ...mail });
       }
-      // ★ FIX (auditoría): admins también deben enterarse cuando se crea un
       // contrato nuevo. Antes recibían el mismo template del agente — ahora
       // reciben uno dedicado con resumen ejecutivo, IDs y CTA al panel admin.
       const adminEmails = await getAdminEmails();
@@ -558,14 +751,12 @@ exports.onContractWritten = onDocumentWritten(
     const nextStage  = String(after.businessStage  || "").toLowerCase();
 
     if (prevStatus !== nextStatus || prevStage !== nextStage) {
-      // ★ FIX (auditoría): el dispatcher elige el email específico según
       // el businessStage al que se transicionó (cuota inicial, escritura
       // firmada, canon en mora, etc.). Antes todo usaba el mismo email genérico.
       if (clientEmail) {
         const mail = getContractStageEmail(after, prevStatus, prevStage);
         await send({ to: clientEmail, ...mail });
       }
-      // ★ FIX (auditoría): agente recibe email DEDICADO con datos de gestión
       // (cliente, teléfono, IDs, CTA al panel) — no el mismo template del
       // cliente. Solo cuando cambia status o cuando cambia a etapa relevante
       // (no por cada micro-transición intermedia).
@@ -582,8 +773,6 @@ exports.onContractWritten = onDocumentWritten(
         const mail = contractStageAgentEmail(after, prevStatus, prevStage, contractId);
         await send({ to: agentEmail, ...mail });
       }
-
-      // ★ FIX (auditoría): admins reciben email DEDICADO con resumen
       // ejecutivo, IDs y CTA al panel admin. Antes recibían el mismo
       // genérico. Solo en cambios críticos para no saturar.
       const isCritical =
@@ -602,7 +791,7 @@ exports.onContractWritten = onDocumentWritten(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 9: onPaymentWritten  (v2 Firestore trigger)
+// FUNCIÓN 8: onPaymentWritten  (v2 Firestore trigger)
 // Confirma pagos al cliente cuando se marca un pago como pagado.
 // ═════════════════════════════════════════════════════════════════════════════
 exports.onPaymentWritten = onDocumentWritten(
@@ -640,15 +829,11 @@ exports.onPaymentWritten = onDocumentWritten(
       const mail = paymentConfirmedEmail(contract, after);
       await send({ to: clientEmail, ...mail });
     }
-
-    // ★ FIX (auditoría): agente recibe template DEDICADO con datos de cobranza
     // — antes recibía el mismo template del cliente ("confirmamos tu pago").
     if (agentEmail && agentEmail !== clientEmail) {
       const mail = paymentConfirmedAgentEmail(contract, after);
       await send({ to: agentEmail, ...mail });
     }
-
-    // ★ FIX (auditoría): admin se entera SOLO en pagos críticos (cuota inicial,
     // pagos > 5M COP, escrituración) para evitar saturación pero mantener
     // visibilidad de tesorería.
     const paidAmount = Number(after.paidAmount || after.amount || 0);
@@ -678,8 +863,6 @@ exports.onPaymentWritten = onDocumentWritten(
         console.error("[onPaymentWritten] error notificando admins:", e);
       }
     }
-
-    // ★ FIX (auditoría): notif IN-APP al cliente — antes solo email. Si el
     // cliente está navegando el portal, ahora ve la confirmación al instante.
     if (clientEmail) {
       try {
@@ -702,7 +885,7 @@ exports.onPaymentWritten = onDocumentWritten(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 10: onPropertyChanged  (v2 Firestore trigger — indexación pública)
+// FUNCIÓN 9: onPropertyChanged  (v2 Firestore trigger — indexación pública)
 // ═════════════════════════════════════════════════════════════════════════════
 exports.onPropertyChanged = onDocumentWritten(
   { document: "properties/{propertyId}" },
@@ -766,7 +949,7 @@ exports.onPropertyChanged = onDocumentWritten(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 11: scheduledPaymentAlerts  (v2 Scheduler — diario 8am Bogotá)
+// FUNCIÓN 10: scheduledPaymentAlerts  (v2 Scheduler — diario 8am Bogotá)
 // Envía recordatorios, mora y alertas de vencimiento de contratos.
 // ═════════════════════════════════════════════════════════════════════════════
 exports.scheduledPaymentAlerts = onSchedule(
@@ -780,9 +963,8 @@ exports.scheduledPaymentAlerts = onSchedule(
     const transporter = createTransport(gmailUser, gmailPass);
     const send = (opts) => sendMail(transporter, gmailUser, opts, TAG);
 
-    const db   = admin.firestore();
-    const now  = new Date();
-    const todayYmd = ymd(now);
+    const db  = admin.firestore();
+    const now = new Date();
 
     // Cache de admins (para mora crítica) — evita una query por cada caso
     let adminEmailsCache = null;
@@ -828,7 +1010,6 @@ exports.scheduledPaymentAlerts = onSchedule(
             isRent: true,
           });
           await send({ to: clientEmail, ...clientMail });
-          // ★ FIX (auditoría): agente recibe template OPERATIVO con datos
           // de gestión (cliente, teléfono, ID contrato), no el del cliente.
           if (agentEmail && agentEmail !== clientEmail) {
             const agentMail = contractExpiryAgentEmail({
@@ -903,7 +1084,6 @@ exports.scheduledPaymentAlerts = onSchedule(
             amount:       payment.amount,
           });
           await send({ to: clientEmail, ...clientMail });
-          // ★ FIX (auditoría): agente recibe template de COBRANZA, no el
           // mismo del cliente. Datos específicos para gestión hoy mismo.
           if (agentEmail && agentEmail !== clientEmail) {
             const agentMail = paymentDueAgentEmail({
@@ -933,7 +1113,6 @@ exports.scheduledPaymentAlerts = onSchedule(
             daysLate,
           });
           await send({ to: clientEmail, ...clientMail });
-          // ★ FIX (auditoría): agente con template DEDICADO con plan de
           // cobranza adaptado a los días de mora.
           if (agentEmail && agentEmail !== clientEmail) {
             const agentMail = latePaymentAgentEmail({
@@ -949,8 +1128,6 @@ exports.scheduledPaymentAlerts = onSchedule(
             });
             await send({ to: agentEmail, ...agentMail });
           }
-
-          // ★ FIX (auditoría): admin recibe alerta de cartera SOLO en mora
           // crítica (≥15d). Antes los admins quedaban ciegos a problemas
           // graves de cobranza hasta abrir el panel.
           if (daysLate >= 15) {
@@ -971,8 +1148,6 @@ exports.scheduledPaymentAlerts = onSchedule(
               await send({ to: a, ...adminMail });
             }
           }
-
-          // ★ FIX (auditoría): notif IN-APP al cliente — antes solo email,
           // si el cliente tiene la app abierta no se enteraba hasta abrir
           // Gmail. Ahora aparece en su campana de notificaciones.
           try {
@@ -999,7 +1174,7 @@ exports.scheduledPaymentAlerts = onSchedule(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 12: onAccessRequestCreated  (v2 Firestore trigger)
+// FUNCIÓN 11: onAccessRequestCreated  (v2 Firestore trigger)
 //
 // AUDITORÍA: cuando alguien envía el formulario de "Solicitar acceso al
 // portal", la app crea un doc en /accessRequests y notif in-app a admins.
@@ -1044,7 +1219,7 @@ exports.onAccessRequestCreated = onDocumentCreated(
   }
 );
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 13: onAccessRequestUpdated  (v2 Firestore trigger)
+// FUNCIÓN 12: onAccessRequestUpdated  (v2 Firestore trigger)
 //
 // AUDITORÍA: cuando el admin aprueba o rechaza una solicitud de acceso desde
 // /solicitudes (request.service.js), antes el solicitante quedaba en silencio
@@ -1090,7 +1265,7 @@ exports.onAccessRequestUpdated = onDocumentUpdated(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 14: onContactCreated  (v2 Firestore trigger)
+// FUNCIÓN 13: onContactCreated  (v2 Firestore trigger)
 //
 // AUDITORÍA: el formulario público (/contactos y "Pregunta sobre esta propiedad"
 // de PropertyDetail) escribe en /contacts pero ANTES no había trigger — los
@@ -1185,7 +1360,7 @@ exports.onContactCreated = onDocumentCreated(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 15: onAccountDeletionRequested  (v2 Firestore trigger)
+// FUNCIÓN 14: onAccountDeletionRequested  (v2 Firestore trigger)
 //
 // AUDITORÍA: profile.service.js .requestAccountDeletion crea un doc en
 // /accountDeletionRequests pero los admins NO recibían email — quedaban
@@ -1250,7 +1425,7 @@ exports.onAccountDeletionRequested = onDocumentCreated(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 16: onContractDocumentCreated  (v2 Firestore trigger)
+// FUNCIÓN 15: onContractDocumentCreated  (v2 Firestore trigger)
 //
 // AUDITORÍA: cuando el agente sube un documento al contrato (subcollection
 // /contracts/{id}/documents) el cliente NO se enteraba — ni email, ni notif.
@@ -1307,7 +1482,7 @@ exports.onContractDocumentCreated = onDocumentCreated(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 17: onVisitApprovedAdminNotice  (v2 Firestore trigger)
+// FUNCIÓN 16: onVisitApprovedAdminNotice  (v2 Firestore trigger)
 //
 // AUDITORÍA: cuando una visita es aprobada, antes los admins NO recibían
 // notif in-app — solo agente + cliente. Esto deja sin visibilidad operativa

@@ -7,7 +7,7 @@
 // · Todo tokenizado (cero hardcoding)
 // ─────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   SeoHead,
@@ -98,6 +98,10 @@ const SCHEDULE = [
 /* ─── Componente ──────────────────────────────────────────── */
 
 const ContactPage = () => {
+  useEffect(() => {
+    if (typeof window !== "undefined") window.prerenderReady = true;
+  }, []);
+
   const [form, setForm] = useState({
     name: "",
     email: "",

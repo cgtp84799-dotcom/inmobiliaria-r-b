@@ -11,7 +11,6 @@ class ContactService {
    */
   async createContact(contactData) {
     try {
-      // ★ FIX (auditoría): sanitización mínima para evitar inyección.
       // El backend ya escapa HTML al renderizar el email (escapeHtml en
       // utils.js), pero recortar valores y forzar tipos protege contra
       // inputs hostiles (formularios automatizados, bots).

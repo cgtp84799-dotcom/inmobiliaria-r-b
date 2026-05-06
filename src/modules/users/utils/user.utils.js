@@ -14,12 +14,12 @@ export const ROLE_ICONS = {
 export const ROLE_ICON_CLASSES = {
   [USER_ROLES.ADMIN]: 'text-rose-400',
   [USER_ROLES.MEMBER]: 'text-emerald-400',
-  [USER_ROLES.VIEWER]: 'text-slate-400',
+  [USER_ROLES.VIEWER]: 'text-[var(--color-text-muted)]',
 };
 
 export const STATUS_STYLES = {
   active:   'bg-green-500/10  text-green-400  border-green-500/30',
-  inactive: 'bg-slate-500/10  text-slate-400 border-slate-500/30',
+  inactive: 'bg-slate-500/10  text-[var(--color-text-muted)] border-slate-500/30',
   pending:  'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
   blocked:  'bg-red-500/10    text-red-400   border-red-500/30',
 };

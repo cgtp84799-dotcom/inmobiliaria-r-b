@@ -3987,3 +3987,217 @@ h3, h4, h5, h6 { font-family: 'Inter', system-ui, sans-serif; font-weight: 600; 
 /* Opacity disminuida en modo light para no sangrar */
 :root:not(.dark) .portal-client .opacity-60 { opacity: 0.75; }
 :root:not(.dark) .portal-client .opacity-50 { opacity: 0.65; }
+
+/* ═══════════════════════════════════════════════════════════
+   POLISH FINAL — Refinamientos consistencia tema light/dark
+   Añadido en la auditoría 2026-05.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Inputs y selects con tokens — refinamiento global ──── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+textarea,
+select {
+  color: var(--color-text);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-faint);
+  opacity: 1;
+}
+
+/* ── Card-soft refinada (la usa varios paneles) ─────────── */
+.card-soft {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-soft:hover {
+  border-color: var(--color-divider);
+}
+
+/* ── Track de barra de completitud ──────────────────────── */
+.completion-track {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-inner-card);
+  overflow: hidden;
+}
+
+/* ── Stat pill (perfil) ─────────────────────────────────── */
+.stat-pill {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* ── Línea divisora de sección ──────────────────────────── */
+.section-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+/* ── Botones primarios consistentes (usar .btn-gold) ────── */
+.btn-gold {
+  background: var(--color-gold);
+  color: var(--color-bg);
+  font-weight: 700;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.18);
+}
+.btn-gold:hover:not(:disabled) {
+  background: var(--color-gold-soft);
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.24);
+}
+.btn-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Mejoras responsive del portal cliente ──────────────── */
+@media (max-width: 640px) {
+  .portal-client .portal-main {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  /* Tabs scrolleables sin barra de scroll fea */
+  .portal-tabs__scroll {
+    scrollbar-width: none;
+  }
+  .portal-tabs__scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Inputs con tokens dentro del portal cliente ────────── */
+.portal-client input[type="text"],
+.portal-client input[type="email"],
+.portal-client input[type="tel"],
+.portal-client input[type="password"],
+.portal-client input[type="number"],
+.portal-client input[type="date"],
+.portal-client input[type="time"],
+.portal-client textarea,
+.portal-client select {
+  background: var(--color-input-bg);
+  border-color: var(--color-input-border);
+  color: var(--color-text);
+}
+.portal-client input:focus,
+.portal-client textarea:focus,
+.portal-client select:focus {
+  border-color: var(--color-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-input-focus);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   POLISH FINAL — Refinamientos consistencia tema light/dark
+   Añadido en la auditoría 2026-05.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Inputs y selects con tokens — refinamiento global ──── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+textarea,
+select {
+  color: var(--color-text);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-faint);
+  opacity: 1;
+}
+
+/* ── Card-soft refinada (la usa varios paneles) ─────────── */
+.card-soft {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-soft:hover {
+  border-color: var(--color-divider);
+}
+
+/* ── Track de barra de completitud ──────────────────────── */
+.completion-track {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-inner-card);
+  overflow: hidden;
+}
+
+/* ── Stat pill (perfil) ─────────────────────────────────── */
+.stat-pill {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* ── Línea divisora de sección ──────────────────────────── */
+.section-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+/* ── Botones primarios consistentes (.btn-gold) ─────────── */
+.btn-gold {
+  background: var(--color-gold);
+  color: var(--color-bg);
+  font-weight: 700;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.18);
+}
+.btn-gold:hover:not(:disabled) {
+  background: var(--color-gold-soft);
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.24);
+}
+.btn-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Mejoras responsive del portal cliente ──────────────── */
+@media (max-width: 640px) {
+  .portal-client .portal-main {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  .portal-tabs__scroll {
+    scrollbar-width: none;
+  }
+  .portal-tabs__scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Inputs con tokens dentro del portal cliente ────────── */
+.portal-client input[type="text"],
+.portal-client input[type="email"],
+.portal-client input[type="tel"],
+.portal-client input[type="password"],
+.portal-client input[type="number"],
+.portal-client input[type="date"],
+.portal-client input[type="time"],
+.portal-client textarea,
+.portal-client select {
+  background: var(--color-input-bg);
+  border-color: var(--color-input-border);
+  color: var(--color-text);
+}
+.portal-client input:focus,
+.portal-client textarea:focus,
+.portal-client select:focus {
+  border-color: var(--color-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-input-focus);
+}

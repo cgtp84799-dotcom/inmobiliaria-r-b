@@ -13,6 +13,12 @@ const TX = {
 };
 
 const ST = {
+  // Canónicos (enum PROPERTY_STATUS)
+  published: 'DISPONIBLE',
+  reserved: 'RESERVADA',
+  sold: 'VENDIDA',
+  rented: 'ARRENDADA',
+  // Aliases legacy
   disponible: 'DISPONIBLE',
   reservada: 'RESERVADA',
   vendida: 'VENDIDA',
@@ -55,8 +61,6 @@ export default function PropertyClientPrint({ property, onClose }) {
   const docRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [, setScale] = useState(1);
-
-  // ★ FIX rules-of-hooks: hooks deben llamarse SIEMPRE en el mismo orden.
   // Antes: `if (!property) return null;` antes de useMemo/useEffect → bug.
   // Ahora: computamos con fallback seguro y el early return va AL FINAL,
   // justo antes del render (pero después de todos los hooks).
@@ -82,7 +86,7 @@ export default function PropertyClientPrint({ property, onClose }) {
   const txLabel = TX[safeProperty.transactionType] ?? 'PROPIEDAD';
   const stLabel = ST[safeProperty.status] ?? (safeProperty.status || '').toUpperCase();
   const txCls = `chip-${safeProperty.transactionType || 'venta'}`;
-  const stCls = `chip-${safeProperty.status || 'disponible'}`;
+  const stCls = `chip-${safeProperty.status || 'published'}`;
   const isArriendo = safeProperty.transactionType === 'arriendo';
 
   const loc = [
@@ -174,8 +178,6 @@ export default function PropertyClientPrint({ property, onClose }) {
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, [property]);
-
-  // ★ Early return AQUÍ (después de todos los hooks) — cumple rules-of-hooks
   if (!property) return null;
 
   const handleDownload = async () => {

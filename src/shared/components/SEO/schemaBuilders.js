@@ -1,3 +1,4 @@
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 // src/shared/components/SEO/schemaBuilders.js
 // ─────────────────────────────────────────────────────────────
 // Factorías puras para generar objetos Schema.org.
@@ -12,13 +13,11 @@
 //   • buildReviewSchema() — nuevo, para reseñas individuales.
 //   • buildServiceSchema() — nuevo, para servicios jurídico-inmobiliarios.
 // ─────────────────────────────────────────────────────────────
-
-const BASE_URL      = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
 const COMPANY_PHONE = "+573105968202";
 const COMPANY_PHONE_2 = "+573206736391";
 const COMPANY_EMAIL = "inmojuridi09@gmail.com";
-const COMPANY_LOGO  = `${BASE_URL}/logo-ryb.png`;
+const COMPANY_LOGO  = `${BASE_URL}/logo-light.png`;
 const COMPANY_OG    = `${BASE_URL}/og-default.jpg`;
 
 const toAbsolute = (url) => {
@@ -324,7 +323,6 @@ export function buildLocalBusinessSchema() {
     "@type": "RealEstateAgent",
     "@id": `${BASE_URL}/#organization`,
     name: COMPANY_NAME,
-    // ✅ FIX: imagen OG correcta (1200×630) en vez del logo cuadrado (512×512)
     image: [COMPANY_OG, COMPANY_LOGO],
     logo: COMPANY_LOGO,
     url: BASE_URL,

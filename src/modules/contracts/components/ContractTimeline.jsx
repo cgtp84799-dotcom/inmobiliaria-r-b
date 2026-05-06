@@ -34,7 +34,7 @@ export default function ContractTimeline({ contract, compact = false, onStageCli
 
   if (!sequence.length) {
     return (
-      <div className="text-slate-500 text-xs italic p-3">
+      <div className="text-[var(--color-text-muted)] text-xs italic p-3">
         Sin secuencia de etapas definida para este contrato.
       </div>
     );
@@ -56,12 +56,12 @@ export default function ContractTimeline({ contract, compact = false, onStageCli
                 className={`w-2 h-2 rounded-full ${
                   isDone ? 'bg-emerald-500' :
                   isCurrent ? 'bg-primary ring-2 ring-primary/30' :
-                  'bg-slate-700'
+                  'bg-[var(--color-input-bg)]'
                 }`}
                 title={getStageLabel(stage)}
               />
               {i < sequence.length - 1 && (
-                <div className={`w-3 h-px ${i < currentIdx ? 'bg-emerald-500' : 'bg-slate-700'}`} />
+                <div className={`w-3 h-px ${i < currentIdx ? 'bg-emerald-500' : 'bg-[var(--color-input-bg)]'}`} />
               )}
             </div>
           );
@@ -72,7 +72,7 @@ export default function ContractTimeline({ contract, compact = false, onStageCli
 
   return (
     <div className="relative pl-4">
-      <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-800" />
+      <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-[var(--color-surface)]" />
       <div className="space-y-3">
         {sequence.map((stage, i) => {
           const isDone = i < currentIdx;
@@ -89,7 +89,7 @@ export default function ContractTimeline({ contract, compact = false, onStageCli
                   ? 'bg-primary/20 border-primary ring-2 ring-offset-1 ring-offset-slate-950 ring-primary'
                   : isDone
                   ? 'bg-emerald-500/20 border-emerald-500/50'
-                  : 'bg-slate-900 border-slate-700'
+                  : 'bg-[var(--color-surface)] border-[var(--color-border)]'
               }`}>
                 {isDone ? (
                   <FaCheckCircle className="text-emerald-400 text-[8px]" />
@@ -101,7 +101,7 @@ export default function ContractTimeline({ contract, compact = false, onStageCli
                 <p className={`text-xs font-semibold ${
                   isCurrent ? 'text-primary' :
                   isDone ? 'text-emerald-400' :
-                  'text-slate-500'
+                  'text-[var(--color-text-muted)]'
                 }`}>
                   {getStageLabel(stage)}
                   {isCurrent && (

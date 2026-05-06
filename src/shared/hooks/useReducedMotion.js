@@ -1,4 +1,3 @@
-// FIX [PERFORMANCE]: respeta prefers-reduced-motion para animaciones.
 import { useEffect, useState } from 'react';
 
 export function useReducedMotion() {

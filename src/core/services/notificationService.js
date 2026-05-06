@@ -8,8 +8,9 @@ import {
 import { db, messagingReady } from '../config/firebase.config';
 
 
+import { SITE_URL as BASE_URL } from '../config/site.config';
+
 // ── VAPID ─────────────────────────────────────────────────────────────────────
-// ★ FIX: el CI anterior pasaba la VAPID como VITE_FIREBASE_VAPID_KEY pero el
 // código la leía como VITE_VAPID_KEY → push notifications rotas en prod.
 // Ahora aceptamos ambos nombres (primero el canónico, luego el legacy) para
 // evitar romper despliegues durante la transición.
@@ -24,10 +25,6 @@ if (!VAPID_KEY && typeof window !== 'undefined' && import.meta.env.PROD) {
     '[notificationService] VITE_VAPID_KEY no está configurada. Las notificaciones push no funcionarán.'
   );
 }
-
-const BASE_URL = 'https://inmobiliaria-ryb-y-asociados.com';
-
-
 // ── Tipos de notificación exportados ─────────────────────────────────────────
 export const NOTIF_TYPES = {
   // cliente portal
@@ -188,7 +185,7 @@ function buildEmailHtml(title, message, type) {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <img src="${BASE_URL}/logo.jpg.png" alt="R&B Inmobiliaria">
+        <img src="${BASE_URL}/logo-dark.png" alt="R&B Inmobiliaria">
         <span>Inmobiliaria &middot; Real Estate</span>
       </div>
       <div class="body">

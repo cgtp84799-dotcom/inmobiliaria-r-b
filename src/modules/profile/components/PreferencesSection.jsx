@@ -28,12 +28,12 @@ export default function PreferencesSection({ userData, theme, saving, onToggleTh
   };
 
   const Toggle = ({ id, label, description, checked, onToggle }) => (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-800 last:border-0">
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-[var(--color-border)] last:border-0">
       <div>
-        <label htmlFor={id} className="text-sm font-medium text-slate-200 cursor-pointer">
+        <label htmlFor={id} className="text-sm font-medium text-[var(--color-text)] cursor-pointer">
           {label}
         </label>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        {description && <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{description}</p>}
       </div>
       <button
         id={id}
@@ -42,11 +42,11 @@ export default function PreferencesSection({ userData, theme, saving, onToggleTh
         aria-checked={checked}
         onClick={onToggle}
         className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-          checked ? 'bg-primary' : 'bg-slate-700'
+          checked ? 'bg-primary' : 'bg-[var(--color-input-bg)]'
         }`}
       >
         <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-[var(--color-surface)] rounded-full shadow transition-transform ${
             checked ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
@@ -56,19 +56,19 @@ export default function PreferencesSection({ userData, theme, saving, onToggleTh
   );
 
   return (
-    <section aria-labelledby="preferences-heading" className="card-soft p-6 border border-slate-800">
-      <h2 id="preferences-heading" className="text-lg font-bold text-white mb-5 flex items-center gap-2">
+    <section aria-labelledby="preferences-heading" className="card-soft p-6 border border-[var(--color-border)]">
+      <h2 id="preferences-heading" className="text-lg font-bold text-[var(--color-text)] mb-5 flex items-center gap-2">
         <FaBell className="text-primary" />
         Preferencias
       </h2>
 
       {/* Tema */}
       <div className="mb-6">
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Apariencia</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Apariencia</h3>
         <button
           type="button"
           onClick={onToggleTheme}
-          className="flex items-center gap-4 w-full p-4 bg-slate-800/50 hover:bg-slate-800 rounded-xl border border-slate-700 transition-all"
+          className="flex items-center gap-4 w-full p-4 bg-[var(--color-surface)]/50 hover:bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] transition-all"
         >
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             {theme === 'dark' ? (
@@ -78,10 +78,10 @@ export default function PreferencesSection({ userData, theme, saving, onToggleTh
             )}
           </div>
           <div className="text-left">
-            <p className="text-sm font-medium text-slate-200">
+            <p className="text-sm font-medium text-[var(--color-text)]">
               Tema {theme === 'dark' ? 'oscuro' : 'claro'}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[var(--color-text-muted)]">
               Clic para cambiar a tema {theme === 'dark' ? 'claro' : 'oscuro'}
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function PreferencesSection({ userData, theme, saving, onToggleTh
 
       {/* Notificaciones */}
       <div>
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Notificaciones</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Notificaciones</h3>
         <div className="space-y-0">
           <Toggle
             id="pref-email"

@@ -16,8 +16,8 @@ export default function AgentPerformanceChart({ monthlyData = [], loading = fals
       <div className="h-48 flex items-end gap-3 px-2 animate-pulse">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="flex-1 flex flex-col gap-1 items-center">
-            <div className="w-full bg-slate-800 rounded-t" style={{ height: `${30 + i * 12}px` }} />
-            <div className="w-8 h-2 bg-slate-800 rounded" />
+            <div className="w-full bg-[var(--color-surface)] rounded-t" style={{ height: `${30 + i * 12}px` }} />
+            <div className="w-8 h-2 bg-[var(--color-surface)] rounded" />
           </div>
         ))}
       </div>
@@ -35,10 +35,10 @@ export default function AgentPerformanceChart({ monthlyData = [], loading = fals
     <div className="w-full">
       {/* Leyenda */}
       <div className="flex items-center gap-4 mb-3">
-        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+        <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
           <span className="w-3 h-3 rounded-sm bg-blue-500/70 inline-block" /> Visitas
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+        <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
           <span className="w-3 h-3 rounded-sm bg-primary/70 inline-block" /> Contratos
         </span>
       </div>

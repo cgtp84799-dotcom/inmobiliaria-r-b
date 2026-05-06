@@ -45,7 +45,7 @@ export default function NotificationBell() {
               exit={{ scale: 0 }}
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-0.5
-                bg-red-500 text-white text-[10px] font-bold rounded-full
+                bg-red-500 text-[var(--color-text)] text-[10px] font-bold rounded-full
                 flex items-center justify-center leading-none"
             >
               {unreadCount > 9 ? '9+' : unreadCount}

@@ -66,8 +66,8 @@ export default function SectionFavoritos({
         <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4">
           <FaHeart className="text-rose-400 text-2xl" />
         </div>
-        <h3 className="text-white font-semibold mb-2">Aún no tienes favoritos</h3>
-        <p className="text-slate-400 text-sm mb-5">
+        <h3 className="text-[var(--color-text)] font-semibold mb-2">Aún no tienes favoritos</h3>
+        <p className="text-[var(--color-text-muted)] text-sm mb-5">
           Explora el catálogo y toca el corazón ❤️ en las propiedades que más te gusten.
         </p>
         <Link
@@ -84,9 +84,9 @@ export default function SectionFavoritos({
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-        <h2 className="text-lg font-bold text-white">
+        <h2 className="text-lg font-bold text-[var(--color-text)]">
           Mis favoritos{' '}
-          <span className="text-slate-500 font-normal text-sm">({favProps.length})</span>
+          <span className="text-[var(--color-text-muted)] font-normal text-sm">({favProps.length})</span>
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           {onToggleCompare && favProps.length >= 2 && (
@@ -95,7 +95,7 @@ export default function SectionFavoritos({
               className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition ${
                 compareMode
                   ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                  : 'text-slate-400 border-slate-700/60 hover:text-white hover:border-slate-600'
+                  : 'text-[var(--color-text-muted)] border-[var(--color-border)]/60 hover:text-[var(--color-text)] hover:border-slate-600'
               }`}
             >
               <FaBalanceScale className="text-[10px]" />
@@ -130,14 +130,14 @@ export default function SectionFavoritos({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={{ duration: 0.2 }}
-                className={`bg-slate-900/60 border rounded-2xl overflow-hidden transition group ${
+                className={`bg-[var(--color-surface)]/60 border rounded-2xl overflow-hidden transition group ${
                   isSelected
                     ? 'border-blue-500/50 ring-1 ring-blue-500/20'
-                    : 'border-slate-800/60 hover:border-slate-700'
+                    : 'border-[var(--color-border)]/60 hover:border-[var(--color-border)]'
                 }`}
               >
                 {/* Imagen */}
-                <div className="relative h-44 bg-slate-800 overflow-hidden">
+                <div className="relative h-44 bg-[var(--color-surface)] overflow-hidden">
                   {p.images?.[0] ? (
                     <img
                       src={p.images[0]}
@@ -146,7 +146,7 @@ export default function SectionFavoritos({
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <FaHome className="text-slate-700 text-3xl" />
+                      <FaHome className="text-[var(--color-text-faint)] text-3xl" />
                     </div>
                   )}
 
@@ -154,7 +154,7 @@ export default function SectionFavoritos({
                   <button
                     onClick={() => onRemoveFavorite(p.id)}
                     title="Quitar de favoritos"
-                    className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 text-rose-400 hover:text-white hover:bg-rose-600 transition"
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-[var(--color-bg)]/80 text-rose-400 hover:text-[var(--color-text)] hover:bg-rose-600 transition"
                   >
                     <FaHeart className="text-xs" />
                   </button>
@@ -165,8 +165,8 @@ export default function SectionFavoritos({
                       onClick={() => onToggleCompare && onToggleCompare(p.id)}
                       className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
                         isSelected
-                          ? 'bg-blue-500 border-blue-400 text-white'
-                          : 'bg-slate-950/70 border-slate-500 text-transparent hover:border-blue-400'
+                          ? 'bg-blue-500 border-blue-400 text-[var(--color-text)]'
+                          : 'bg-[var(--color-bg)]/70 border-slate-500 text-transparent hover:border-blue-400'
                       }`}
                     >
                       {isSelected && <span className="text-[9px] font-bold">✓</span>}
@@ -176,10 +176,10 @@ export default function SectionFavoritos({
 
                 {/* Info */}
                 <div className="p-4">
-                  <p className="text-white font-semibold text-sm truncate">{p.title}</p>
+                  <p className="text-[var(--color-text)] font-semibold text-sm truncate">{p.title}</p>
 
                   {cityText && (
-                    <p className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-0.5 flex items-center gap-1">
                       <FaMapMarkerAlt className="text-[9px]" /> {cityText}
                     </p>
                   )}
@@ -190,7 +190,7 @@ export default function SectionFavoritos({
                     </p>
                   )}
 
-                  <div className="flex items-center gap-3 mt-2 text-slate-500 text-xs">
+                  <div className="flex items-center gap-3 mt-2 text-[var(--color-text-muted)] text-xs">
                     {rooms && (
                       <span className="flex items-center gap-1">
                         <FaBed className="text-[10px]" /> {rooms} hab.
@@ -232,7 +232,7 @@ export default function SectionFavoritos({
 
       {/* Footer de info */}
       {favProps.length > 0 && (
-        <p className="text-center text-slate-600 text-xs mt-5">
+        <p className="text-center text-[var(--color-text-faint)] text-xs mt-5">
           {favProps.length} propiedad{favProps.length !== 1 ? 'es' : ''} guardada{favProps.length !== 1 ? 's' : ''} · Haz clic en ❤️ para eliminar
         </p>
       )}

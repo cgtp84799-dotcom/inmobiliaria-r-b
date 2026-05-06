@@ -1,6 +1,5 @@
 // src/core/config/constants.js
 //
-// ★ FIX (auditoría): este archivo ANTES definía constantes propias para roles
 // y estados de contratos que NO coincidían con el sistema real:
 //   - USER_ROLES.AGENT/LAWYER/CLIENT  → real es ADMIN/MEMBER/VIEWER
 //   - CONTRACT_STATUS.PENDING_SIGNATURE → real es 'borrador' / 'vigente' / etc.

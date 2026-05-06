@@ -15,10 +15,10 @@ export default function AgentActivityFeed({ activities = [], loading = false }) 
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
           <div key={i} className="flex gap-3 animate-pulse">
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex-shrink-0" />
+            <div className="w-8 h-8 rounded-full bg-[var(--color-surface)] flex-shrink-0" />
             <div className="flex-1 space-y-1.5">
-              <div className="h-3 bg-slate-800 rounded w-3/4" />
-              <div className="h-2.5 bg-slate-800 rounded w-1/2" />
+              <div className="h-3 bg-[var(--color-surface)] rounded w-3/4" />
+              <div className="h-2.5 bg-[var(--color-surface)] rounded w-1/2" />
             </div>
           </div>
         ))}
@@ -28,7 +28,7 @@ export default function AgentActivityFeed({ activities = [], loading = false }) 
 
   if (!activities.length) {
     return (
-      <div className="py-10 text-center text-slate-500">
+      <div className="py-10 text-center text-[var(--color-text-muted)]">
         <FaClock className="mx-auto text-3xl mb-2 opacity-30" />
         <p className="text-sm">Sin actividad reciente</p>
       </div>
@@ -38,7 +38,7 @@ export default function AgentActivityFeed({ activities = [], loading = false }) 
   return (
     <div className="relative">
       {/* Línea vertical */}
-      <div className="absolute left-3.5 top-0 bottom-0 w-px bg-slate-800" />
+      <div className="absolute left-3.5 top-0 bottom-0 w-px bg-[var(--color-surface)]" />
 
       <AnimatePresence initial={false}>
         <div className="space-y-1">
@@ -62,9 +62,9 @@ function ActivityItem({ item, index }) {
     completed: <FaCheckCircle className="text-primary"    size={10} />,
     rejected:  <FaTimesCircle className="text-red-400"    size={10} />,
     active:    <FaCheckCircle className="text-green-400"  size={10} />,
-    expired:   <FaTimesCircle className="text-slate-500"  size={10} />,
+    expired:   <FaTimesCircle className="text-[var(--color-text-muted)]"  size={10} />,
     cancelled: <FaTimesCircle className="text-red-400"    size={10} />,
-    draft:     <FaHourglass   className="text-slate-400"  size={10} />,
+    draft:     <FaHourglass   className="text-[var(--color-text-muted)]"  size={10} />,
   }[item.status] ?? null;
 
   const timeAgo = item.date ? getTimeAgo(item.date) : '—';
@@ -74,7 +74,7 @@ function ActivityItem({ item, index }) {
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.03, duration: 0.25 }}
-      className="flex gap-3 pl-1 py-2 hover:bg-slate-800/30 rounded-xl
+      className="flex gap-3 pl-1 py-2 hover:bg-[var(--color-surface)]/30 rounded-xl
         px-2 transition-colors group"
     >
       {/* Ícono del tipo */}
@@ -87,12 +87,12 @@ function ActivityItem({ item, index }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-slate-200 text-xs font-semibold truncate">{item.title}</p>
-            <p className="text-slate-500 text-[11px] truncate">{item.client}</p>
+            <p className="text-[var(--color-text)] text-xs font-semibold truncate">{item.title}</p>
+            <p className="text-[var(--color-text-muted)] text-[11px] truncate">{item.client}</p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {statusIcon}
-            <span className="text-slate-600 text-[10px] whitespace-nowrap">{timeAgo}</span>
+            <span className="text-[var(--color-text-faint)] text-[10px] whitespace-nowrap">{timeAgo}</span>
           </div>
         </div>
         {item.value && (
@@ -101,7 +101,7 @@ function ActivityItem({ item, index }) {
           </p>
         )}
         {!item.value && item.agent && (
-          <p className="text-slate-600 text-[10px] mt-0.5 truncate">Agente: {item.agent}</p>
+          <p className="text-[var(--color-text-faint)] text-[10px] mt-0.5 truncate">Agente: {item.agent}</p>
         )}
       </div>
     </motion.div>

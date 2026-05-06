@@ -18,15 +18,13 @@ import {
 import { auth, db } from '../../../core/config/firebase.config';
 import { useAuth } from '../../../core/contexts/AuthContext';
 import { useTheme } from '../../../core/contexts/ThemeContext';
-import { PRIVATE_ROUTES } from '../../../core/config/routes.config';
+import { PRIVATE_ROUTES, PUBLIC_ROUTES } from '../../../core/config/routes.config';
 import { USER_ROLES } from '../../users/types/user.types';
+import { requestEmailVerification } from '../services/emailVerification.service';
 import toast from 'react-hot-toast';
 
 
 const googleProvider = new GoogleAuthProvider();
-
-
-// ★ FIX (auditoría — duplicación de cliente al completar/omitir onboarding):
 // Antes esta función buscaba con `email == email` (sin normalizar), pero el
 // portal busca con `email == norm(email)` (lowercase + trim). Si el usuario
 // se registra con "Pedro@Mail.com" pero el portal lo busca como "pedro@mail.com",
@@ -48,14 +46,32 @@ async function ensureClientDocs(user, extra = {}) {
   if (uSnap.exists()) {
     const d = uSnap.data();
     if (d.role === USER_ROLES.ADMIN || d.role === USER_ROLES.MEMBER) return;
-    if (d.status === 'pending' && d.role === USER_ROLES.VIEWER)
-      await updateDoc(uRef, { status: 'active', updatedAt: serverTimestamp() });
+    // Sincronizar emailVerified si Auth dice que está verificado pero
+    // el doc todavía dice que no (caso típico tras click en el link).
+    const updates = {};
+    if (d.status === 'pending' && d.role === USER_ROLES.VIEWER) {
+      updates.status = 'active';
+    }
+    if (user.emailVerified && d.emailVerified !== true) {
+      updates.emailVerified = true;
+      updates.emailVerifiedAt = serverTimestamp();
+    }
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = serverTimestamp();
+      await updateDoc(uRef, updates);
+    }
   } else {
+    // Cuentas Google ya vienen verificadas. Cuentas password=false hasta
+    // que el usuario haga click en el email.
+    const verified = user.emailVerified === true;
     await setDoc(uRef, {
       uid: user.uid, role: USER_ROLES.VIEWER, status: 'active',
       displayName: extra.displayName ?? user.displayName ?? email.split('@')[0],
       phone: extra.phone ?? '', photoURL: user.photoURL ?? null,
-      favorites: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      favorites: [],
+      emailVerified: verified,
+      ...(verified ? { emailVerifiedAt: serverTimestamp() } : {}),
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
   }
 
@@ -238,8 +254,8 @@ function LeftPanel({ dark }) {
   ];
 
   const featureCard = dark
-    ? 'bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.07] hover:border-white/[0.12]'
-    : 'bg-white/50 border border-white/70 shadow-sm hover:bg-white/75 hover:border-white/90';
+    ? 'bg-[var(--color-surface)]/[0.04] border border-white/[0.07] hover:bg-[var(--color-surface)]/[0.07] hover:border-white/[0.12]'
+    : 'bg-[var(--color-surface)]/50 border border-white/70 shadow-sm hover:bg-[var(--color-surface)]/75 hover:border-white/90';
 
   const iconWrap = dark
     ? 'bg-amber-400/10 text-amber-400'
@@ -274,13 +290,13 @@ function LeftPanel({ dark }) {
           className="flex items-start justify-between"
         >
           <img
-            src={dark ? '/logo.jpg.png' : '/logo-ryb.png'}
+            src={dark ? '/logo-dark.png' : '/logo-light.png'}
             alt="Rincón Bedoya & Asociados"
             className="h-12 xl:h-14 w-auto object-contain"
             onError={e => { e.currentTarget.style.display='none'; }}
           />
           <div className={`flex items-center gap-2 rounded-full px-3.5 py-2 text-[11px] font-medium
-            ${dark ? 'bg-white/6 text-white/45 border border-white/8' : 'bg-black/5 text-slate-500 border border-black/8'}`}>
+            ${dark ? 'bg-[var(--color-surface)]/6 text-[var(--color-text)]/45 border border-white/8' : 'bg-black/5 text-[var(--color-text-muted)] border border-black/8'}`}>
             <FaMapMarkerAlt className={`text-[10px] ${dark ? 'text-amber-400/70' : 'text-amber-700/70'}`}/>
             Anserma, Caldas
           </div>
@@ -299,7 +315,7 @@ function LeftPanel({ dark }) {
             </p>
             <h2
               className={`font-serif leading-[0.93] tracking-tight
-                ${dark ? 'text-white' : 'text-slate-900'}`}
+                ${dark ? 'text-[var(--color-text)]' : 'text-slate-900'}`}
               style={{ fontSize: 'clamp(2.4rem, 3.2vw, 4rem)' }}
             >
               Todo tu proceso<br/>
@@ -308,7 +324,7 @@ function LeftPanel({ dark }) {
             </h2>
 
             <p className={`mt-5 text-sm xl:text-[15px] leading-[1.8] max-w-sm
-              ${dark ? 'text-white/42' : 'text-slate-500'}`}>
+              ${dark ? 'text-[var(--color-text)]/42' : 'text-[var(--color-text-muted)]'}`}>
               Accede a tus propiedades guardadas, el estado de tus visitas, tus documentos y el seguimiento de tu proceso — todo desde aquí, sin intermediarios.
             </p>
           </motion.div>
@@ -334,12 +350,12 @@ function LeftPanel({ dark }) {
                 </div>
                 {/* Título */}
                 <p className={`text-[13px] font-bold leading-snug mb-1.5
-                  ${dark ? 'text-white/88' : 'text-slate-800'}`}>
+                  ${dark ? 'text-[var(--color-text)]/88' : 'text-slate-800'}`}>
                   {b.title}
                 </p>
                 {/* Descripción */}
                 <p className={`text-[11px] leading-[1.6]
-                  ${dark ? 'text-white/35' : 'text-slate-500'}`}>
+                  ${dark ? 'text-[var(--color-text)]/35' : 'text-[var(--color-text-muted)]'}`}>
                   {b.desc}
                 </p>
               </motion.div>
@@ -357,8 +373,8 @@ function LeftPanel({ dark }) {
           >
             <FaShieldAlt className={`flex-shrink-0 text-base ${dark ? 'text-amber-400/70' : 'text-amber-700/70'}`} />
             <p className={`text-[11.5px] leading-[1.55]
-              ${dark ? 'text-white/45' : 'text-slate-500'}`}>
-              <span className={`font-semibold ${dark ? 'text-white/70' : 'text-slate-700'}`}>
+              ${dark ? 'text-[var(--color-text)]/45' : 'text-[var(--color-text-muted)]'}`}>
+              <span className={`font-semibold ${dark ? 'text-[var(--color-text)]/70' : 'text-[var(--color-text-faint)]'}`}>
                 +15 años de experiencia.
               </span>{' '}
               Respaldo jurídico especializado en cada proceso de compra, venta y arriendo en Caldas.
@@ -372,7 +388,7 @@ function LeftPanel({ dark }) {
           initial={{ opacity:0 }} animate={{ opacity:1 }}
           transition={{ delay:0.9, duration:0.6 }}
           className={`flex items-center justify-between text-[11px]
-            ${dark ? 'text-white/22' : 'text-slate-400'}`}
+            ${dark ? 'text-[var(--color-text)]/22' : 'text-[var(--color-text-muted)]'}`}
         >
           <span>© {new Date().getFullYear()} Rincón Bedoya & Asociados</span>
           <Link to="/politica-privacidad"
@@ -399,7 +415,7 @@ function Field({ icon: Icon, type='text', placeholder, value, onChange, error, r
           className={`w-full rounded-2xl pl-11 ${rightEl?'pr-11':'pr-4'} py-3.5 text-sm
             border-0 outline-none ring-1 transition-all duration-200 backdrop-blur-sm
             ${dark
-              ? `bg-white/5 text-white placeholder-white/20 ring-white/8 focus:ring-amber-400/40 focus:bg-white/8`
+              ? `bg-[var(--color-surface)]/5 text-[var(--color-text)] placeholder-white/20 ring-white/8 focus:ring-amber-400/40 focus:bg-[var(--color-surface)]/8`
               : `bg-black/4 text-slate-900 placeholder-slate-400/60 ring-slate-900/10 focus:ring-amber-600/40 focus:bg-black/6`}
             ${error ? (dark?'!ring-red-400/50':'!ring-red-400/60') : ''}`}/>
         {rightEl && <div className="absolute right-4 top-1/2 -translate-y-1/2">{rightEl}</div>}
@@ -474,15 +490,34 @@ export default function ClientAuthPage() {
     setBusy(true);
     try {
       if (mode === 'login') {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
-        await ensureClientDocs(auth.currentUser);
+        const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+        await ensureClientDocs(cred.user);
+        // Si la cuenta no está verificada (email/password) → mandar a verificación.
+        // Las cuentas creadas con Google ya vienen verificadas por Google.
+        const providerId = cred.user.providerData?.[0]?.providerId;
+        if (!cred.user.emailVerified && providerId === 'password') {
+          toast('Verifica tu email para acceder.', { icon: '✉️' });
+          navigate(PUBLIC_ROUTES.EMAIL_VERIFICATION, { replace: true });
+          return;
+        }
         toast.success('¡Bienvenido de nuevo!');
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await updateProfile(cred.user, { displayName: name.trim() });
-        await ensureClientDocs(cred.user, { displayName:name.trim(), phone:phone.trim() });
-        toast.success('¡Cuenta creada con éxito!');
-        navigate(PRIVATE_ROUTES.CLIENT_PORTAL, { replace:true });
+        await ensureClientDocs(cred.user, { displayName: name.trim(), phone: phone.trim() });
+        // Enviar email de verificación CUSTOM (no usa la plantilla de Firebase
+        // Auth, que no se puede personalizar).
+        // Importante: requestEmailVerification requiere ID token — el
+        // createUserWithEmailAndPassword ya nos deja la sesión activa.
+        try {
+          await requestEmailVerification();
+        } catch (verifyErr) {
+          console.error('[signup] requestEmailVerification:', verifyErr);
+          // No bloqueamos el flujo: el usuario puede reenviar desde la
+          // página de verificación.
+        }
+        toast.success('Cuenta creada. Revisa tu email para activarla.');
+        navigate(PUBLIC_ROUTES.EMAIL_VERIFICATION, { replace: true });
       }
     } catch (err) {
       toast.error(ERR[err.code] ?? 'Error inesperado. Intenta de nuevo.');
@@ -502,7 +537,7 @@ export default function ClientAuthPage() {
   }
 
   if (loading) return (
-    <div className={`min-h-screen flex items-center justify-center ${dark?'bg-slate-950':'bg-stone-50'}`}>
+    <div className={`min-h-screen flex items-center justify-center ${dark?'bg-[var(--color-bg)]':'bg-stone-50'}`}>
       <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}>
         <FaSpinner className="text-amber-500 text-2xl"/>
       </motion.div>
@@ -514,24 +549,24 @@ export default function ClientAuthPage() {
     : 'bg-[radial-gradient(ellipse_at_50%_0%,_#fffdf7_0%,_#f5f0e8_60%)]';
 
   const cardBg = dark
-    ? 'bg-slate-900/70 ring-1 ring-white/8 shadow-[0_40px_100px_rgba(0,0,0,0.65)]'
-    : 'bg-white/80 ring-1 ring-black/6 shadow-[0_40px_100px_rgba(15,23,42,0.15)]';
+    ? 'bg-[var(--color-surface)]/70 ring-1 ring-white/8 shadow-[0_40px_100px_rgba(0,0,0,0.65)]'
+    : 'bg-[var(--color-surface)]/80 ring-1 ring-black/6 shadow-[0_40px_100px_rgba(15,23,42,0.15)]';
 
-  const mutedColor = dark ? 'text-white/30' : 'text-slate-400';
-  const dividerColor = dark ? 'bg-white/8' : 'bg-slate-200/80';
+  const mutedColor = dark ? 'text-[var(--color-text)]/30' : 'text-[var(--color-text-muted)]';
+  const dividerColor = dark ? 'bg-[var(--color-surface)]/8' : 'bg-slate-200/80';
   const tabActiveCls = dark
     ? 'bg-amber-400 text-slate-950 shadow-[0_6px_20px_rgba(251,191,36,0.28)]'
-    : 'bg-amber-500 text-white shadow-[0_6px_20px_rgba(245,158,11,0.26)]';
-  const tabInactiveCls = dark ? 'text-white/35 hover:text-white/70' : 'text-slate-400 hover:text-slate-700';
+    : 'bg-amber-500 text-[var(--color-text)] shadow-[0_6px_20px_rgba(245,158,11,0.26)]';
+  const tabInactiveCls = dark ? 'text-[var(--color-text)]/35 hover:text-[var(--color-text)]/70' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-faint)]';
   const ctaBtn = dark
     ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 shadow-[0_16px_48px_rgba(251,191,36,0.26)]'
-    : 'bg-amber-500 text-white hover:bg-amber-600 shadow-[0_16px_48px_rgba(245,158,11,0.26)]';
+    : 'bg-amber-500 text-[var(--color-text)] hover:bg-amber-600 shadow-[0_16px_48px_rgba(245,158,11,0.26)]';
   const googleBtn = dark
-    ? 'bg-white/5 ring-1 ring-white/10 text-white hover:bg-white/10'
-    : 'bg-white ring-1 ring-slate-200 text-slate-800 hover:bg-slate-50';
+    ? 'bg-[var(--color-surface)]/5 ring-1 ring-white/10 text-[var(--color-text)] hover:bg-[var(--color-surface)]/10'
+    : 'bg-[var(--color-surface)] ring-1 ring-slate-200 text-slate-800 hover:bg-slate-50';
   const themeBtnCls = dark
-    ? 'bg-white/5 ring-1 ring-white/10 text-white/50 hover:text-white hover:bg-white/10'
-    : 'bg-black/4 ring-1 ring-black/8 text-slate-500 hover:text-slate-900 hover:bg-black/7';
+    ? 'bg-[var(--color-surface)]/5 ring-1 ring-white/10 text-[var(--color-text)]/50 hover:text-[var(--color-text)] hover:bg-[var(--color-surface)]/10'
+    : 'bg-black/4 ring-1 ring-black/8 text-[var(--color-text-muted)] hover:text-slate-900 hover:bg-black/7';
 
   return (
     <div className="min-h-screen transition-colors duration-500">
@@ -551,7 +586,7 @@ export default function ClientAuthPage() {
             {/* Mobile header */}
             <div className="flex items-center justify-between mb-7 lg:hidden">
               <Link to="/">
-                <img src={dark?'/logo.jpg.png':'/logo-ryb.png'} alt="Rincón Bedoya & Asociados"
+                <img src={dark?'/logo-dark.png':'/logo-light.png'} alt="Rincón Bedoya & Asociados"
                   className="h-10 w-auto object-contain"
                   onError={e => { e.currentTarget.style.display='none'; }}/>
               </Link>
@@ -575,7 +610,7 @@ export default function ClientAuthPage() {
               <p className={`text-[10px] font-bold uppercase tracking-[0.4em] mb-2 ${dark?'text-amber-400/60':'text-amber-800/60'}`}>
                 Portal privado
               </p>
-              <h1 className={`font-serif text-3xl leading-tight ${dark?'text-white':'text-slate-900'}`}>
+              <h1 className={`font-serif text-3xl leading-tight ${dark?'text-[var(--color-text)]':'text-slate-900'}`}>
                 Tu espacio <span className={dark?'text-amber-400':'text-amber-600'}>inmobiliario</span> personal.
               </h1>
             </div>
@@ -587,7 +622,7 @@ export default function ClientAuthPage() {
               <p className={`text-[10px] font-bold uppercase tracking-[0.4em] mb-2 ${dark?'text-amber-400/60':'text-amber-800/60'}`}>
                 Acceso privado
               </p>
-              <h2 className={`font-serif text-3xl xl:text-4xl leading-tight ${dark?'text-white':'text-slate-900'}`}>
+              <h2 className={`font-serif text-3xl xl:text-4xl leading-tight ${dark?'text-[var(--color-text)]':'text-slate-900'}`}>
                 {mode === 'login' ? 'Bienvenido de nuevo.' : 'Crea tu acceso privado.'}
               </h2>
             </motion.div>
@@ -600,14 +635,14 @@ export default function ClientAuthPage() {
               className={`rounded-[28px] p-5 sm:p-6 backdrop-blur-2xl transition-colors duration-300 ${cardBg}`}>
 
               {/* Tabs */}
-              <div className={`relative grid grid-cols-2 rounded-[16px] p-1 mb-5 ${dark?'bg-white/5':'bg-slate-100/90'}`}>
+              <div className={`relative grid grid-cols-2 rounded-[16px] p-1 mb-5 ${dark?'bg-[var(--color-surface)]/5':'bg-slate-100/90'}`}>
                 <motion.div layout transition={{ type:'spring', stiffness:340, damping:28 }}
                   className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl ${tabActiveCls}
                     ${mode==='login'?'left-1':'left-[calc(50%+2px)]'}`}/>
                 {[['login','Iniciar sesión'],['register','Crear cuenta']].map(([m, label]) => (
                   <button key={m} type="button" onClick={() => switchMode(m)}
                     className={`relative z-10 py-3 rounded-xl text-sm font-semibold transition-colors duration-200
-                      ${mode===m ? (dark?'text-slate-950':'text-white') : tabInactiveCls}`}>
+                      ${mode===m ? (dark?'text-slate-950':'text-[var(--color-text)]') : tabInactiveCls}`}>
                     {label}
                   </button>
                 ))}
@@ -699,7 +734,7 @@ export default function ClientAuthPage() {
             {/* Bottom links */}
             <div className="mt-5 flex items-center justify-between">
               <Link to="/catalogo"
-                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-all duration-200 ${dark?'text-white/28 hover:text-white/55':'text-slate-400 hover:text-slate-600'}`}>
+                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-all duration-200 ${dark?'text-[var(--color-text)]/28 hover:text-[var(--color-text)]/55':'text-[var(--color-text-muted)] hover:text-[var(--color-text-faint)]'}`}>
                 Ver catálogo
                 <FaArrowRight className="text-[9px]"/>
               </Link>

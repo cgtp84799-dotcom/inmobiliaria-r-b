@@ -19,7 +19,6 @@ export const analyticsService = {
   async getGeneralStats() {
     try {
       // ── Conteos totales con getCountFromServer (1 read cada uno) ──────────
-      // ★ FIX (auditoría):
       //   - contratos: el campo es `statusGeneral`, no `status`. Estados reales:
       //     vigente / borrador / pausado / vencido / finalizado / cancelado.
       //     "pendingsignature" no existe → usamos 'borrador' como pendiente.
@@ -40,9 +39,12 @@ export const analyticsService = {
         getCountFromServer(collection(db, "properties")),
         getCountFromServer(collection(db, "clients")),
         getCountFromServer(collection(db, "contracts")),
-        getCountFromServer(query(collection(db, "properties"), where("status", "==", "disponible"))),
-        getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["vendida", "sold"]))),
-        getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["arrendada", "rented"]))),
+        // Disponibles = canónico 'published' + aliases legacy
+        getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["published", "disponible", "active", "available"]))),
+        // Vendidas = canónico 'sold' + alias legacy
+        getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["sold", "vendida"]))),
+        // Arrendadas = canónico 'rented' + alias legacy
+        getCountFromServer(query(collection(db, "properties"), where("status", "in",  ["rented", "arrendada"]))),
         getCountFromServer(query(collection(db, "clients"),    where("estado", "in", ["activo", "active"]))),
         getCountFromServer(query(collection(db, "clients"),    where("tipoCliente", "==", "lead"))),
         getCountFromServer(query(collection(db, "contracts"),  where("statusGeneral", "in", ["vigente", "active", "activo"]))),
@@ -93,9 +95,9 @@ export const analyticsService = {
 
         return {
           totalProperties:     properties.size,
-          availableProperties: propertiesData.filter(p => p.status === "disponible").length,
-          soldProperties:      propertiesData.filter(p => ["vendida","sold"].includes(p.status)).length,
-          rentedProperties:    propertiesData.filter(p => ["arrendada","rented"].includes(p.status)).length,
+          availableProperties: propertiesData.filter(p => ["published","disponible","available","active"].includes(p.status)).length,
+          soldProperties:      propertiesData.filter(p => ["sold","vendida"].includes(p.status)).length,
+          rentedProperties:    propertiesData.filter(p => ["rented","arrendada"].includes(p.status)).length,
           totalClients:        clients.size,
           activeClients:       clientsData.filter(c => ['activo', 'active'].includes(c.estado)).length,
           leads:               clientsData.filter(c => c.tipoCliente === "lead").length,

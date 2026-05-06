@@ -1,8 +1,7 @@
-// FIX [CALIDAD]: feedback visible al fallar carga y animaciones adaptadas a reduced motion.
 // src/modules/public/pages/PropertyDetailPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Detalle editorial — Inmobiliaria Rincón Bedoya & Asociados
-// · Diseño tokenizado (sin bg-slate-900 ni chispero de colores)
+// · Diseño tokenizado (sin bg-[var(--color-surface)] ni chispero de colores)
 // · SEO robusto: OG con imagen real de la propiedad
 // · Schema.org completo (RealEstateListing + Breadcrumbs + Residence)
 // · Twitter cards, locale, alt text, OG price tags
@@ -32,11 +31,11 @@ import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
 import { useFavorites } from "../../clients/hooks/useFavorites";
 import { useReducedMotion } from "../../../shared/hooks/useReducedMotion";
 
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
+
 /* ═══════════════════════════════════════════════════════════ */
 /*  CONSTANTS                                                   */
 /* ═══════════════════════════════════════════════════════════ */
-
-const BASE_URL      = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
 const COMPANY_PHONE = "573105968202";
 const DEFAULT_OG    = `${BASE_URL}/og-default.jpg`;
@@ -224,6 +223,7 @@ const PropertyDetailPage = () => {
       setProperty(null);
     } finally {
       setLoading(false);
+      if (typeof window !== "undefined") window.prerenderReady = true;
     }
   };
 

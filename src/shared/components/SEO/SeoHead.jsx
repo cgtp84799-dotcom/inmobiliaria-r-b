@@ -24,10 +24,10 @@
 // ─────────────────────────────────────────────────────────────
 
 import { Helmet } from "react-helmet-async";
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME = "Inmobiliaria Rincón Bedoya y Asociados";
-const DEFAULT_IMAGE = `${BASE_URL}/logo-ryb.png`;
+const DEFAULT_IMAGE = `${BASE_URL}/logo-light.png`;
 const DEFAULT_IMAGE_ALT = "Inmobiliaria Rincón Bedoya y Asociados";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -207,10 +207,7 @@ export default function SeoHead({
       <meta name="image" content={finalImage} />
 
       {/* ── JSON-LD ─────────────────────────────────────────── */}
-      {/* ★ FIX (auditoría): escapar </script> dentro del JSON para evitar
-          que un valor de descripción que contenga ese substring rompa el
-          parsing del HTML. Es una salvaguarda defensiva incluso si los
-          builders de schema no introducen el patrón hoy. */}
+      {}
       {jsonLdArray.map((json, i) => (
         <script key={`ld-${i}`} type="application/ld+json">
           {JSON.stringify(json).replace(/<\/script>/gi, '<\\/script>')}

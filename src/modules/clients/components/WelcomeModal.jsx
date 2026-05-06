@@ -36,7 +36,6 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   async function handleFinish() {
     setSaving(true);
     try {
-      // ★ FIX (auditoría — duplicación reportada): antes de actualizar el doc,
       // forzamos un resolveClientByEmail que dedupera duplicados creados por
       // race conditions previas. Esto garantiza que escribimos en EL doc real,
       // no en uno fantasma que el panel mostraría como cliente separado.
@@ -92,7 +91,6 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   }
 
   async function handleSkip() {
-    // ★ FIX (auditoría — duplicación reportada): igual que handleFinish,
     // forzamos dedup antes de marcar onboardingDone.
     try {
       const { resolveClientByEmail } = await import('../services/client.portal.service');
@@ -115,26 +113,26 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
   }
 
   const inputClass = `
-    w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 text-sm
-    text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60
+    w-full bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-xl px-4 py-3 text-sm
+    text-[var(--color-text)] placeholder-slate-500 focus:outline-none focus:border-amber-500/60
     focus:ring-1 focus:ring-amber-500/30 transition
   `;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-[var(--color-bg)]/80 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       />
 
       <motion.div
-        className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden"
+        className="relative z-10 w-full max-w-md bg-[var(--color-surface)] border border-[var(--color-border)]/60 rounded-2xl shadow-2xl overflow-hidden"
         initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       >
-        <div className="h-1 bg-slate-800">
+        <div className="h-1 bg-[var(--color-surface)]">
           <motion.div
             className="h-full bg-amber-500"
             animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
@@ -150,8 +148,8 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                   <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-3xl">👋</span>
                   </div>
-                  <h2 className="text-2xl font-bold text-white mb-2">¡Bienvenido al portal!</h2>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <h2 className="text-2xl font-bold text-[var(--color-text)] mb-2">¡Bienvenido al portal!</h2>
+                  <p className="text-[var(--color-text-muted)] text-sm leading-relaxed">
                     Tarda menos de 2 minutos en configurar tu perfil para que podamos mostrarte
                     las propiedades que más te interesan.
                   </p>
@@ -163,9 +161,9 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                     { icon: '📄', text: 'Accede a tus contratos' },
                     { icon: '🔔', text: 'Recibe notificaciones personalizadas' },
                   ].map((f, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-slate-800/40 rounded-xl px-4 py-3">
+                    <div key={i} className="flex items-center gap-3 bg-[var(--color-surface)]/40 rounded-xl px-4 py-3">
                       <span className="text-base">{f.icon}</span>
-                      <span className="text-sm text-slate-300">{f.text}</span>
+                      <span className="text-sm text-[var(--color-text)]">{f.text}</span>
                     </div>
                   ))}
                 </div>
@@ -174,7 +172,7 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                   Configurar mi perfil <FaArrowRight className="text-xs" />
                 </button>
                 <button onClick={handleSkip}
-                  className="w-full mt-2 text-sm text-slate-500 hover:text-slate-400 py-2 transition">
+                  className="w-full mt-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-muted)] py-2 transition">
                   Omitir por ahora
                 </button>
               </motion.div>
@@ -187,23 +185,23 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                     <FaUser className="text-amber-400 text-sm" />
                   </div>
                   <div>
-                    <h3 className="text-white font-bold">Tus datos</h3>
-                    <p className="text-slate-500 text-xs">Para identificarte y contactarte</p>
+                    <h3 className="text-[var(--color-text)] font-bold">Tus datos</h3>
+                    <p className="text-[var(--color-text-muted)] text-xs">Para identificarte y contactarte</p>
                   </div>
                 </div>
                 <div className="space-y-3 mb-6">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Nombre completo</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">Nombre completo</label>
                     <div className="relative">
-                      <FaUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
+                      <FaUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-xs pointer-events-none" />
                       <input value={form.nombre} onChange={update('nombre')} placeholder="Tu nombre completo"
                         className={`${inputClass} pl-9`} autoComplete="name" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Teléfono (opcional)</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">Teléfono (opcional)</label>
                     <div className="relative">
-                      <FaPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
+                      <FaPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-xs pointer-events-none" />
                       <input value={form.telefono} onChange={update('telefono')} placeholder="Ej: 3001234567" type="tel"
                         className={`${inputClass} pl-9`} autoComplete="tel" />
                     </div>
@@ -211,7 +209,7 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setStep(0)}
-                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition">
+                    className="flex-1 py-3 rounded-xl border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-slate-600 text-sm transition">
                     Atrás
                   </button>
                   <button onClick={() => setStep(2)}
@@ -229,26 +227,26 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                     <FaHome className="text-amber-400 text-sm" />
                   </div>
                   <div>
-                    <h3 className="text-white font-bold">¿Qué buscas?</h3>
-                    <p className="text-slate-500 text-xs">Así encontramos lo que más te conviene</p>
+                    <h3 className="text-[var(--color-text)] font-bold">¿Qué buscas?</h3>
+                    <p className="text-[var(--color-text-muted)] text-xs">Así encontramos lo que más te conviene</p>
                   </div>
                 </div>
                 <div className="space-y-3 mb-6">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Zona de interés</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">Zona de interés</label>
                     <div className="relative">
-                      <FaMapMarkerAlt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none" />
+                      <FaMapMarkerAlt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-xs pointer-events-none" />
                       <input value={form.ubicacionInteres} onChange={update('ubicacionInteres')}
                         placeholder="Ej: Laureles, El Poblado, Envigado" className={`${inputClass} pl-9`} />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Presupuesto máximo (opcional)</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">Presupuesto máximo (opcional)</label>
                     <input value={form.presupuesto} onChange={update('presupuesto')}
                       placeholder="Ej: 500.000.000" className={inputClass} />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5 font-medium">Tipo de propiedad</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">Tipo de propiedad</label>
                     <select value={form.tipoPropiedad} onChange={update('tipoPropiedad')} className={inputClass}>
                       <option value="">Sin preferencia</option>
                       <option value="Apartamento">Apartamento</option>
@@ -262,7 +260,7 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setStep(1)}
-                    className="flex-1 py-3 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition">
+                    className="flex-1 py-3 rounded-xl border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-slate-600 text-sm transition">
                     Atrás
                   </button>
                   <button onClick={handleFinish} disabled={saving}
@@ -281,8 +279,8 @@ export default function WelcomeModal({ clientId, clientData, onDone }) {
                   className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-5">
                   <FaCheckCircle className="text-emerald-400 text-3xl" />
                 </motion.div>
-                <h2 className="text-2xl font-bold text-white mb-2">¡Todo listo!</h2>
-                <p className="text-slate-400 text-sm mb-6">
+                <h2 className="text-2xl font-bold text-[var(--color-text)] mb-2">¡Todo listo!</h2>
+                <p className="text-[var(--color-text-muted)] text-sm mb-6">
                   Tu perfil está configurado. Ya puedes explorar propiedades y gestionar tus visitas.
                 </p>
                 <button onClick={onDone}

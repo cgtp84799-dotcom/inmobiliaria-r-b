@@ -1,6 +1,5 @@
 // src/modules/agents/components/AgentVisitRow.jsx
 //
-// ★ FIX (auditoría):
 //   - `scheduledAt` no existe — el campo real es `requestedDate` + `requestedTime`.
 //   - `confirmed` no es status real → es `approved`.
 //   - `cancelled` puede venir como `cancelada` (cliente cancela desde portal).
@@ -31,7 +30,7 @@ const AgentVisitRow = ({ visit }) => {
   const cfg = STATUS_CFG[visit.status] || STATUS_CFG.pending;
   const Icon = cfg.icon;
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-slate-800 last:border-0">
+    <div className="flex items-center gap-3 py-3 border-b border-[var(--color-border)] last:border-0">
       <div className={`w-8 h-8 rounded-lg bg-${cfg.color}/10 flex items-center justify-center flex-shrink-0`}>
         <Icon className={`text-${cfg.color} text-sm`} />
       </div>
@@ -40,12 +39,12 @@ const AgentVisitRow = ({ visit }) => {
           {visit.propertyName || visit.propertyAddress || 'Propiedad sin título'}
         </p>
         <div className="flex items-center gap-3 mt-0.5">
-          <span className="flex items-center gap-1 text-xs text-slate-400">
-            <FaUser className="text-slate-500" />
+          <span className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
+            <FaUser className="text-[var(--color-text-muted)]" />
             {visit.clientName || 'Cliente'}
           </span>
-          <span className="flex items-center gap-1 text-xs text-slate-400">
-            <FaClock className="text-slate-500" />
+          <span className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
+            <FaClock className="text-[var(--color-text-muted)]" />
             {fmtRequested(visit)}
           </span>
         </div>

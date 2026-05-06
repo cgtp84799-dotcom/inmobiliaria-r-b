@@ -1,19 +1,14 @@
 // src/core/contexts/AuthContext.jsx
 //
-// ═══════════════════════════════════════════════════════════════════
-// FIXES APLICADOS (TODOS):
-//   1. syncUserToFirestore NUNCA modifica el role de docs existentes
-//   2. permission-denied NO cierra sesión
-//   3. setupPresence solo corre para admin/member
-//   4. sanitizeForRTDB elimina undefined
-//   5. role siempre tiene fallback a VIEWER
-//   6. currentUser = objeto Auth puro, datos extra en userData
-//   7. ★ FIX: Ya NO mutamos currentUser directamente (currentUser.role = ...)
-//      Ahora TODO se lee desde userData.
-//   8. ★ FIX: currentUser expuesto al Provider es un objeto plano seguro
-//      que combina datos de Auth + Firestore SIN mutar el original.
-//      Componentes que necesiten el Auth User puro: currentUser._authUser
-// ═══════════════════════════════════════════════════════════════════
+// Contexto de autenticación. Reglas clave:
+//   - syncUserToFirestore NUNCA modifica el role de docs existentes.
+//   - permission-denied NO cierra sesión (se reintenta una vez).
+//   - setupPresence solo corre para admin/member (no clientes/viewers).
+//   - sanitizeForRTDB elimina undefined antes de escribir en RTDB.
+//   - role siempre tiene fallback a VIEWER.
+//   - currentUser expuesto al Provider es un objeto plano (mezcla Auth +
+//     Firestore) que NO muta el Auth User original. Componentes que
+//     necesiten el Auth User puro lo leen de currentUser._authUser.
 
 import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -138,7 +133,6 @@ export const AuthProvider = ({ children }) => {
 
   // ── Sync a Firestore ────────────────────────────────────────────────────
   //
-  // ★ FIX de coste: antes se hacía getDoc() en cada onAuthStateChanged.
   // Firebase dispara este callback cada vez que refresca el token (~1h),
   // así que un usuario activo 8h generaba ~8 lecturas/día gratis.
   // Ahora cacheamos en memoria el UID ya sincronizado: solo creamos el
@@ -148,7 +142,6 @@ export const AuthProvider = ({ children }) => {
 
   const syncUserToFirestore = async (firebaseUser) => {
     if (syncedUidsRef.current.has(firebaseUser.uid)) return;
-    // ★ FIX (auditoría): proveedores OAuth pueden devolver user sin email.
     // Sin email no podemos crear el doc /users/{email} (la convención del
     // proyecto). Logueamos y salimos — el siguiente intento (cuando el user
     // verifique email o re-auth) sí lo creará.
@@ -191,6 +184,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Helper para leer y setear userData ──────────────────────────────────
+  //
+  // Además de leer el doc, esta función ACTIVA al staff que está pending.
+  // Cuando un admin crea un usuario interno con createUserByAdmin, el doc
+  // queda con status='pending'. La primera vez que el staff hace login
+  // exitoso, marcamos status='active' → el trigger onUserWelcomeOnReady
+  // detecta el cambio y envía el welcome del equipo.
+  //
+  // Sólo aplica a admin/member. Viewers usan otro flujo (verificación
+  // de email).
 
   const loadUserData = async (firebaseUser) => {
     const userDocRef = doc(db, 'users', firebaseUser.email);
@@ -202,12 +204,41 @@ export const AuthProvider = ({ children }) => {
 
     const data = userDoc.data();
     const resolvedRole = data.role || USER_ROLES.VIEWER;
+    const resolvedStatus = data.status || 'active';
+
+    // ── Activación de staff en primer login ─────────────────────────────
+    const isStaff = resolvedRole === USER_ROLES.ADMIN || resolvedRole === USER_ROLES.MEMBER;
+    if (isStaff && resolvedStatus === 'pending') {
+      try {
+        await setDoc(
+          userDocRef,
+          {
+            status: 'active',
+            firstLoginAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        // Refleja el cambio en el objeto que devolvemos para evitar
+        // que el ProtectedRoute lo trate como inactive en este render.
+        return {
+          id:     userDoc.id,
+          ...data,
+          role:   resolvedRole,
+          status: 'active',
+        };
+      } catch (e) {
+        // Si falla la actualización (permisos / red), seguimos con el
+        // doc tal cual y reintentaremos en el próximo refresh de token.
+        console.warn('[AuthContext] No se pudo activar staff en primer login:', e?.message);
+      }
+    }
 
     return {
       id:     userDoc.id,
       ...data,
       role:   resolvedRole,
-      status: data.status || 'active',
+      status: resolvedStatus,
     };
   };
 
@@ -349,8 +380,6 @@ export const AuthProvider = ({ children }) => {
   const isViewer   = role === USER_ROLES.VIEWER;
   const canOperate = isAdmin || isMember;
   const canRead    = isAdmin || isMember || isViewer;
-
-  // ★ FIX PRINCIPAL: Crear un objeto plano que combine Auth + Firestore
   // SIN mutar el Auth User original de Firebase.
   // Componentes que necesiten el Auth User puro (ej: updateProfile, getIdToken)
   // usan currentUser._authUser
@@ -377,11 +406,8 @@ export const AuthProvider = ({ children }) => {
       isAdmin, isMember, isViewer, canOperate, canRead,
       signIn, signOut,
     }}>
-      {/* ★ FIX: antes se hacía `{!loading && children}` → pantalla blanca
-          durante la carga inicial. Ahora exponemos `loading` en el contexto
-          y cada componente decide qué mostrar (skeleton, spinner, etc.).
-          ProtectedRoute ya maneja su propio LoadingScreen. */}
+      {}
       {children}
     </AuthContext.Provider>
   );
-};  
+};

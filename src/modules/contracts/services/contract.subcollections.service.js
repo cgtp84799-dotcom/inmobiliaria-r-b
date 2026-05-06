@@ -84,7 +84,6 @@ export const paymentService = {
     });
   },
   async markPaid(contractId, paymentId, { paidAmount, receiptUrl, notes, actorEmail } = {}) {
-    // ★ FIX (auditoría): validar que el monto pagado sea positivo. Antes
     // se aceptaba cualquier valor (incluido 0 o negativo) → emails de
     // confirmación con $0 confundían al cliente.
     const amt = Number(paidAmount);
@@ -122,7 +121,6 @@ export const contractDocumentService = {
   },
   async upload(contractId, file, { kind = DOCUMENT_KIND.OTHER, label = "", uploadedBy = "" } = {}) {
     if (!file) throw new Error("Archivo requerido");
-    // ★ FIX (auditoría): validaciones cliente antes de subir.
     // Storage rules ya validan tipo y tamaño, pero esto da feedback inmediato
     // al usuario en vez de un error opaco al final del upload.
     if (file.size === 0) {
@@ -140,7 +138,7 @@ export const contractDocumentService = {
     }
     // Sanitizar nombre — evita caracteres conflictivos en Storage paths
     const safeName = file.name
-      .replace(/[\/\\?%*:|"<>]/g, "_")
+      .replace(/[/\\?%*:|"<>]/g, "_")
       .replace(/\s+/g, "_")
       .slice(0, 200);
     const ext = safeName.includes(".") ? safeName.split(".").pop() : "";

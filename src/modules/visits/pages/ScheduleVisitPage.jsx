@@ -6,7 +6,7 @@
 // Sin cambios en la UI ni en el flujo de envío.
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaCalendarAlt, FaClock, FaUser, FaPhone,

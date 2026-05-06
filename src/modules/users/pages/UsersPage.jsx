@@ -234,7 +234,7 @@ const UsersPage = () => {
                 <Icon className={`text-${color}`} />
               </div>
               <div>
-                <p className="text-xs text-slate-400">{label}</p>
+                <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
                 <p className={`text-2xl font-bold text-${color} tabular-nums`}>{value}</p>
               </div>
             </div>
@@ -243,7 +243,7 @@ const UsersPage = () => {
       </motion.div>
 
       {/* Tabs de universo */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="flex gap-2 border-b border-slate-800">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="flex gap-2 border-b border-[var(--color-border)]">
         {TABS.map((t) => {
           const Icon   = t.icon;
           const active = activeTab === t.id;
@@ -252,12 +252,12 @@ const UsersPage = () => {
               key={t.id}
               onClick={() => { setActiveTab(t.id); clearFilters(); }}
               className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                active ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-300'
+                active ? 'border-primary text-primary' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}
             >
               <Icon className="text-xs" />
               {t.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${active ? 'bg-primary/20 text-primary' : 'bg-slate-800 text-slate-500'}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${active ? 'bg-primary/20 text-primary' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)]'}`}>
                 {t.count}
               </span>
             </button>
@@ -265,10 +265,10 @@ const UsersPage = () => {
         })}
       </motion.div>
 
-      <p className="text-slate-500 text-xs -mt-3">
+      <p className="text-[var(--color-text-muted)] text-xs -mt-3">
         {TABS.find((t) => t.id === activeTab)?.desc}
         {activeTab === 'clients' && (
-          <span className="ml-1 text-slate-600">— Los clientes se registran desde el portal (/acceso-clientes).</span>
+          <span className="ml-1 text-[var(--color-text-faint)]">— Los clientes se registran desde el portal (/acceso-clientes).</span>
         )}
       </p>
 
@@ -281,9 +281,9 @@ const UsersPage = () => {
               <h3 className="text-blue-400 font-semibold mb-3">Roles del panel interno</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 {[USER_ROLES.ADMIN, USER_ROLES.MEMBER].map((id) => (
-                  <div key={id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div key={id} className="p-3 rounded-xl bg-[var(--color-surface)]/60 border border-[var(--color-border)]">
                     <p className="text-light font-semibold mb-1">{USER_ROLE_LABELS[id]}</p>
-                    <p className="text-slate-400 text-xs leading-relaxed">{USER_ROLE_DESCRIPTIONS[id]}</p>
+                    <p className="text-[var(--color-text-muted)] text-xs leading-relaxed">{USER_ROLE_DESCRIPTIONS[id]}</p>
                   </div>
                 ))}
               </div>
@@ -293,7 +293,7 @@ const UsersPage = () => {
       )}
 
       {/* Filtros */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card-soft border border-slate-800/80">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card-soft border border-[var(--color-border)]/80">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -309,26 +309,26 @@ const UsersPage = () => {
         {filtersOpen && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Búsqueda</label>
               <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none" />
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-sm pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Nombre, correo, teléfono..."
                   value={filters.searchTerm}
                   onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {activeTab === 'team' && (
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Rol</label>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Rol</label>
                   <select
                     value={filters.role}
                     onChange={(e) => handleFilterChange('role', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary"
+                    className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary"
                   >
                     <option value="">Todos los roles</option>
                     <option value={USER_ROLES.ADMIN}>{USER_ROLE_LABELS[USER_ROLES.ADMIN]}</option>
@@ -337,11 +337,11 @@ const UsersPage = () => {
                 </div>
               )}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Estado</label>
+                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Estado</label>
                 <select
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary"
                 >
                   <option value="">Todos</option>
                   <option value="active">Activos</option>
@@ -353,7 +353,7 @@ const UsersPage = () => {
               <div className="flex items-end">
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600 rounded-xl transition-all"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] hover:border-slate-600 rounded-xl transition-all"
                 >
                   <FaTimesCircle /> Limpiar
                 </button>
@@ -365,7 +365,7 @@ const UsersPage = () => {
 
       {/* Contador */}
       {!loading && (
-        <p className="text-slate-400 text-sm">
+        <p className="text-[var(--color-text-muted)] text-sm">
           <span className="text-primary font-bold tabular-nums">{filteredUsers.length}</span>{' '}
           {filteredUsers.length === 1 ? 'usuario encontrado' : 'usuarios encontrados'}
         </p>
@@ -375,17 +375,17 @@ const UsersPage = () => {
       {loading ? (
         <div className="card-soft py-16 text-center">
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
-          <p className="text-slate-400">Cargando usuarios...</p>
+          <p className="text-[var(--color-text-muted)]">Cargando usuarios...</p>
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div className="card-soft py-16 px-6 text-center border border-dashed border-slate-700">
+        <div className="card-soft py-16 px-6 text-center border border-dashed border-[var(--color-border)]">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <FaUsers className="text-primary text-3xl" />
           </div>
           <h2 className="text-2xl font-bold text-light mb-2">
             {activeUsers.length === 0 ? 'Aún no hay usuarios' : 'No se encontraron usuarios'}
           </h2>
-          <p className="text-slate-400 max-w-md mx-auto mb-6">
+          <p className="text-[var(--color-text-muted)] max-w-md mx-auto mb-6">
             {activeUsers.length === 0
               ? activeTab === 'team'
                 ? 'Crea el primer usuario del equipo con el botón de arriba.'

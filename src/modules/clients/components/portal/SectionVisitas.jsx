@@ -76,7 +76,7 @@ function CancelModal({ visit, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div
-        className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-[var(--color-bg)]/70 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onClose}
@@ -85,26 +85,26 @@ function CancelModal({ visit, onConfirm, onClose }) {
         initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94 }}
-        className="relative z-10 w-full max-w-sm bg-slate-900 border border-slate-700/60 rounded-2xl p-6 shadow-2xl"
+        className="relative z-10 w-full max-w-sm bg-[var(--color-surface)] border border-[var(--color-border)]/60 rounded-2xl p-6 shadow-2xl"
       >
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/20 flex items-center justify-center flex-shrink-0">
             <FaExclamationTriangle className="text-red-400 text-sm" />
           </div>
           <div>
-            <h3 className="text-white font-bold">Cancelar visita</h3>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <h3 className="text-[var(--color-text)] font-bold">Cancelar visita</h3>
+            <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
               ¿Seguro que quieres cancelar tu visita a{' '}
-              <span className="text-white font-semibold">{visit.propertyName}</span>?
+              <span className="text-[var(--color-text)] font-semibold">{visit.propertyName}</span>?
             </p>
           </div>
-          <button onClick={onClose} className="ml-auto text-slate-600 hover:text-slate-400 transition flex-shrink-0">
+          <button onClick={onClose} className="ml-auto text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] transition flex-shrink-0">
             <FaTimes />
           </button>
         </div>
 
         <div className="mb-5">
-          <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+          <label className="block text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">
             Motivo (opcional)
           </label>
           <textarea
@@ -112,7 +112,7 @@ function CancelModal({ visit, onConfirm, onClose }) {
             onChange={(e) => setReason(e.target.value)}
             placeholder="Ej: Ya no estoy disponible en esa fecha..."
             rows={3}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 transition resize-none"
+            className="w-full bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-xl px-4 py-2.5 text-sm text-[var(--color-text)] placeholder-slate-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 transition resize-none"
           />
         </div>
 
@@ -120,14 +120,14 @@ function CancelModal({ visit, onConfirm, onClose }) {
           <button
             onClick={onClose}
             disabled={cancelling}
-            className="flex-1 py-2.5 rounded-xl border border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600 text-sm transition"
+            className="flex-1 py-2.5 rounded-xl border border-[var(--color-border)]/60 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-slate-600 text-sm transition"
           >
             Mantener visita
           </button>
           <button
             onClick={handleConfirm}
             disabled={cancelling}
-            className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-[var(--color-text)] font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-60"
           >
             {cancelling ? <FaSpinner className="animate-spin" /> : <FaBan className="text-xs" />}
             {cancelling ? 'Cancelando...' : 'Cancelar visita'}
@@ -149,7 +149,7 @@ export default function SectionVisitas({ visits, onCancelVisit }) {
 
       {/* Encabezado */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white">Mis visitas</h2>
+        <h2 className="text-lg font-bold text-[var(--color-text)]">Mis visitas</h2>
         <Link
           to="/agendar-visita"
           className="inline-flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-semibold px-3 py-2 rounded-xl transition"
@@ -161,8 +161,8 @@ export default function SectionVisitas({ visits, onCancelVisit }) {
       {/* Estado vacío */}
       {visits.length === 0 && (
         <div className="text-center py-12">
-          <FaCalendarAlt className="text-slate-700 text-3xl mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">Aún no tienes visitas agendadas.</p>
+          <FaCalendarAlt className="text-[var(--color-text-faint)] text-3xl mx-auto mb-3" />
+          <p className="text-[var(--color-text-muted)] text-sm">Aún no tienes visitas agendadas.</p>
           <Link to="/agendar-visita" className="inline-block mt-4 text-amber-400 hover:underline text-sm">
             Agendar una visita →
           </Link>
@@ -183,18 +183,18 @@ export default function SectionVisitas({ visits, onCancelVisit }) {
                 </span>
                 <Countdown dateStr={next.requestedDate} timeStr={next.requestedTime} />
               </div>
-              <p className="text-white font-bold truncate">{next.propertyName || 'Propiedad'}</p>
+              <p className="text-[var(--color-text)] font-bold truncate">{next.propertyName || 'Propiedad'}</p>
               {next.propertyAddress && (
-                <p className="text-slate-400 text-xs mt-0.5 flex items-center gap-1">
+                <p className="text-[var(--color-text-muted)] text-xs mt-0.5 flex items-center gap-1">
                   <FaMapMarkerAlt className="text-[9px]" /> {next.propertyAddress}
                 </p>
               )}
-              <p className="text-slate-400 text-sm mt-1.5">
+              <p className="text-[var(--color-text-muted)] text-sm mt-1.5">
                 {fmtDate(next.requestedDate)}
                 {next.requestedTime && ` · ${next.requestedTime}`}
               </p>
               {next.agentName && (
-                <p className="text-slate-500 text-xs mt-1">Agente: {next.agentName}</p>
+                <p className="text-[var(--color-text-muted)] text-xs mt-1">Agente: {next.agentName}</p>
               )}
             </div>
             <div className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border ${VS[next.status]?.bg || ''} ${VS[next.status]?.color || ''} ${VS[next.status]?.border || ''}`}>
@@ -220,16 +220,16 @@ export default function SectionVisitas({ visits, onCancelVisit }) {
           const cfg  = VS[v.status] || VS.pending;
           const Icon = cfg.icon;
           return (
-            <div key={v.id} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-4">
+            <div key={v.id} className="bg-[var(--color-surface)]/60 border border-[var(--color-border)]/60 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <div className={`w-9 h-9 rounded-xl ${cfg.bg} border ${cfg.border} flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`${cfg.color} text-sm`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-semibold truncate">
+                  <p className="text-[var(--color-text)] text-sm font-semibold truncate">
                     {v.propertyName || 'Propiedad'}
                   </p>
-                  <p className="text-slate-500 text-xs mt-0.5">
+                  <p className="text-[var(--color-text-muted)] text-xs mt-0.5">
                     {fmtDate(v.requestedDate)}
                     {v.requestedTime && ` · ${v.requestedTime}`}
                   </p>
@@ -251,7 +251,7 @@ export default function SectionVisitas({ visits, onCancelVisit }) {
                   )}
                   {/* Cancelada por el cliente */}
                   {v.cancelledByClient && v.cancelReason && (
-                    <p className="text-xs text-slate-500 mt-1 italic">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1 italic">
                       Motivo: {v.cancelReason}
                     </p>
                   )}

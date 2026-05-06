@@ -65,7 +65,7 @@ const ACT_CFG = {
   reunion:           { icon: FaUsers,         color: 'text-purple-400',  label: 'Reunión' },
   llamada:           { icon: FaPhone,         color: 'text-green-400',   label: 'Llamada' },
   seguimiento:       { icon: FaClipboardList, color: 'text-orange-400',  label: 'Seguimiento' },
-  otro:              { icon: FaCalendarAlt,   color: 'text-slate-400',   label: 'Otro' },
+  otro:              { icon: FaCalendarAlt,   color: 'text-[var(--color-text-muted)]',   label: 'Otro' },
 };
 const STATUS_CFG = {
   pendiente:   { icon: FaClock,       color: 'text-yellow-400', label: 'Pendiente' },
@@ -92,7 +92,7 @@ const EstadoBadge = ({ estado }) => {
   const s = {
     Activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     activo: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    Inactivo: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+    Inactivo: 'bg-slate-500/20 text-[var(--color-text-muted)] border-slate-500/30',
     Convertido: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
   };
   return <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${s[estado] || s.Activo}`}>{estado}</span>;
@@ -147,13 +147,13 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
         </button>
       </div>
       {items.length === 0 ? (
-        <div className="py-10 text-center text-slate-500">
+        <div className="py-10 text-center text-[var(--color-text-muted)]">
           <FaHistory size={28} className="mx-auto mb-2 opacity-30" />
           <p className="text-sm">Sin historial de actividad</p>
         </div>
       ) : (
         <div className="relative pl-5">
-          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-slate-700" />
+          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-[var(--color-input-bg)]" />
           <div className="space-y-4">
             {items.map((item) => {
               const cfg  = ACT_CFG[item.type] || ACT_CFG.otro;
@@ -165,12 +165,12 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
                 : fmtDate(item.createdAt);
               return (
                 <div key={`${item._src}-${item._id}`} className="relative">
-                  <div className={`absolute -left-6 w-3 h-3 rounded-full border-2 bg-slate-950 border-current ${cfg.color}`} />
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 hover:border-slate-700 transition-colors">
+                  <div className={`absolute -left-6 w-3 h-3 rounded-full border-2 bg-[var(--color-bg)] border-current ${cfg.color}`} />
+                  <div className="bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-xl p-3 hover:border-[var(--color-border)] transition-colors">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <Icon className={`${cfg.color} flex-shrink-0`} size={12} />
-                        <span className="text-white text-xs font-semibold">{cfg.label}</span>
+                        <span className="text-[var(--color-text)] text-xs font-semibold">{cfg.label}</span>
                         {item._src === 'history' && <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-bold uppercase">CRM</span>}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -178,12 +178,12 @@ function ActivityTab({ client, onScheduleVisit, onAddActivity }) {
                         <span className={`text-[10px] ${sc.color}`}>{sc.label}</span>
                       </div>
                     </div>
-                    {item.propertyName && <p className="text-slate-400 text-xs mb-1 flex items-center gap-1"><FaBuilding size={9} className="flex-shrink-0" /> {item.propertyName}</p>}
-                    <div className="flex items-center gap-3 text-slate-600 text-[10px]">
+                    {item.propertyName && <p className="text-[var(--color-text-muted)] text-xs mb-1 flex items-center gap-1"><FaBuilding size={9} className="flex-shrink-0" /> {item.propertyName}</p>}
+                    <div className="flex items-center gap-3 text-[var(--color-text-faint)] text-[10px]">
                       <span>{dateDisplay}</span>
                       {item.agentName && <span>· {item.agentName}</span>}
                     </div>
-                    {item.notes && <p className="text-slate-500 text-[10px] mt-1.5 italic line-clamp-2">{item.notes}</p>}
+                    {item.notes && <p className="text-[var(--color-text-muted)] text-[10px] mt-1.5 italic line-clamp-2">{item.notes}</p>}
                   </div>
                 </div>
               );
@@ -201,7 +201,6 @@ function ContractsTab({ clientId, clientEmail }) {
 
   useEffect(() => {
     if (!clientId) return;
-    // ★ FIX (auditoría): los contratos pueden tener clientId, clientEmail o
     // ambos. Hacer 2 listeners y combinar para no perder contratos legacy
     // creados solo con email.
     let docsById = [];
@@ -237,23 +236,23 @@ function ContractsTab({ clientId, clientEmail }) {
   }, [clientId, clientEmail]);
 
   if (loading) return <div className="py-8 flex justify-center"><FaSpinner className="animate-spin text-primary" /></div>;
-  if (!contracts.length) return <div className="py-10 text-center text-slate-500"><FaFileContract size={28} className="mx-auto mb-2 opacity-30" /><p className="text-sm">No hay contratos registrados</p></div>;
+  if (!contracts.length) return <div className="py-10 text-center text-[var(--color-text-muted)]"><FaFileContract size={28} className="mx-auto mb-2 opacity-30" /><p className="text-sm">No hay contratos registrados</p></div>;
 
   const totalValue = contracts.reduce((s, c) => s + (Number(c.value) || 0), 0);
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
-        <span className="text-slate-400 text-xs">Valor total gestionado</span>
+        <span className="text-[var(--color-text-muted)] text-xs">Valor total gestionado</span>
         <span className="text-primary font-bold text-sm">{formatCOP(totalValue)}</span>
       </div>
       {contracts.map((c) => (
-        <div key={c.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition-colors">
+        <div key={c.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 hover:border-[var(--color-border)] transition-colors">
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2 flex-wrap"><ContractTypeBadge type={c.type} /><ContractStatusBadge status={c.status} /></div>
-            <p className="text-slate-500 text-xs whitespace-nowrap">{formatShort(c.startDate)}</p>
+            <p className="text-[var(--color-text-muted)] text-xs whitespace-nowrap">{formatShort(c.startDate)}</p>
           </div>
-          <p className="text-white text-sm font-semibold truncate mb-1">{c.propertyName || '—'}</p>
-          {c.propertyAddress && <p className="text-slate-500 text-xs truncate mb-2">{c.propertyAddress}</p>}
+          <p className="text-[var(--color-text)] text-sm font-semibold truncate mb-1">{c.propertyName || '—'}</p>
+          {c.propertyAddress && <p className="text-[var(--color-text-muted)] text-xs truncate mb-2">{c.propertyAddress}</p>}
           <div className="flex items-center justify-between">
             <span className="text-primary text-sm font-bold">{formatCOP(c.value)}</span>
             {c.documentUrl && (
@@ -285,19 +284,19 @@ function FavoritesTab({ favoriteIds }) {
     }).catch(() => setLoading(false));
   }, [JSON.stringify(favoriteIds)]);
 
-  if (!favoriteIds?.length) return <div className="py-10 text-center text-slate-500"><FaHeart size={28} className="mx-auto mb-2 opacity-20" /><p className="text-sm">Sin propiedades guardadas</p></div>;
+  if (!favoriteIds?.length) return <div className="py-10 text-center text-[var(--color-text-muted)]"><FaHeart size={28} className="mx-auto mb-2 opacity-20" /><p className="text-sm">Sin propiedades guardadas</p></div>;
   if (loading) return <div className="py-8 flex justify-center"><FaSpinner className="animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-3">
       {properties.map((p) => (
-        <div key={p.id} className="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-3">
-          <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" /> : <FaHome className="text-slate-600" size={16} />}
+        <div key={p.id} className="flex items-center gap-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-3">
+          <div className="w-12 h-12 rounded-lg bg-[var(--color-surface)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" /> : <FaHome className="text-[var(--color-text-faint)]" size={16} />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-semibold truncate">{p.title || '—'}</p>
-            <p className="text-slate-500 text-xs truncate">{p.city || p.address || ''}</p>
+            <p className="text-[var(--color-text)] text-sm font-semibold truncate">{p.title || '—'}</p>
+            <p className="text-[var(--color-text-muted)] text-xs truncate">{p.city || p.address || ''}</p>
           </div>
           <Link to={`/propiedades/${p.id}`} className="text-primary hover:text-primary/80 text-xs flex items-center gap-1 flex-shrink-0 transition-colors">
             Ver <FaExternalLinkAlt size={9} />
@@ -395,7 +394,7 @@ function PortalTab({ client }) {
   <div class="container">
     <div class="card">
       <div class="header">
-        <img src="https://inmobiliaria-ryb-y-asociados.com/logo.jpg.png" alt="Inmobiliaria Rincón Bedoya y Asociados" height="52" style="height:52px;max-width:80%;"/>
+        <img src="https://inmobiliaria-ryb-y-asociados.com/logo-dark.png" alt="Inmobiliaria Rincón Bedoya y Asociados" height="52" style="height:52px;max-width:80%;"/>
       </div>
       <div class="body">
         <div style="text-align:center;font-size:48px;margin-bottom:14px;">🏠</div>
@@ -482,15 +481,15 @@ function PortalTab({ client }) {
 
   return (
     <div className="space-y-5">
-      <div className={`flex items-center gap-3 p-4 rounded-xl border ${hasPortal ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-slate-800/40 border-slate-700/40'}`}>
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${hasPortal ? 'bg-emerald-500/15' : 'bg-slate-700/40'}`}>
-          {hasPortal ? <FaGlobe className="text-emerald-400" size={14} /> : <FaLock className="text-slate-500" size={14} />}
+      <div className={`flex items-center gap-3 p-4 rounded-xl border ${hasPortal ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-[var(--color-surface)]/40 border-[var(--color-border)]/40'}`}>
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${hasPortal ? 'bg-emerald-500/15' : 'bg-[var(--color-input-bg)]/40'}`}>
+          {hasPortal ? <FaGlobe className="text-emerald-400" size={14} /> : <FaLock className="text-[var(--color-text-muted)]" size={14} />}
         </div>
         <div className="flex-1">
-          <p className={`text-sm font-semibold ${hasPortal ? 'text-emerald-300' : 'text-slate-400'}`}>
+          <p className={`text-sm font-semibold ${hasPortal ? 'text-emerald-300' : 'text-[var(--color-text-muted)]'}`}>
             {hasPortal ? 'Portal activo' : 'Sin cuenta en el portal'}
           </p>
-          <p className="text-slate-500 text-xs">
+          <p className="text-[var(--color-text-muted)] text-xs">
             {hasPortal ? `Cuenta registrada en ${email}` : 'Este cliente no tiene acceso al portal todavía'}
           </p>
         </div>
@@ -509,28 +508,28 @@ function PortalTab({ client }) {
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Últimas notificaciones</p>
+        <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Últimas notificaciones</p>
         {loadingNotifs ? (
-          <div className="flex justify-center py-4"><FaSpinner className="animate-spin text-slate-600" /></div>
+          <div className="flex justify-center py-4"><FaSpinner className="animate-spin text-[var(--color-text-faint)]" /></div>
         ) : notifications.length === 0 ? (
-          <div className="text-center py-8 text-slate-600">
+          <div className="text-center py-8 text-[var(--color-text-faint)]">
             <FaBell size={20} className="mx-auto mb-2 opacity-30" />
             <p className="text-xs">Sin notificaciones enviadas</p>
           </div>
         ) : (
           <div className="space-y-2">
             {notifications.map((n) => (
-              <div key={n.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+              <div key={n.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-white text-xs font-semibold">{n.title}</p>
-                    <p className="text-slate-400 text-xs mt-0.5 line-clamp-2">{n.message}</p>
+                    <p className="text-[var(--color-text)] text-xs font-semibold">{n.title}</p>
+                    <p className="text-[var(--color-text-muted)] text-xs mt-0.5 line-clamp-2">{n.message}</p>
                   </div>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${n.read ? 'bg-slate-700 text-slate-500' : 'bg-amber-500/20 text-amber-400'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${n.read ? 'bg-[var(--color-input-bg)] text-[var(--color-text-muted)]' : 'bg-amber-500/20 text-amber-400'}`}>
                     {n.read ? 'Leída' : 'No leída'}
                   </span>
                 </div>
-                <p className="text-slate-600 text-[10px] mt-1">{fmtDate(n.createdAt)}</p>
+                <p className="text-[var(--color-text-faint)] text-[10px] mt-1">{fmtDate(n.createdAt)}</p>
               </div>
             ))}
           </div>
@@ -545,32 +544,32 @@ function PortalTab({ client }) {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10"
+              className="relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10"
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-white font-bold text-sm">Enviar notificación manual</h3>
-                <button onClick={() => setShowModal(false)} className="text-slate-500 hover:text-white transition"><FaTimes size={14} /></button>
+                <h3 className="text-[var(--color-text)] font-bold text-sm">Enviar notificación manual</h3>
+                <button onClick={() => setShowModal(false)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition"><FaTimes size={14} /></button>
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Tipo</label>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">Tipo</label>
                   <select value={notifForm.type} onChange={(e) => setNotifForm((f) => ({ ...f, type: e.target.value }))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 transition">
+                    className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:border-amber-500/60 transition">
                     {NOTIF_TYPE_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Título</label>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">Título</label>
                   <input value={notifForm.title} onChange={(e) => setNotifForm((f) => ({ ...f, title: e.target.value }))}
                     placeholder="Ej: Nueva propiedad disponible"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition" />
+                    className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition" />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Mensaje</label>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">Mensaje</label>
                   <textarea value={notifForm.message} onChange={(e) => setNotifForm((f) => ({ ...f, message: e.target.value }))}
                     placeholder="Escribe el mensaje para el cliente..."
                     rows={3}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition resize-none" />
+                    className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-sm text-[var(--color-text)] placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition resize-none" />
                 </div>
                 <button onClick={handleSendNotif} disabled={sending}
                   className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-60">
@@ -618,7 +617,7 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
             <FaUser className="text-primary" size={18} />
           </div>
           <div>
-            <h2 className="text-white font-extrabold text-base leading-tight">{client.nombre}</h2>
+            <h2 className="text-[var(--color-text)] font-extrabold text-base leading-tight">{client.nombre}</h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <TipoBadge  tipo={client.tipoCliente} />
               <EstadoBadge estado={client.estado} />
@@ -632,12 +631,12 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {canEdit && onEdit && (
-            <button onClick={() => onEdit(client)} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Editar cliente">
+            <button onClick={() => onEdit(client)} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title="Editar cliente">
               <FaEdit size={13} />
             </button>
           )}
           {onClose && (
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
               <FaTimes size={13} />
             </button>
           )}
@@ -647,10 +646,10 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
       {/* Contact info */}
       <div className="grid grid-cols-1 gap-2">
         {client.telefono && (
-          <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800">
+          <div className="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
             <div className="flex items-center gap-2">
-              <FaPhone className="text-slate-500" size={12} />
-              <a href={`tel:${client.telefono}`} className="text-white text-sm hover:text-primary transition-colors">{client.telefono}</a>
+              <FaPhone className="text-[var(--color-text-muted)]" size={12} />
+              <a href={`tel:${client.telefono}`} className="text-[var(--color-text)] text-sm hover:text-primary transition-colors">{client.telefono}</a>
             </div>
             {waLink && (
               <a href={waLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors text-xs font-semibold">
@@ -660,45 +659,45 @@ export default function ClientDetail({ client, onClose, onEdit, onScheduleVisit,
           </div>
         )}
         {client.email && (
-          <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-800">
-            <FaEnvelope className="text-slate-500" size={12} />
-            <a href={`mailto:${client.email}`} className="text-white text-sm hover:text-primary transition-colors truncate">{client.email}</a>
+          <div className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+            <FaEnvelope className="text-[var(--color-text-muted)]" size={12} />
+            <a href={`mailto:${client.email}`} className="text-[var(--color-text)] text-sm hover:text-primary transition-colors truncate">{client.email}</a>
           </div>
         )}
         {client.ubicacionInteres && (
-          <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-800">
-            <FaMapMarkerAlt className="text-slate-500 flex-shrink-0" size={11} />
-            <span className="text-slate-300 text-xs">{client.ubicacionInteres}</span>
+          <div className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+            <FaMapMarkerAlt className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
+            <span className="text-[var(--color-text)] text-xs">{client.ubicacionInteres}</span>
           </div>
         )}
         {client.presupuesto && (
-          <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-800">
-            <FaDollarSign className="text-slate-500 flex-shrink-0" size={11} />
-            <span className="text-slate-300 text-xs">{client.presupuesto}</span>
+          <div className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+            <FaDollarSign className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
+            <span className="text-[var(--color-text)] text-xs">{client.presupuesto}</span>
           </div>
         )}
         {client.tipoPropiedad && (
-          <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-800">
-            <FaHome className="text-slate-500 flex-shrink-0" size={11} />
-            <span className="text-slate-300 text-xs">{client.tipoPropiedad}</span>
+          <div className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+            <FaHome className="text-[var(--color-text-muted)] flex-shrink-0" size={11} />
+            <span className="text-[var(--color-text)] text-xs">{client.tipoPropiedad}</span>
           </div>
         )}
       </div>
 
       {client.notas && (
-        <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+        <div className="p-3 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-1">
-            <FaStickyNote className="text-slate-500" size={11} />
-            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Notas</span>
+            <FaStickyNote className="text-[var(--color-text-muted)]" size={11} />
+            <span className="text-[var(--color-text-muted)] text-xs font-semibold uppercase tracking-wider">Notas</span>
           </div>
-          <p className="text-slate-300 text-xs leading-relaxed">{client.notas}</p>
+          <p className="text-[var(--color-text)] text-xs leading-relaxed">{client.notas}</p>
         </div>
       )}
 
-      <div className="flex gap-1 bg-slate-900 rounded-xl p-1">
+      <div className="flex gap-1 bg-[var(--color-surface)] rounded-xl p-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tab === id ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tab === id ? 'bg-[var(--color-surface)] text-[var(--color-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>
             <Icon size={10} /> {label}
           </button>
         ))}

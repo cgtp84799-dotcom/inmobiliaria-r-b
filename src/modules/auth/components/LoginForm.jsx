@@ -22,7 +22,6 @@ const LoginForm = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error('Error en login:', error);
-      // ★ FIX (auditoría): antes el usuario no veía nada cuando el login
       // fallaba (credenciales mal, demasiados intentos, cuenta deshabilitada).
       const code = error?.code || '';
       let msg = 'Error al iniciar sesión';

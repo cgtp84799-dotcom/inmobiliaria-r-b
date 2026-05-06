@@ -90,11 +90,38 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'displayName', 'phone', 'photoURL', 'updatedAt', 'lastSeen',
         'online', 'fcmToken', 'lastTokenUpdate', 'notificationsEnabled',
-        // ★ FIX (auditoría): staff (admin/member) guarda favoritos en su
-        // propio doc /users/{email} en vez de /clients (evita aparecer como
-        // cliente fantasma en el panel).
+        // Favoritos del staff (evita docs fantasma en /clients).
         'favorites',
+        // Sincronización de verificación de email tras click en el link.
+        // El usuario solo puede setearlo a true (no mentir hacia false).
+        'emailVerified', 'emailVerifiedAt',
       ]);
+    }
+
+    // Activación de staff (admin/member) en su primer login.
+    //
+    // Cuando un admin crea un usuario interno con createUserByAdmin, el doc
+    // queda con status='pending'. Al iniciar sesión por primera vez, el
+    // AuthContext escribe { status:'active', firstLoginAt:<server>,
+    // updatedAt:<server> } para disparar el welcome del equipo
+    // (onUserWelcomeOnReady en functions/index.js).
+    //
+    // Restricciones:
+    //   • Sólo el dueño del doc puede ejecutarlo.
+    //   • Solo se permite la transición pending → active (no a otro status).
+    //   • Sólo staff (admin/member); viewers usan el flujo de emailVerified.
+    //   • Únicos campos modificables: status, firstLoginAt, updatedAt.
+    function userStaffSelfActivation() {
+      let beforeStatus = resource.data.status;
+      let afterStatus  = request.resource.data.status;
+      let role = resource.data.role;
+      let onlyAllowed = request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status', 'firstLoginAt', 'updatedAt'
+      ]);
+      return beforeStatus == 'pending'
+          && afterStatus  == 'active'
+          && (role == 'admin' || role == 'member')
+          && onlyAllowed;
     }
 
     function notifAllowedUpdateFields() {
@@ -193,8 +220,11 @@ service cloud.firestore {
       allow read:   if isAdmin() || isOwner(userId);
       // Solo el propio usuario puede crear su doc (al registrarse)
       allow create: if isSignedIn() && userId == authEmail();
-      // Admin puede editar todo; usuario solo sus campos permitidos
-      allow update: if isAdmin() || (isOwner(userId) && userSelfAllowedFields());
+      // Admin puede editar todo; usuario edita sus campos permitidos O
+      // se auto-activa en primer login (transición pending → active).
+      allow update: if isAdmin()
+                    || (isOwner(userId) && userSelfAllowedFields())
+                    || (isOwner(userId) && userStaffSelfActivation());
       allow delete: if isAdmin();
     }
 
@@ -206,6 +236,22 @@ service cloud.firestore {
       allow create:         if validAccessRequest();
       allow read:           if isAdmin();
       allow update, delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VERIFICACIÓN DE EMAIL — sistema custom (reemplaza Firebase Auth template)
+    //
+    // Esta colección guarda los tokens de verificación generados por la
+    // Cloud Function requestEmailVerification (con hash SHA-256 — nunca
+    // almacenamos el token en plaintext). NINGÚN cliente debe poder
+    // leerla ni escribirla; sólo el Admin SDK desde Cloud Functions
+    // (que bypasses estas rules).
+    // ════════════════════════════════════════════════════════════════════════
+    match /emailVerifications/{verificationId} {
+      allow read:   if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -223,8 +269,17 @@ service cloud.firestore {
     // ════════════════════════════════════════════════════════════════════════
 
     match /properties/{propertyId} {
-      // Catálogo público — solo propiedades publicadas
-      allow read:           if resource.data.status == 'published';
+      // Lectura:
+      //   - Staff (admin/member) puede leer TODAS las propiedades, incluyendo
+      //     draft, reserved, sold, rented, inactive (necesario para el panel
+      //     admin, dashboard y queries de aggregate como count()).
+      //   - Público anónimo solo puede leer propiedades con status='published'
+      //     (catálogo público). También se aceptan los aliases legacy en
+      //     español para data antigua que aún no se ha migrado.
+      allow read:           if canOperate()
+                            || resource.data.status == 'published'
+                            || resource.data.status == 'disponible'
+                            || resource.data.status == 'reservada';
       allow create, update: if canOperate();
       allow delete:         if isAdmin();
     }

@@ -2,25 +2,18 @@
 // ─────────────────────────────────────────────────────────────
 // Configuración optimizada para SEO y Core Web Vitals.
 //
-// FIXES DE COMPATIBILIDAD ESM (abril 2026):
+// COMPATIBILIDAD ESM:
+//   Algunas dependencias usan sub-paquetes que solo tienen named exports.
+//   Cuando están en `exclude`, Vite sirve su ESM raw al browser que intenta
+//   importar `default` y explota con "does not provide an export named
+//   'default'".
 //
-//   PROBLEMA: Varias dependencias usan sub-paquetes que solo tienen
-//   named exports (sin `export default`). Cuando están en `exclude`,
-//   Vite sirve su ESM raw al browser que intenta importar `default`
-//   y explota con "does not provide an export named 'default'".
+//   Dependencias afectadas:
+//     • recharts@3.x       → usa es-toolkit/compat/get.js (named only)
+//     • react-big-calendar → usa invariant/browser.js     (named only)
 //
-//   DEPENDENCIAS AFECTADAS:
-//     • recharts@3.x     → usa es-toolkit/compat/get.js (named only)
-//     • react-big-calendar → usa invariant/browser.js  (named only)
-//
-//   SOLUCIÓN: mover estas librerías (y sus sub-deps problemáticas)
-//   a `optimizeDeps.include`. esbuild las pre-bundlea y resuelve
-//   correctamente los re-exports internos.
-//
-// LIMPIEZA DEPS (2026-04):
-//   • Eliminadas referencias a @fullcalendar/* — no se usa en código fuente
-//   • Eliminada referencia a @hello-pangea/dnd — se usa solo @dnd-kit
-//   • jspdf eliminado como standalone — se accede vía html2pdf.js
+//   Solución: moverlas a `optimizeDeps.include` para que esbuild las
+//   pre-bundlee y resuelva los re-exports internos.
 // ─────────────────────────────────────────────────────────────
 
 import { defineConfig } from "vite";
@@ -143,8 +136,6 @@ export default defineConfig({
           // el import dinámico.
           // ═══════════════════════════════════════════════════════════════════
 
-          // Mapas
-          if (id.includes("leaflet") || id.includes("react-leaflet")) return "maps-lazy";
 
           // Charts — agrupados con es-toolkit para resolver sus re-exports
           if (
@@ -154,8 +145,9 @@ export default defineConfig({
             id.includes("d3-")
           ) return "charts-lazy";
 
-          // PDF — html2pdf.js incluye jspdf y html2canvas internamente
-          if (id.includes("html2pdf") || id.includes("html2canvas")) return "pdf-lazy";
+          // PDF — html2pdf.js incluye jspdf y html2canvas internamente,
+          // pero pdfUtils.js también importa jspdf de forma directa.
+          if (id.includes("html2pdf") || id.includes("html2canvas") || id.includes("jspdf")) return "pdf-lazy";
 
           // DnD
           if (id.includes("@dnd-kit")) return "dnd-lazy";
@@ -198,8 +190,6 @@ export default defineConfig({
     ],
     exclude: [
       // Estas sí pueden excluirse — no tienen el problema de named-vs-default.
-      "leaflet",
-      "react-leaflet",
       "html2pdf.js",
       "html2canvas",
     ],

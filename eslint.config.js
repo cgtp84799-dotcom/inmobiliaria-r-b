@@ -138,4 +138,38 @@ export default [
       globals:     { ...globals.node },
     },
   },
+
+  // ── Tests (Vitest + Node) ────────────────────────────────────────────────
+  {
+    files: ['tests/**/*.{js,jsx,ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType:  'module',
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+        // Vitest globals usados vía import explícito — solo los más comunes
+        describe:   'readonly',
+        it:         'readonly',
+        test:       'readonly',
+        expect:     'readonly',
+        beforeAll:  'readonly',
+        afterAll:   'readonly',
+        beforeEach: 'readonly',
+        afterEach:  'readonly',
+        vi:         'readonly',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', {
+        argsIgnorePattern:         '^_',
+        varsIgnorePattern:         '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+      'no-console': 'off',
+    },
+  },
 ];

@@ -1,3 +1,4 @@
+import { SITE_URL as BASE_URL } from './site.config';
 /**
  * src/core/config/routes.config.js
  * ─────────────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ export const PUBLIC_ROUTES = {
 
   // Auth público clientes
   CLIENT_AUTH:           '/acceso-clientes',
+  EMAIL_VERIFICATION:    '/verificar-email',
+  EMAIL_VERIFY_TOKEN:    '/verificar-email/:token',
 };
 
 export const AUTH_ROUTES = {
@@ -83,9 +86,6 @@ export const PRIVATE_ROUTES = {
 /* ═══════════════════════════════════════════════════════════════════════════
  *  URL BUILDERS — usar estos en lugar de construir strings a mano
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-const BASE_URL = 'https://inmobiliaria-ryb-y-asociados.com';
-
 const slugify = (str = '') =>
   String(str)
     .normalize('NFD')

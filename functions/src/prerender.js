@@ -1,129 +1,67 @@
 // functions/src/prerender.js
 // ═══════════════════════════════════════════════════════════════════════════
 //  Prerender engine — Inmobiliaria Rincón Bedoya y Asociados
-//
-//  PROBLEMA QUE RESUELVE:
-//  Esta es una SPA (React + Vite). Google llega a cualquier URL y recibe
-//  solo <div id="root"></div> vacío. Todo el SEO (SeoHead, meta tags,
-//  schema JSON-LD) solo existe DESPUÉS de que React ejecuta el JS.
-//  Google sí ejecuta JS, pero con demora de días. Resultado: tus
-//  propiedades no aparecen en Google con los títulos/descripciones correctos.
-//
-//  CÓMO FUNCIONA:
-//  1. Cada request que llega a Firebase Hosting pasa primero por esta function.
-//  2. Si el User-Agent es un bot de búsqueda/redes sociales → se sirve
-//     el HTML pre-renderizado de Prerender.io (o el fallback estático).
-//  3. Si es un usuario real → se sirve index.html normal (SPA funciona igual).
-//
-//  MODOS DE OPERACIÓN:
-//  • Con Prerender.io (RECOMENDADO): registrate en prerender.io, obtén tu
-//    token y ponlo en PRERENDER_TOKEN. Ellos renderizan el JS y te devuelven
-//    HTML completo con todos los meta tags.
-//  • Sin Prerender.io (FALLBACK): genera HTML estático mínimo con los datos
-//    de Firestore para que Google al menos vea title, description y schema.
-//    Menos perfecto pero funciona sin costo adicional.
-//
-//  ACTIVACIÓN:
-//  1. En firebase.json: cambiar el último rewrite de destination a function.
-//  2. Opcional: añadir PRERENDER_TOKEN a Firebase Secrets.
 // ═══════════════════════════════════════════════════════════════════════════
 
 "use strict";
 
-const https   = require("https");
-const http    = require("http");
-const path    = require("path");
-const fs      = require("fs");
-const admin   = require("firebase-admin");
+const https = require("https");
+const path  = require("path");
+const fs    = require("fs");
+const admin = require("firebase-admin");
+
+const { SITE_URL: BASE_URL } = require('./site.config');
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-
-const BASE_URL      = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
 const COMPANY_PHONE = "+573105968202";
-const LOGO_URL      = `${BASE_URL}/logo-ryb.png`;
+const LOGO_URL      = `${BASE_URL}/logo-light.png`;
 const OG_DEFAULT    = `${BASE_URL}/og-default.jpg`;
 
 // ─── Detección de crawlers ────────────────────────────────────────────────────
-//  Lista completa de bots que necesitan HTML pre-renderizado.
-//  Incluye: motores de búsqueda, redes sociales, herramientas de preview.
-
 const CRAWLER_PATTERN = new RegExp([
-  // Motores de búsqueda
-  "googlebot",
-  "google-inspectiontool",
-  "adsbot-google",
-  "mediapartners-google",
-  "bingbot",
-  "slurp",            // Yahoo
-  "duckduckbot",
-  "baiduspider",
-  "yandexbot",
-  "sogou",
-  "exabot",
-  "ia_archiver",      // Wayback Machine
-  // Redes sociales (para previews al compartir)
-  "facebookexternalhit",
-  "facebookcatalog",
-  "twitterbot",
-  "linkedinbot",
-  "whatsapp",
-  "telegrambot",
-  "discordbot",
-  "slackbot",
-  // Herramientas SEO / análisis
-  "semrushbot",
-  "ahrefsbot",
-  "mj12bot",
-  "dotbot",
-  "rogerbot",
-  // Herramientas de validación
-  "w3c_validator",
-  "google rich results",
-  "chrome-lighthouse",
+  "googlebot", "google-inspectiontool", "adsbot-google", "mediapartners-google",
+  "bingbot", "slurp", "duckduckbot", "baiduspider", "yandexbot", "sogou",
+  "exabot", "ia_archiver",
+  "facebookexternalhit", "facebookcatalog", "twitterbot", "linkedinbot",
+  "whatsapp", "telegrambot", "discordbot", "slackbot",
+  "semrushbot", "ahrefsbot", "mj12bot", "dotbot", "rogerbot",
+  "w3c_validator", "google rich results", "chrome-lighthouse",
 ].join("|"), "i");
 
-/**
- * Determina si el request viene de un crawler.
- * @param {string} userAgent
- * @returns {boolean}
- */
 function isCrawler(userAgent) {
   if (!userAgent) return false;
   return CRAWLER_PATTERN.test(userAgent);
 }
 
-// ─── Helpers de datos ─────────────────────────────────────────────────────────
+// ─── Detectar si la URL es un asset estático ─────────────────────────────────
+const STATIC_ASSET_PATTERN = /\.(js|mjs|css|png|jpg|jpeg|webp|avif|svg|ico|woff|woff2|ttf|otf|eot|json|txt|xml|map|gz|br|pdf|mp4|webm|ogg|mp3|wav)$/i;
 
-/**
- * Extrae el ID de propiedad desde el slug de la URL.
- * URL: /propiedades/venta-casa-anserma-3-habitaciones-abc123def
- * ID:  abc123def
- */
+function isStaticAsset(urlPath) {
+  return (
+    urlPath.startsWith("/assets/") ||
+    urlPath.startsWith("/__/") ||
+    urlPath.startsWith("/static/") ||
+    STATIC_ASSET_PATTERN.test(urlPath)
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function extractPropertyId(urlPath) {
   const match = urlPath.match(/\/propiedades\/[^/]+-([a-zA-Z0-9]{6,})$/);
   return match ? match[1] : null;
 }
 
-/**
- * Extrae el slug de ciudad/zona desde la URL.
- * URL: /propiedades/zona/casas-en-venta-manizales
- */
 function extractZoneSlug(urlPath) {
   const match = urlPath.match(/\/propiedades\/zona\/([^/]+)$/);
   return match ? match[1] : null;
 }
 
-/**
- * Extrae el slug de departamento desde la URL.
- * URL: /propiedades/departamento/caldas
- */
 function extractDeptSlug(urlPath) {
   const match = urlPath.match(/\/propiedades\/departamento\/([^/]+)$/);
   return match ? match[1] : null;
 }
 
-/** Formatea precio en COP */
 function formatPrice(price) {
   if (!price) return null;
   const n = Number(price);
@@ -133,7 +71,6 @@ function formatPrice(price) {
   return `$${n.toLocaleString("es-CO")} COP`;
 }
 
-/** Resuelve campos de una propiedad de Firestore */
 function resolveProperty(data) {
   return {
     title:       data.title || "Propiedad",
@@ -160,11 +97,6 @@ function resolveProperty(data) {
   };
 }
 
-// ─── Generadores de HTML estático (fallback sin Prerender.io) ─────────────────
-
-/**
- * Escapa caracteres HTML para evitar XSS en el HTML estático.
- */
 function esc(str) {
   return String(str || "")
     .replace(/&/g, "&amp;")
@@ -174,143 +106,32 @@ function esc(str) {
     .replace(/'/g, "&#39;");
 }
 
-/**
- * Genera el HTML estático para la página de detalle de una propiedad.
- * Este HTML NO es lo que ve el usuario — es lo que ve Google.
- */
-function buildPropertyHtml(p, canonicalUrl) {
-  const txLabel = (() => {
-    const v = String(p.tx).toLowerCase();
-    if (["sale","venta","compra"].includes(v)) return "en venta";
-    if (["rent","arriendo","alquiler","renta"].includes(v)) return "en arriendo";
-    return "";
-  })();
+// ─── Leer index.html del hosting (para usuarios normales) ─────────────────────
+// Firebase copia los archivos del hosting junto a las functions en el deploy.
+// El index.html del dist se copia como static-index.html en el build script.
+let _cachedIndexHtml = null;
 
-  const typeLabel = (() => {
-    const v = String(p.type).toLowerCase();
-    if (v.includes("casa"))    return "Casa";
-    if (v.includes("apart"))   return "Apartamento";
-    if (v.includes("finca"))   return "Finca";
-    if (v.includes("lote"))    return "Lote";
-    if (v.includes("local"))   return "Local comercial";
-    if (v.includes("oficina")) return "Oficina";
-    if (v.includes("bodega"))  return "Bodega";
-    return "Propiedad";
-  })();
+function getIndexHtml() {
+  if (_cachedIndexHtml) return _cachedIndexHtml;
 
-  const priceFormatted = formatPrice(p.price);
-  const mainImage = p.images[0] || OG_DEFAULT;
+  // Intentar varias rutas donde puede estar el index.html
+  const candidates = [
+    path.join(__dirname, "../static-index.html"),  // copiado por build script
+    path.join(__dirname, "../../dist/index.html"), // dev local
+    path.join(__dirname, "../public/index.html"),  // alternativa
+  ];
 
-  const title = `${typeLabel} ${txLabel} en ${p.city}${p.rooms ? ` · ${p.rooms} hab` : ""}${priceFormatted ? ` · ${priceFormatted}` : ""} | ${COMPANY_NAME}`;
-  const description = [
-    `${typeLabel} ${txLabel} en ${p.city}, ${p.department}.`,
-    p.rooms    ? `${p.rooms} habitaciones.` : "",
-    p.baths    ? `${p.baths} baños.` : "",
-    p.area     ? `${p.area} m².` : "",
-    priceFormatted ? `Precio: ${priceFormatted}.` : "",
-    `Verificación jurídica completa por ${COMPANY_NAME}.`,
-  ].filter(Boolean).join(" ");
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      _cachedIndexHtml = fs.readFileSync(p, "utf8");
+      return _cachedIndexHtml;
+    }
+  }
 
-  // Availability para schema
-  const availability = (() => {
-    const s = String(p.status).toLowerCase();
-    if (s === "vendida" || s === "sold") return "https://schema.org/SoldOut";
-    if (s === "reservada") return "https://schema.org/LimitedAvailability";
-    return "https://schema.org/InStock";
-  })();
-
-  const schemaListing = {
-    "@context": "https://schema.org",
-    "@type": "RealEstateListing",
-    name: p.title,
-    description: p.description || description,
-    url: canonicalUrl,
-    mainEntityOfPage: canonicalUrl,
-    datePosted: p.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    image: p.images.length > 0
-      ? p.images.map((url, i) => ({
-          "@type": "ImageObject",
-          url,
-          contentUrl: url,
-          caption: `${typeLabel} ${txLabel} en ${p.city}`,
-          representativeOfPage: i === 0,
-        }))
-      : [{ "@type": "ImageObject", url: OG_DEFAULT, representativeOfPage: true }],
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: p.address,
-      addressLocality: p.city,
-      addressRegion: p.department,
-      addressCountry: "CO",
-    },
-    ...(p.lat && p.lng ? {
-      geo: { "@type": "GeoCoordinates", latitude: p.lat, longitude: p.lng }
-    } : {}),
-    ...(p.rooms ? { numberOfRooms: Number(p.rooms) } : {}),
-    ...(p.area  ? { floorSize: { "@type": "QuantitativeValue", value: Number(p.area), unitCode: "MTK" } } : {}),
-    ...(p.amenities.length > 0 ? {
-      amenityFeature: p.amenities.map(a => ({ "@type": "LocationFeatureSpecification", name: a, value: true }))
-    } : {}),
-    ...(p.price ? {
-      offers: {
-        "@type": "Offer",
-        price: Number(p.price),
-        priceCurrency: "COP",
-        availability,
-        url: canonicalUrl,
-        priceValidUntil: new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString().slice(0, 10),
-        seller: {
-          "@type": "RealEstateAgent",
-          "@id": `${BASE_URL}/#organization`,
-          name: COMPANY_NAME,
-          telephone: COMPANY_PHONE,
-        },
-      }
-    } : {}),
-  };
-
-  const schemaBreadcrumb = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Inicio", item: BASE_URL },
-      { "@type": "ListItem", position: 2, name: "Catálogo", item: `${BASE_URL}/catalogo` },
-      { "@type": "ListItem", position: 3, name: `${typeLabel} en ${p.city}`, item: canonicalUrl },
-    ],
-  };
-
-  return buildHtmlShell({
-    title,
-    description,
-    canonical: canonicalUrl,
-    ogImage: mainImage,
-    ogType: "article",
-    price: p.price,
-    schemas: [schemaListing, schemaBreadcrumb],
-    bodyContent: `
-      <h1>${esc(p.title)}</h1>
-      <p>${esc(description)}</p>
-      ${p.images.slice(0, 4).map(img => `<img src="${esc(img)}" alt="${esc(p.title)}" loading="lazy"/>`).join("")}
-      <ul>
-        ${p.rooms  ? `<li>Habitaciones: ${esc(p.rooms)}</li>`  : ""}
-        ${p.baths  ? `<li>Baños: ${esc(p.baths)}</li>`         : ""}
-        ${p.area   ? `<li>Área: ${esc(p.area)} m²</li>`        : ""}
-        ${priceFormatted ? `<li>Precio: ${esc(priceFormatted)}</li>` : ""}
-        <li>Ciudad: ${esc(p.city)}, ${esc(p.department)}</li>
-        <li>Verificación jurídica: incluida</li>
-      </ul>
-      ${p.amenities.length > 0 ? `<ul>${p.amenities.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}
-      <a href="${esc(canonicalUrl)}">Ver propiedad completa</a>
-      <a href="${esc(BASE_URL)}/catalogo">Ver más propiedades</a>
-      <a href="${esc(BASE_URL)}/contacto">Contactar agente</a>
-    `,
-  });
+  return null;
 }
 
-/**
- * Shell HTML mínimo para crawlers — contiene todos los meta tags SEO
- * pero el body es texto plano (no interfiere con el JS de React).
- */
+// ─── HTML Shell para crawlers ─────────────────────────────────────────────────
 function buildHtmlShell({ title, description, canonical, ogImage, ogType = "website", price, schemas = [], bodyContent = "" }) {
   const schemasHtml = schemas.map(s =>
     `<script type="application/ld+json">${JSON.stringify(s)}</script>`
@@ -338,10 +159,8 @@ function buildHtmlShell({ title, description, canonical, ogImage, ogType = "webs
   <meta property="og:image:alt" content="${esc(title)}"/>
   <meta property="og:locale" content="es_CO"/>
   <meta property="og:site_name" content="${esc(COMPANY_NAME)}"/>
-  ${price ? `
-  <meta property="product:price:amount" content="${Number(price)}"/>
-  <meta property="product:price:currency" content="COP"/>
-  ` : ""}
+  ${price ? `<meta property="product:price:amount" content="${Number(price)}"/>
+  <meta property="product:price:currency" content="COP"/>` : ""}
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:site" content="@inmobiliaria_ryb"/>
   <meta name="twitter:title" content="${esc(title)}"/>
@@ -370,15 +189,6 @@ function buildHtmlShell({ title, description, canonical, ogImage, ogType = "webs
 }
 
 // ─── Prerender.io proxy ───────────────────────────────────────────────────────
-
-/**
- * Llama a Prerender.io y devuelve el HTML renderizado.
- * Prerender.io ejecuta el JS completo y devuelve el DOM final —
- * meta tags de Helmet incluidos.
- * @param {string} targetUrl  URL completa a pre-renderizar
- * @param {string} token      Token de Prerender.io
- * @returns {Promise<string>} HTML renderizado
- */
 function fetchFromPrerender(targetUrl, token) {
   return new Promise((resolve, reject) => {
     const prerenderUrl = `https://service.prerender.io/${targetUrl}`;
@@ -388,7 +198,6 @@ function fetchFromPrerender(targetUrl, token) {
         "User-Agent": "Prerender",
       },
     };
-
     https.get(prerenderUrl, options, (res) => {
       let html = "";
       res.setEncoding("utf8");
@@ -399,7 +208,6 @@ function fetchFromPrerender(targetUrl, token) {
 }
 
 // ─── Generadores de HTML por tipo de página ───────────────────────────────────
-
 async function buildHomeHtml() {
   const schema = {
     "@context": "https://schema.org",
@@ -469,25 +277,19 @@ async function buildCatalogHtml(queryParams) {
   });
 }
 
-async function buildPropertyDetailHtml(propertyId, urlPath) {
+async function buildPropertyDetailHtml(propertyId) {
   try {
     const db = admin.firestore();
     const snap = await db.collection("properties").doc(propertyId).get();
 
-    if (!snap.exists || !snap.data()) {
-      return buildNotFoundHtml();
-    }
+    if (!snap.exists || !snap.data()) return buildNotFoundHtml();
 
     const data = snap.data();
-    // Solo mostrar propiedades públicas
     const publicStatuses = new Set(["disponible","reservada","published","active","available",""]);
-    if (!publicStatuses.has(String(data.status || "").toLowerCase())) {
-      return buildNotFoundHtml();
-    }
+    if (!publicStatuses.has(String(data.status || "").toLowerCase())) return buildNotFoundHtml();
 
     const p = resolveProperty(data);
 
-    // Reconstruir la URL canónica (igual que buildCanonicalPropertyUrl en React)
     const normalize = (s) => String(s).normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
       .replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
@@ -507,31 +309,134 @@ async function buildPropertyDetailHtml(propertyId, urlPath) {
   }
 }
 
-async function buildZoneHtml(zoneSlug) {
-  // Extraer ciudad y tipo del slug: "casas-en-venta-manizales"
-  const cityMatch  = zoneSlug.match(/-([a-z]+)$/);
-  const typeMatch  = zoneSlug.match(/^([a-z]+)/);
-  const city       = cityMatch  ? cityMatch[1]  : "Colombia";
-  const type       = typeMatch  ? typeMatch[1]  : "Propiedades";
-  const canonical  = `${BASE_URL}/propiedades/zona/${zoneSlug}`;
+function buildPropertyHtml(p, canonicalUrl) {
+  const txLabel = (() => {
+    const v = String(p.tx).toLowerCase();
+    if (["sale","venta","compra"].includes(v)) return "en venta";
+    if (["rent","arriendo","alquiler","renta"].includes(v)) return "en arriendo";
+    return "";
+  })();
 
-  const title = `${esc(type.charAt(0).toUpperCase() + type.slice(1))} en ${esc(city.charAt(0).toUpperCase() + city.slice(1))} | ${COMPANY_NAME}`;
+  const typeLabel = (() => {
+    const v = String(p.type).toLowerCase();
+    if (v.includes("casa"))    return "Casa";
+    if (v.includes("apart"))   return "Apartamento";
+    if (v.includes("finca"))   return "Finca";
+    if (v.includes("lote"))    return "Lote";
+    if (v.includes("local"))   return "Local comercial";
+    if (v.includes("oficina")) return "Oficina";
+    if (v.includes("bodega"))  return "Bodega";
+    return "Propiedad";
+  })();
+
+  const priceFormatted = formatPrice(p.price);
+  const mainImage = p.images[0] || OG_DEFAULT;
+
+  const title = `${typeLabel} ${txLabel} en ${p.city}${p.rooms ? ` · ${p.rooms} hab` : ""}${priceFormatted ? ` · ${priceFormatted}` : ""} | ${COMPANY_NAME}`;
+  const description = [
+    `${typeLabel} ${txLabel} en ${p.city}, ${p.department}.`,
+    p.rooms    ? `${p.rooms} habitaciones.` : "",
+    p.baths    ? `${p.baths} baños.` : "",
+    p.area     ? `${p.area} m².` : "",
+    priceFormatted ? `Precio: ${priceFormatted}.` : "",
+    `Verificación jurídica completa por ${COMPANY_NAME}.`,
+  ].filter(Boolean).join(" ");
+
+  const availability = (() => {
+    const s = String(p.status).toLowerCase();
+    if (s === "vendida" || s === "sold") return "https://schema.org/SoldOut";
+    if (s === "reservada") return "https://schema.org/LimitedAvailability";
+    return "https://schema.org/InStock";
+  })();
+
+  const schemaListing = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    name: p.title,
+    description: p.description || description,
+    url: canonicalUrl,
+    mainEntityOfPage: canonicalUrl,
+    datePosted: p.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    image: p.images.length > 0
+      ? p.images.map((url, i) => ({ "@type": "ImageObject", url, contentUrl: url, caption: `${typeLabel} ${txLabel} en ${p.city}`, representativeOfPage: i === 0 }))
+      : [{ "@type": "ImageObject", url: OG_DEFAULT, representativeOfPage: true }],
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: p.address,
+      addressLocality: p.city,
+      addressRegion: p.department,
+      addressCountry: "CO",
+    },
+    ...(p.lat && p.lng ? { geo: { "@type": "GeoCoordinates", latitude: p.lat, longitude: p.lng } } : {}),
+    ...(p.rooms ? { numberOfRooms: Number(p.rooms) } : {}),
+    ...(p.area  ? { floorSize: { "@type": "QuantitativeValue", value: Number(p.area), unitCode: "MTK" } } : {}),
+    ...(p.amenities.length > 0 ? { amenityFeature: p.amenities.map(a => ({ "@type": "LocationFeatureSpecification", name: a, value: true })) } : {}),
+    ...(p.price ? {
+      offers: {
+        "@type": "Offer",
+        price: Number(p.price),
+        priceCurrency: "COP",
+        availability,
+        url: canonicalUrl,
+        priceValidUntil: new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        seller: { "@type": "RealEstateAgent", "@id": `${BASE_URL}/#organization`, name: COMPANY_NAME, telephone: COMPANY_PHONE },
+      }
+    } : {}),
+  };
+
+  const schemaBreadcrumb = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Inicio", item: BASE_URL },
+      { "@type": "ListItem", position: 2, name: "Catálogo", item: `${BASE_URL}/catalogo` },
+      { "@type": "ListItem", position: 3, name: `${typeLabel} en ${p.city}`, item: canonicalUrl },
+    ],
+  };
+
+  return buildHtmlShell({
+    title, description, canonical: canonicalUrl,
+    ogImage: mainImage, ogType: "article", price: p.price,
+    schemas: [schemaListing, schemaBreadcrumb],
+    bodyContent: `
+      <h1>${esc(p.title)}</h1>
+      <p>${esc(description)}</p>
+      ${p.images.slice(0, 4).map(img => `<img src="${esc(img)}" alt="${esc(p.title)}" loading="lazy"/>`).join("")}
+      <ul>
+        ${p.rooms  ? `<li>Habitaciones: ${esc(p.rooms)}</li>`  : ""}
+        ${p.baths  ? `<li>Baños: ${esc(p.baths)}</li>`         : ""}
+        ${p.area   ? `<li>Área: ${esc(p.area)} m²</li>`        : ""}
+        ${priceFormatted ? `<li>Precio: ${esc(priceFormatted)}</li>` : ""}
+        <li>Ciudad: ${esc(p.city)}, ${esc(p.department)}</li>
+        <li>Verificación jurídica: incluida</li>
+      </ul>
+      ${p.amenities.length > 0 ? `<ul>${p.amenities.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}
+      <a href="${esc(canonicalUrl)}">Ver propiedad completa</a>
+      <a href="${BASE_URL}/catalogo">Ver más propiedades</a>
+      <a href="${BASE_URL}/contacto">Contactar agente</a>
+    `,
+  });
+}
+
+async function buildZoneHtml(zoneSlug) {
+  const cityMatch = zoneSlug.match(/-([a-z]+)$/);
+  const typeMatch = zoneSlug.match(/^([a-z]+)/);
+  const city      = cityMatch ? cityMatch[1] : "Colombia";
+  const type      = typeMatch ? typeMatch[1] : "Propiedades";
+  const canonical = `${BASE_URL}/propiedades/zona/${zoneSlug}`;
+  const title     = `${type.charAt(0).toUpperCase() + type.slice(1)} en ${city.charAt(0).toUpperCase() + city.slice(1)} | ${COMPANY_NAME}`;
 
   return buildHtmlShell({
     title,
     description: `Encuentra ${type} en venta y arriendo en ${city}. ${COMPANY_NAME} ofrece propiedades con verificación jurídica completa, saneamiento predial y asesoría legal especializada.`,
-    canonical,
-    ogImage: OG_DEFAULT,
+    canonical, ogImage: OG_DEFAULT,
     schemas: [{
-      "@context": "https://schema.org",
-      "@type": "CollectionPage",
-      name: title,
-      url: canonical,
-      isPartOf: { "@id": `${BASE_URL}/#website` },
-      inLanguage: "es-CO",
+      "@context": "https://schema.org", "@type": "CollectionPage",
+      name: title, url: canonical,
+      isPartOf: { "@id": `${BASE_URL}/#website` }, inLanguage: "es-CO",
     }],
     bodyContent: `
-      <h1>${title}</h1>
+      <h1>${esc(title)}</h1>
       <p>Propiedades en venta y arriendo en ${esc(city)} con verificación jurídica completa.</p>
       <a href="${BASE_URL}/catalogo">Ver todo el catálogo</a>
       <a href="${BASE_URL}">Inicio</a>
@@ -544,8 +449,7 @@ function buildNotFoundHtml() {
   return buildHtmlShell({
     title: `Página no encontrada | ${COMPANY_NAME}`,
     description: "La página que buscas no existe. Explora nuestro catálogo de propiedades en venta y arriendo.",
-    canonical: `${BASE_URL}/404`,
-    ogImage: OG_DEFAULT,
+    canonical: `${BASE_URL}/404`, ogImage: OG_DEFAULT,
     bodyContent: `
       <h1>Página no encontrada</h1>
       <p>La propiedad que buscas no existe o no está disponible.</p>
@@ -559,8 +463,7 @@ function buildFallbackHtml() {
   return buildHtmlShell({
     title: `Propiedades en Colombia | ${COMPANY_NAME}`,
     description: "Casas, apartamentos, fincas y locales en venta y arriendo en Colombia con verificación jurídica completa.",
-    canonical: BASE_URL,
-    ogImage: OG_DEFAULT,
+    canonical: BASE_URL, ogImage: OG_DEFAULT,
     bodyContent: `
       <h1>${esc(COMPANY_NAME)}</h1>
       <p>Gestión inmobiliaria con respaldo jurídico en Colombia.</p>
@@ -571,58 +474,82 @@ function buildFallbackHtml() {
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────
-
-/**
- * handlePrerenderRequest
- *
- * Exportado para usarse en functions/index.js como:
- *   exports.serveApp = onRequest(handlePrerenderRequest);
- *
- * @param {import('firebase-functions').https.Request} req
- * @param {import('firebase-functions').https.Response} res
- */
 async function handlePrerenderRequest(req, res) {
   const userAgent = req.headers["user-agent"] || "";
   const urlPath   = req.path || "/";
 
-  // 1. Usuario real → servir index.html (Firebase Hosting lo hace normalmente)
-  //    Esta function solo se activa para crawlers, según la configuración
-  //    de firebase.json que solo redirecciona si detectamos el UA aquí.
-  if (!isCrawler(userAgent)) {
-    // Leer index.html desde el disco (ya compilado por Vite en dist/)
-    try {
-      const indexPath = path.join(__dirname, "../../dist/index.html");
-      if (fs.existsSync(indexPath)) {
-        return res.status(200).sendFile(indexPath);
-      }
-    } catch (_) {}
-    // Fallback: redirect a Firebase Hosting directamente
-    return res.redirect(302, `${BASE_URL}${urlPath}`);
+  // ── 1. NUNCA interceptar assets estáticos ───────────────────────────────────
+  // Los archivos .js, .css, imágenes, etc. deben ser servidos por Firebase
+  // Hosting directamente. Si llegan aquí es un error de configuración —
+  // los dejamos pasar con 404 en lugar de romper la app con HTML.
+  if (isStaticAsset(urlPath)) {
+    console.warn("[prerender] Asset interceptado incorrectamente:", urlPath);
+    res.set("Cache-Control", "no-store");
+    return res.status(404).send("Not found");
   }
 
-  // 2. Crawler detectado → servir HTML pre-renderizado
+  // ── 2. Usuario real → servir index.html ────────────────────────────────────
+  // Para usuarios normales servimos el index.html del build de React.
+  // Firebase Hosting normalmente haría esto, pero como usamos una Cloud
+  // Function como catch-all, tenemos que hacerlo nosotros.
+  if (!isCrawler(userAgent)) {
+    const indexHtml = getIndexHtml();
+
+    if (indexHtml) {
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.set("X-Served-By", "prerender-function");
+      return res.status(200).send(indexHtml);
+    }
+
+    // Si por alguna razón no se encuentra el index.html (nunca debería pasar
+    // en producción si el build script copió el archivo), devolver un HTML
+    // mínimo que carga la SPA desde el dominio raíz — sin redirect que rompa assets.
+    console.error("[prerender] CRÍTICO: static-index.html no encontrado en", path.join(__dirname, "../static-index.html"));
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", "no-store");
+    return res.status(200).send(`<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cargando... | Inmobiliaria Rincón Bedoya</title>
+  <script>
+    // El index.html estático no está disponible — redirigir al hosting directamente
+    // usando la URL actual para no perder la ruta
+    if (!window.location.search.includes('_fb=1')) {
+      window.location.replace(window.location.href + (window.location.search ? '&' : '?') + '_fb=1');
+    }
+  </script>
+</head>
+<body><p>Cargando...</p></body>
+</html>`);
+  }
+
+  // ── 3. Crawler detectado → servir HTML pre-renderizado ─────────────────────
   try {
     const prerenderToken = process.env.PRERENDER_TOKEN || "";
     const fullUrl = `${BASE_URL}${urlPath}${req.search || ""}`;
 
-    // Modo A: Prerender.io (si hay token configurado)
+    // Modo A: Prerender.io (con token configurado)
+    // Prerender.io ejecuta React completo y espera window.prerenderReady = true
     if (prerenderToken) {
       const html = await fetchFromPrerender(fullUrl, prerenderToken);
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.set("X-Prerender", "true");
-      res.set("Cache-Control", "public, max-age=300, s-maxage=3600"); // 5 min local, 1h CDN
+      res.set("X-Prerender", "prerender-io");
+      res.set("Cache-Control", "public, max-age=300, s-maxage=3600");
       return res.status(200).send(html);
     }
 
     // Modo B: HTML estático generado desde Firestore (sin Prerender.io)
-    // Determinar qué tipo de página es según la URL
+    // Genera HTML mínimo con title, description y schema para cada tipo de página.
     let html;
-    const searchParams = new URLSearchParams(req.query);
+    const searchParams = new URLSearchParams(req.query || {});
 
     if (urlPath === "/" || urlPath === "") {
       html = await buildHomeHtml();
 
-    } else if (urlPath === "/catalogo") {
+    } else if (urlPath === "/catalogo" || urlPath.startsWith("/catalogo?")) {
       html = await buildCatalogHtml(searchParams);
 
     } else if (urlPath.startsWith("/propiedades/zona/")) {
@@ -636,7 +563,7 @@ async function handlePrerenderRequest(req, res) {
     } else if (urlPath.startsWith("/propiedades/")) {
       const propertyId = extractPropertyId(urlPath);
       html = propertyId
-        ? await buildPropertyDetailHtml(propertyId, urlPath)
+        ? await buildPropertyDetailHtml(propertyId)
         : await buildFallbackHtml();
 
     } else if (urlPath === "/contacto") {
@@ -645,21 +572,51 @@ async function handlePrerenderRequest(req, res) {
         description: `Contacta a ${COMPANY_NAME} para comprar, vender o arrendar propiedades en Colombia. Teléfono: ${COMPANY_PHONE}.`,
         canonical: `${BASE_URL}/contacto`,
         ogImage: OG_DEFAULT,
-        bodyContent: `<h1>Contacto</h1><p>Tel: ${esc(COMPANY_PHONE)}</p><a href="${BASE_URL}">Inicio</a>`,
+        bodyContent: `
+          <h1>Contacto — ${esc(COMPANY_NAME)}</h1>
+          <p>Estamos disponibles para acompañarte en todo el proceso inmobiliario.</p>
+          <ul>
+            <li>Teléfono: <a href="tel:${COMPANY_PHONE}">${esc(COMPANY_PHONE)}</a></li>
+            <li>Email: <a href="mailto:inmojuridi09@gmail.com">inmojuridi09@gmail.com</a></li>
+            <li>Dirección: Cra 5 #9-28, Anserma, Caldas, Colombia</li>
+          </ul>
+          <a href="${BASE_URL}">Inicio</a>
+          <a href="${BASE_URL}/catalogo">Ver propiedades</a>
+        `,
       });
+
+    } else if (urlPath === "/politica-privacidad") {
+      html = buildHtmlShell({
+        title: `Política de Privacidad | ${COMPANY_NAME}`,
+        description: `Política de privacidad y tratamiento de datos personales de ${COMPANY_NAME}.`,
+        canonical: `${BASE_URL}/politica-privacidad`,
+        ogImage: OG_DEFAULT,
+        bodyContent: `<h1>Política de Privacidad</h1><a href="${BASE_URL}">Inicio</a>`,
+      });
+
     } else {
       html = await buildFallbackHtml();
     }
 
     res.set("Content-Type", "text/html; charset=utf-8");
-    res.set("X-Prerender", "static");
+    res.set("X-Prerender", "static-fallback");
     res.set("Cache-Control", "public, max-age=300, s-maxage=3600");
     return res.status(200).send(html);
 
   } catch (err) {
-    console.error("[prerender] Error:", err.message);
-    // En caso de error, dejar que Firebase Hosting sirva index.html normalmente
-    return res.redirect(302, `${BASE_URL}${urlPath}`);
+    console.error("[prerender] Error inesperado:", urlPath, err.message);
+
+    // En caso de error, intentar servir el index.html para no romper la navegación
+    const indexHtml = getIndexHtml();
+    if (indexHtml) {
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.set("Cache-Control", "no-store");
+      return res.status(200).send(indexHtml);
+    }
+
+    // Último recurso: página de error simple (no redirect que cause loops)
+    res.set("Content-Type", "text/html; charset=utf-8");
+    return res.status(500).send(`<!doctype html><html><head><title>Error</title></head><body><h1>Error temporal</h1><a href="${BASE_URL}">Volver al inicio</a></body></html>`);
   }
 }
 

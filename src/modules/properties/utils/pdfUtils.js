@@ -250,4 +250,4 @@ export const downloadPDFExactVisual = async (
   } finally {
     removeNodeSafe(wrapper);
   }
-};  
+};

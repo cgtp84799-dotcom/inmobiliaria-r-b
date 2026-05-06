@@ -1,4 +1,9 @@
 // src/shared/components/UI/ConfirmModal.jsx
+//
+// Modal de confirmación reutilizable. Usa tokens CSS para los colores
+// estructurales (fondo, borde, texto) y colores semánticos hex para las
+// variantes (rojo / ámbar / dorado / azul) que tienen significado fijo.
+
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,43 +11,45 @@ import {
   FaExclamationCircle, FaInfoCircle,
 } from 'react-icons/fa';
 
-/* ─── Variantes de intención ────────────────────────────────── */
+// ─── Variantes ────────────────────────────────────────────────────────────────
+// Cada variante define el color semántico del icono y del botón confirmar.
+// Los colores estructurales (fondo del modal, texto, borde) vienen de tokens.
 const VARIANTS = {
   danger: {
     Icon:      FaTrash,
-    iconColor: 'var(--color-error)',
-    iconBg:    'var(--color-error-highlight)',
-    btnBg:     'var(--color-error)',
-    btnHover:  'var(--color-error-hover)',
-    btnText:   '#fff',
+    iconColor: '#ef4444',          // red-500
+    iconBg:    'rgba(239, 68, 68, 0.12)',
+    btnBg:     '#dc2626',          // red-600
+    btnHover:  '#b91c1c',          // red-700
+    btnText:   '#ffffff',
   },
   warning: {
     Icon:      FaExclamationTriangle,
-    iconColor: 'var(--color-warning)',
-    iconBg:    'var(--color-warning-highlight)',
-    btnBg:     'var(--color-warning)',
-    btnHover:  'var(--color-warning-hover)',
-    btnText:   '#fff',
+    iconColor: '#f59e0b',          // amber-500
+    iconBg:    'rgba(245, 158, 11, 0.12)',
+    btnBg:     '#f59e0b',
+    btnHover:  '#d97706',
+    btnText:   '#ffffff',
   },
   primary: {
     Icon:      FaExclamationCircle,
-    iconColor: 'var(--color-primary)',
-    iconBg:    'var(--color-primary-highlight)',
-    btnBg:     'var(--color-primary)',
-    btnHover:  'var(--color-primary-hover)',
-    btnText:   '#fff',
+    iconColor: 'var(--color-gold)',
+    iconBg:    'rgba(180, 83, 9, 0.12)',
+    btnBg:     'var(--color-gold)',
+    btnHover:  'var(--color-gold-soft)',
+    btnText:   'var(--color-bg)',
   },
   info: {
     Icon:      FaInfoCircle,
-    iconColor: 'var(--color-blue)',
-    iconBg:    'var(--color-blue-highlight)',
-    btnBg:     'var(--color-blue)',
-    btnHover:  'var(--color-blue-hover)',
-    btnText:   '#fff',
+    iconColor: '#3b82f6',          // blue-500
+    iconBg:    'rgba(59, 130, 246, 0.12)',
+    btnBg:     '#3b82f6',
+    btnHover:  '#2563eb',
+    btnText:   '#ffffff',
   },
 };
 
-/* ─── Hook: focus trap ──────────────────────────────────────── */
+// ─── Hook focus trap ──────────────────────────────────────────────────────────
 function useFocusTrap(ref, isActive) {
   useEffect(() => {
     if (!isActive || !ref.current) return;
@@ -53,7 +60,6 @@ function useFocusTrap(ref, isActive) {
     const first = focusable[0];
     const last  = focusable[focusable.length - 1];
 
-    // Foco inicial en el primer elemento
     first?.focus();
 
     const trap = (e) => {
@@ -70,9 +76,39 @@ function useFocusTrap(ref, isActive) {
   }, [ref, isActive]);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   CONFIRM MODAL
-═══════════════════════════════════════════════════════════════ */
+// ─── ConfirmModal ─────────────────────────────────────────────────────────────
+//
+// Props:
+//   isOpen         boolean    obligatorio
+//   title          string     obligatorio
+//   message        string     opcional (puede ser ReactNode)
+//   onConfirm      function   obligatorio
+//   onCancel       function   obligatorio
+//   confirmText    string     default 'Eliminar'
+//   cancelText     string     default 'Cancelar'
+//   variant        string     'danger' | 'warning' | 'primary' | 'info'
+//   confirmColor   string     [legacy] alias para variant. Acepta:
+//                              'red' | 'yellow' | 'amber' | 'blue' | 'gold'.
+//                              Se mantiene para compat con código existente
+//                              que lo invoca así (p.ej. SessionSection).
+//   loading        boolean    muestra spinner en el botón confirmar
+//
+// Si confirmColor está definido, prevalece sobre variant para compat.
+const COLOR_TO_VARIANT = {
+  red:    'danger',
+  rojo:   'danger',
+  yellow: 'warning',
+  amarillo: 'warning',
+  amber:  'warning',
+  ambar:  'warning',
+  blue:   'info',
+  azul:   'info',
+  gold:   'primary',
+  oro:    'primary',
+  primary:'primary',
+  dorado: 'primary',
+};
+
 export default function ConfirmModal({
   isOpen,
   title,
@@ -81,17 +117,22 @@ export default function ConfirmModal({
   onCancel,
   confirmText  = 'Eliminar',
   cancelText   = 'Cancelar',
-  variant      = 'danger',   // 'danger' | 'warning' | 'primary' | 'info'
-  loading      = false,      // muestra spinner en botón confirmar
+  variant      = 'danger',
+  confirmColor,
+  loading      = false,
 }) {
   const dialogRef = useRef(null);
-  const meta      = VARIANTS[variant] ?? VARIANTS.danger;
-  const { Icon }  = meta;
 
-  /* ── Focus trap ─────────────────────────────────────────────── */
+  const resolvedVariant = confirmColor
+    ? (COLOR_TO_VARIANT[String(confirmColor).toLowerCase()] || variant)
+    : variant;
+
+  const meta     = VARIANTS[resolvedVariant] || VARIANTS.danger;
+  const Icon     = meta.Icon;
+
   useFocusTrap(dialogRef, isOpen);
 
-  /* ── Escape para cerrar ─────────────────────────────────────── */
+  // Escape para cerrar
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e) => { if (e.key === 'Escape') onCancel?.(); };
@@ -99,7 +140,7 @@ export default function ConfirmModal({
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onCancel]);
 
-  /* ── Bloquea scroll del body mientras está abierto ─────────── */
+  // Bloquea scroll del body mientras está abierto
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -110,7 +151,6 @@ export default function ConfirmModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        /* Backdrop */
         <motion.div
           key="confirm-backdrop"
           initial={{ opacity: 0 }}
@@ -122,7 +162,6 @@ export default function ConfirmModal({
           onClick={onCancel}
           aria-hidden="true"
         >
-          {/* Panel */}
           <motion.div
             key="confirm-panel"
             ref={dialogRef}
@@ -138,17 +177,17 @@ export default function ConfirmModal({
             className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
             style={{
               backgroundColor: 'var(--color-surface)',
-              border:          '1px solid var(--color-border)',
-              color:           'var(--color-text)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
             }}
           >
-            {/* Ícono + textos */}
+            {/* Icono + textos */}
             <div className="flex items-start gap-4 mb-5">
               <div
                 className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
                 style={{
                   backgroundColor: meta.iconBg,
-                  color:           meta.iconColor,
+                  color: meta.iconColor,
                 }}
                 aria-hidden="true"
               >
@@ -177,49 +216,35 @@ export default function ConfirmModal({
 
             {/* Botones */}
             <div className="flex gap-3">
-              {/* Cancelar */}
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold
-                           transition-all duration-150
-                           focus-visible:outline-none focus-visible:ring-2
-                           focus-visible:ring-offset-2 disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-50"
                 style={{
-                  backgroundColor: 'var(--color-surface-offset)',
-                  color:           'var(--color-text-muted)',
-                  // ring offset color
-                  '--tw-ring-offset-color': 'var(--color-surface)',
+                  backgroundColor: 'var(--color-inner-card)',
+                  color: 'var(--color-text-muted)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--color-surface-dynamic)';
-                  e.currentTarget.style.color           = 'var(--color-text)';
+                  e.currentTarget.style.backgroundColor = 'var(--color-row-hover)';
+                  e.currentTarget.style.color = 'var(--color-text)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--color-surface-offset)';
-                  e.currentTarget.style.color           = 'var(--color-text-muted)';
+                  e.currentTarget.style.backgroundColor = 'var(--color-inner-card)';
+                  e.currentTarget.style.color = 'var(--color-text-muted)';
                 }}
               >
                 {cancelText}
               </button>
 
-              {/* Confirmar */}
               <button
                 type="button"
                 onClick={onConfirm}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold
-                           transition-all duration-150
-                           focus-visible:outline-none focus-visible:ring-2
-                           focus-visible:ring-offset-2
-                           flex items-center justify-center gap-2
-                           disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: meta.btnBg,
-                  color:           meta.btnText,
-                  '--tw-ring-color':        meta.btnBg,
-                  '--tw-ring-offset-color': 'var(--color-surface)',
+                  color: meta.btnText,
                 }}
                 onMouseEnter={(e) => {
                   if (!loading) e.currentTarget.style.backgroundColor = meta.btnHover;
@@ -229,10 +254,10 @@ export default function ConfirmModal({
                 }}
               >
                 {loading && (
-                  /* Spinner SVG — sin dependencia extra */
                   <svg
                     className="animate-spin"
-                    width={14} height={14}
+                    width={14}
+                    height={14}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"

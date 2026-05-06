@@ -1,19 +1,7 @@
 // src/shared/components/LazyImage.jsx
-// ═════════════════════════════════════════════════════════════════════════════
-// Componente de imagen con lazy loading usando IntersectionObserver
-// Optimizado para catálogos de propiedades con muchas imágenes
-// ═════════════════════════════════════════════════════════════════════════════
-
 import { useState, useEffect, useRef } from 'react';
 
-/**
- * Componente de imagen con lazy loading
- * @param {string} src - URL de la imagen
- * @param {string} alt - Texto alternativo
- * @param {object} props - Props adicionales del componente img
- * @returns {JSX.Element} - Componente de imagen optimizado
- */
-export default function LazyImage({ 
+export default function LazyImage({
   src, 
   alt, 
   className = '',
@@ -32,7 +20,7 @@ export default function LazyImage({
     <div className={`bg-slate-200 animate-pulse ${className}`}>
       {!placeholder && (
         <div className="w-full h-full flex items-center justify-center">
-          <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-8 h-8 text-[var(--color-text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
@@ -97,18 +85,13 @@ export default function LazyImage({
       {/* Error fallback */}
       {hasError && isLoaded && (
         <div className={`absolute inset-0 bg-slate-100 flex items-center justify-center ${className}`}>
-          <span className="text-slate-400 text-sm">Imagen no disponible</span>
+          <span className="text-[var(--color-text-muted)] text-sm">Imagen no disponible</span>
         </div>
       )}
     </div>
   );
 }
 
-/**
- * Hook para lazy loading de imágenes
- * @param {object} options - Opciones de configuración
- * @returns {object} - { ref, isInView }
- */
 export function useLazyImage(options = {}) {
   const { threshold = 0.1, rootMargin = '100px' } = options;
   const [isInView, setIsInView] = useState(false);
@@ -137,20 +120,13 @@ export function useLazyImage(options = {}) {
   return { ref, isInView };
 }
 
-/**
- * Componente de galería de imágenes con lazy loading
- * @param {array} images - Array de URLs de imágenes
- * @param {string} alt - Texto base para alt
- * @param {object} props - Props adicionales
- * @returns {JSX.Element} - Galería optimizada
- */
 export function LazyImageGallery({ images, alt = 'Imagen de propiedad', className = '', ...props }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   if (!images || images.length === 0) {
     return (
       <div className={`bg-slate-200 ${className}`}>
-        <div className="w-full h-full flex items-center justify-center text-slate-400">
+        <div className="w-full h-full flex items-center justify-center text-[var(--color-text-muted)]">
           Sin imágenes
         </div>
       </div>
@@ -169,7 +145,7 @@ export function LazyImageGallery({ images, alt = 'Imagen de propiedad', classNam
         
         {/* Indicador de cantidad */}
         {images.length > 1 && (
-          <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+          <div className="absolute bottom-2 right-2 bg-black/50 text-[var(--color-text)] text-xs px-2 py-1 rounded">
             {selectedIndex + 1} / {images.length}
           </div>
         )}
@@ -200,5 +176,3 @@ export function LazyImageGallery({ images, alt = 'Imagen de propiedad', classNam
     </div>
   );
 }
-
-export default LazyImage;

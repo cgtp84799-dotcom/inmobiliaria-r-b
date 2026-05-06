@@ -85,10 +85,10 @@ const compressImage = (file, maxWidth = 1920, quality = 0.8) =>
 /** Separador de sub-sección dentro de una Section */
 const SubSectionDivider = ({ label }) => (
   <div className="flex items-center gap-3 mt-2 mb-1">
-    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+    <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider whitespace-nowrap">
       {label}
     </span>
-    <div className="flex-1 h-px bg-slate-700" />
+    <div className="flex-1 h-px bg-[var(--color-input-bg)]" />
   </div>
 );
 
@@ -101,11 +101,11 @@ const Section = ({
   isOpen,
   onToggle,
 }) => (
-  <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-4">
+  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl overflow-hidden mb-4">
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+      className="w-full px-6 py-4 flex items-center justify-between hover:bg-[var(--color-surface)]/50 transition-colors"
     >
       <div className="flex items-center gap-3">
         <div
@@ -116,9 +116,9 @@ const Section = ({
         <h3 className="text-lg font-bold text-light">{title}</h3>
       </div>
       {isOpen ? (
-        <FaChevronUp className="text-slate-400" />
+        <FaChevronUp className="text-[var(--color-text-muted)]" />
       ) : (
-        <FaChevronDown className="text-slate-400" />
+        <FaChevronDown className="text-[var(--color-text-muted)]" />
       )}
     </button>
 
@@ -130,7 +130,7 @@ const Section = ({
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="px-6 py-4 border-t border-slate-800">{children}</div>
+          <div className="px-6 py-4 border-t border-[var(--color-border)]">{children}</div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -145,7 +145,7 @@ const SortableImage = ({ id, src, index, onRemove }) => {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className="relative group rounded-lg overflow-hidden cursor-move border border-slate-700"
+      className="relative group rounded-lg overflow-hidden cursor-move border border-[var(--color-border)]"
       {...attributes}
       {...listeners}
     >
@@ -156,7 +156,7 @@ const SortableImage = ({ id, src, index, onRemove }) => {
           e.stopPropagation();
           onRemove();
         }}
-        className="absolute top-1 right-1 w-7 h-7 bg-red-600 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-1 right-1 w-7 h-7 bg-red-600 hover:bg-red-500 text-[var(--color-text)] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
       >
         <FaTrash className="text-xs" />
       </button>
@@ -173,10 +173,10 @@ const SortableImage = ({ id, src, index, onRemove }) => {
 // Input / Textarea helpers para no repetir clases
 // ─────────────────────────────────────────────
 const inputCls =
-  "w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors";
+  "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors";
 
 const textareaCls =
-  "w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none";
+  "w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-light placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors resize-none";
 
 // ─────────────────────────────────────────────
 // Componente principal
@@ -206,7 +206,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
     transactionType: property?.transactionType || "venta",
     price: property?.price || "",
     description: property?.description || "",
-    status: property?.status || "disponible",
+    status: property?.status || "published",
 
     // Comisiones
     commissionPercentage: property?.commissionPercentage || "",
@@ -469,18 +469,18 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
         initial={{ scale: 0.92, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.92, opacity: 0 }}
-        className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto overscroll-contain shadow-2xl my-6"
+        className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto overscroll-contain shadow-2xl my-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header sticky */}
-        <div className="sticky top-0 bg-slate-950 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[var(--color-bg)] border-b border-[var(--color-border)] px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-2xl font-bold text-primary">
             {property ? "Editar Propiedad" : "Nueva Propiedad"}
           </h2>
           <button
             onClick={onClose}
             type="button"
-            className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors"
+            className="w-10 h-10 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] rounded-lg flex items-center justify-center transition-colors"
           >
             <FaTimes className="text-light" />
           </button>
@@ -562,7 +562,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     : "Canon de arriendo"}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-3 text-slate-400">$</span>
+                  <span className="absolute left-3 top-3 text-[var(--color-text-muted)]">$</span>
                   <input
                     type="number"
                     name="price"
@@ -586,16 +586,17 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   onChange={handleChange}
                   className={inputCls}
                 >
-                  <option value="disponible">Disponible</option>
-                  <option value="reservada">Reservada</option>
-                  <option value="arrendada">Arrendada</option>
-                  <option value="vendida">Vendida</option>
-                  <option value="inactiva">Inactiva</option>
+                  <option value="published">Disponible</option>
+                  <option value="reserved">Reservada</option>
+                  <option value="rented">Arrendada</option>
+                  <option value="sold">Vendida</option>
+                  <option value="inactive">Inactiva</option>
+                  <option value="draft">Borrador</option>
                 </select>
               </div>
 
               {/* Comisiones */}
-              <div className="md:col-span-2 mt-4 pt-4 border-t border-slate-700">
+              <div className="md:col-span-2 mt-4 pt-4 border-t border-[var(--color-border)]">
                 <div className="flex items-center gap-2 mb-4">
                   <FaPercentage className="text-primary text-lg" />
                   <h4 className="text-light font-bold text-lg">
@@ -618,7 +619,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       placeholder={formData.transactionType === "venta" ? "3" : "100"}
                       className={inputCls}
                     />
-                    <p className="text-slate-500 text-xs mt-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">
                       {formData.transactionType === "venta"
                         ? "Estándar: 3% urbano · 5%–8% rural"
                         : "Estándar: 100% (1 mes completo)"}
@@ -632,7 +633,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     <button
                       type="button"
                       onClick={handleCalculateCommission}
-                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-[var(--color-text)] font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       <FaCalculator /> Calcular comisión
                     </button>
@@ -652,7 +653,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               {/* Datos del propietario */}
-              <div className="md:col-span-2 mt-4 pt-4 border-t border-slate-700">
+              <div className="md:col-span-2 mt-4 pt-4 border-t border-[var(--color-border)]">
                 <h4 className="text-light font-semibold mb-3">
                   Datos de contacto del propietario
                 </h4>
@@ -785,7 +786,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               <div className="md:col-span-2">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <FaMapMarkedAlt className="text-primary" />
                     <span className="text-light font-semibold">
@@ -964,7 +965,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       formData.amenities.includes(amenity)
                         ? "bg-primary/20 border-primary text-primary"
-                        : "bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600"
+                        : "bg-[var(--color-surface)]/50 border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-slate-600"
                     }`}
                   >
                     {amenity}
@@ -972,7 +973,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 ))}
               </div>
 
-              <div className="pt-4 border-t border-slate-700">
+              <div className="pt-4 border-t border-[var(--color-border)]">
                 <label className="block text-light mb-2 font-semibold">
                   Amenidades personalizadas
                 </label>
@@ -1084,7 +1085,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       placeholder="Ej: 1245 · Notaría 2 · 2018"
                       className={inputCls}
                     />
-                    <p className="text-slate-500 text-xs mt-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">
                       Número, notaría y año de la escritura de compraventa.
                     </p>
                   </div>
@@ -1100,7 +1101,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       placeholder="Nombre tal como aparece en escritura"
                       className={inputCls}
                     />
-                    <p className="text-slate-500 text-xs mt-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">
                       Puede diferir del propietario de contacto.
                     </p>
                   </div>
@@ -1192,7 +1193,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                         Propiedad horizontal (PH)
                       </span>
                     </label>
-                    <p className="text-slate-500 text-xs mt-1 ml-8">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1 ml-8">
                       Edificio, conjunto o copropiedad con reglamento.
                     </p>
                   </div>
@@ -1203,7 +1204,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   <motion.div
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-4 bg-slate-800/50 border border-slate-700 rounded-lg"
+                    className="mt-4 p-4 bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-lg"
                   >
                     <label className="block text-light mb-2 font-semibold">
                       Régimen de propiedad horizontal
@@ -1216,7 +1217,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                       placeholder="Ej: Reglamento Escritura N.º 450/2018 · Torre 3 · Apto 201"
                       className={inputCls}
                     />
-                    <p className="text-slate-500 text-xs mt-1">
+                    <p className="text-[var(--color-text-muted)] text-xs mt-1">
                       Escribe el número del reglamento, torre, apto o cualquier dato relevante del régimen.
                     </p>
                   </motion.div>
@@ -1238,7 +1239,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     placeholder="Ej: Hipoteca a favor del Banco ABC · Embargo preventivo Juzgado 2 · Servidumbre de paso · Sin gravámenes"
                     className={textareaCls}
                   />
-                  <p className="text-slate-500 text-xs mt-1">
+                  <p className="text-[var(--color-text-muted)] text-xs mt-1">
                     Incluye hipotecas, embargos, servidumbres, usufructos o cualquier limitación al libre dominio.
                     Escribe "Sin gravámenes" si el predio está limpio.
                   </p>
@@ -1302,7 +1303,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   <label className="text-light font-semibold">
                     Imágenes de la propiedad
                   </label>
-                  <span className="text-slate-500 text-sm">
+                  <span className="text-[var(--color-text-muted)] text-sm">
                     {formData.images.length} imagen{formData.images.length !== 1 ? "es" : ""}
                   </span>
                 </div>
@@ -1319,15 +1320,15 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   {uploadingImages ? (
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                      <p className="text-slate-400">Procesando y subiendo...</p>
+                      <p className="text-[var(--color-text-muted)]">Procesando y subiendo...</p>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <FaImages className="text-4xl text-slate-600 group-hover:text-primary transition-colors" />
-                      <p className="text-slate-400 group-hover:text-slate-300">
+                      <FaImages className="text-4xl text-[var(--color-text-faint)] group-hover:text-primary transition-colors" />
+                      <p className="text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]">
                         Arrastra imágenes aquí o haz clic para seleccionar
                       </p>
-                      <p className="text-slate-600 text-sm">
+                      <p className="text-[var(--color-text-faint)] text-sm">
                         Se optimizarán automáticamente · Arrastra para reordenar
                       </p>
                     </div>
@@ -1358,12 +1359,12 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
               </div>
 
               {/* Documentos */}
-              <div className="pt-4 border-t border-slate-700">
+              <div className="pt-4 border-t border-[var(--color-border)]">
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-light font-semibold">
                     Documentos legales
                   </label>
-                  <span className="text-slate-500 text-sm">
+                  <span className="text-[var(--color-text-muted)] text-sm">
                     {formData.documents.length} documento{formData.documents.length !== 1 ? "s" : ""}
                   </span>
                 </div>
@@ -1380,12 +1381,12 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                   {uploadingDocs ? (
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                      <p className="text-slate-400">Subiendo documentos...</p>
+                      <p className="text-[var(--color-text-muted)]">Subiendo documentos...</p>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <FaFileAlt className="text-4xl text-slate-600 group-hover:text-primary transition-colors" />
-                      <p className="text-slate-400 group-hover:text-slate-300">
+                      <FaFileAlt className="text-4xl text-[var(--color-text-faint)] group-hover:text-primary transition-colors" />
+                      <p className="text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]">
                         Subir documentos (PDF, DOC, DOCX)
                       </p>
                     </div>
@@ -1397,10 +1398,10 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                     {formData.documents.map((doc, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between gap-3 p-3 bg-slate-800/50 rounded-lg"
+                        className="flex items-center justify-between gap-3 p-3 bg-[var(--color-surface)]/50 rounded-lg"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <FaFileAlt className="text-slate-400 flex-shrink-0" />
+                          <FaFileAlt className="text-[var(--color-text-muted)] flex-shrink-0" />
                           <span className="text-light text-sm truncate">{doc.name}</span>
                         </div>
                         <button
@@ -1431,12 +1432,12 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
           >
             <div className="space-y-5">
               {/* Aviso privacidad */}
-              <div className="flex items-start gap-3 p-3 bg-slate-800/60 border border-slate-700 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-lg">
                 <FaStickyNote className="text-orange-400 mt-0.5 flex-shrink-0" />
-                <p className="text-slate-400 text-sm leading-relaxed">
+                <p className="text-[var(--color-text-muted)] text-sm leading-relaxed">
                   Esta sección es <span className="text-orange-400 font-semibold">privada</span>.
                   La información aquí registrada es solo visible para el equipo de la inmobiliaria
-                  y <strong className="text-slate-300">nunca</strong> se muestra en la página pública.
+                  y <strong className="text-[var(--color-text)]">nunca</strong> se muestra en la página pública.
                 </p>
               </div>
 
@@ -1445,7 +1446,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 <label className="block text-light mb-1 font-semibold">
                   Observaciones del inmueble
                 </label>
-                <p className="text-slate-500 text-xs mb-2">
+                <p className="text-[var(--color-text-muted)] text-xs mb-2">
                   Estado físico, aspectos a mejorar, detalles que el agente note en visita.
                 </p>
                 <textarea
@@ -1463,7 +1464,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
                 <label className="block text-light mb-1 font-semibold">
                   Recomendaciones especiales del propietario
                 </label>
-                <p className="text-slate-500 text-xs mb-2">
+                <p className="text-[var(--color-text-muted)] text-xs mb-2">
                   Instrucciones del dueño para la gestión: visitas, condiciones, restricciones.
                 </p>
                 <textarea
@@ -1481,11 +1482,11 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
           {/* ══════════════════════════════════════
               BOTONES DE ACCIÓN (sticky)
           ══════════════════════════════════════ */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4 sticky bottom-0 bg-slate-950 pb-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 sticky bottom-0 bg-[var(--color-bg)] pb-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-light font-semibold rounded-xl transition-colors"
+              className="flex-1 px-6 py-3 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-light font-semibold rounded-xl transition-colors"
             >
               Cancelar
             </button>
@@ -1496,7 +1497,7 @@ const PropertyForm = ({ property = null, onClose, onSave }) => {
             >
               {loading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-[var(--color-border)] border-t-transparent rounded-full animate-spin" />
                   Guardando...
                 </>
               ) : (

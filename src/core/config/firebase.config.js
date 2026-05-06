@@ -42,7 +42,6 @@ const app = initializeApp(firebaseConfig);
 // ── App Check ─────────────────────────────────────────────────────────────────
 // IMPORTANTE: debe inicializarse ANTES que Auth, Firestore, etc.
 //
-// ★ FIX DE SEGURIDAD: antes se activaba el debug token siempre que `DEV`
 // fuera true. Eso implicaba que cualquier preview build que corriera con
 // `vite dev` en un entorno con URL pública (ej: un túnel ngrok, un deploy
 // preview de Vercel/Netlify, un entorno de QA) quedaba con debug habilitado

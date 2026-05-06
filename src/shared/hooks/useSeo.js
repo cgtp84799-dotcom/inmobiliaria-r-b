@@ -25,8 +25,7 @@ import {
   buildCityUrl,
   buildTypeCityUrl,
 } from "../../core/config/routes.config";
-
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
+import { SITE_URL as BASE_URL } from '../../core/config/site.config';
 
 const CONTENT_PARAMS = new Set([
   "ciudad", "operacion", "tipo", "min", "max",

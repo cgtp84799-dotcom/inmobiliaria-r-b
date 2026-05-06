@@ -69,7 +69,7 @@ const fmtCOP = (value) => {
 
 const CONTRACT_STATUS_STYLES = {
   vigente:   'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-  borrador:  'bg-slate-500/15 text-slate-400 border-slate-500/25',
+  borrador:  'bg-slate-500/15 text-[var(--color-text-muted)] border-slate-500/25',
   vencido:   'bg-rose-500/15 text-rose-400 border-rose-500/25',
   cancelado: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
 };
@@ -80,7 +80,7 @@ const ACTIVITY_ICONS = {
   visit_created:  <FaCalendarCheck className="text-blue-400 text-xs" />,
   contract_signed:<FaFileContract className="text-primary text-xs" />,
   property_added: <FaHome         className="text-amber-400 text-xs" />,
-  default:        <FaHistory      className="text-slate-500 text-xs" />,
+  default:        <FaHistory      className="text-[var(--color-text-muted)] text-xs" />,
 };
 
 const VISIT_STATUS_MAP = {
@@ -95,13 +95,13 @@ const VISIT_STATUS_MAP = {
 // ─── Micro-componentes compartidos ────────────────────────────────────────────
 
 const KpiCard = ({ icon: Icon, iconBgClass, iconClass, value, label, sublabel }) => (
-  <div className="rounded-2xl p-4 border border-white/[0.06] bg-white/[0.04] flex flex-col items-center text-center gap-1.5 hover:bg-white/[0.07] transition-colors">
+  <div className="rounded-2xl p-4 border border-white/[0.06] bg-[var(--color-surface)]/[0.04] flex flex-col items-center text-center gap-1.5 hover:bg-[var(--color-surface)]/[0.07] transition-colors">
     <div className={`w-10 h-10 rounded-xl ${iconBgClass} flex items-center justify-center mb-0.5`}>
       <Icon className={`${iconClass} text-base`} />
     </div>
     <p className={`text-2xl font-bold tabular-nums ${iconClass}`}>{value ?? '–'}</p>
-    <p className="text-xs text-slate-300 font-semibold leading-tight">{label}</p>
-    {sublabel && <p className="text-xs text-slate-500">{sublabel}</p>}
+    <p className="text-xs text-[var(--color-text)] font-semibold leading-tight">{label}</p>
+    {sublabel && <p className="text-xs text-[var(--color-text-muted)]">{sublabel}</p>}
   </div>
 );
 
@@ -109,35 +109,35 @@ const InfoRow = ({ icon: Icon, label, value }) => {
   if (!value) return null;
   return (
     <div className="flex items-center gap-3 py-3 border-b border-white/[0.05] last:border-0">
-      <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center flex-shrink-0">
-        <Icon className="text-slate-400 text-xs" />
+      <div className="w-8 h-8 rounded-lg bg-[var(--color-surface)]/[0.05] flex items-center justify-center flex-shrink-0">
+        <Icon className="text-[var(--color-text-muted)] text-xs" />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] text-slate-500 font-medium">{label}</p>
-        <p className="text-sm text-slate-200 font-medium truncate">{value}</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] font-medium">{label}</p>
+        <p className="text-sm text-[var(--color-text)] font-medium truncate">{value}</p>
       </div>
     </div>
   );
 };
 
 const SectionLabel = ({ children }) => (
-  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">{children}</p>
+  <p className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-3">{children}</p>
 );
 
 const TabLoader = ({ message }) => (
   <div className="text-center py-16">
     <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-    {message && <p className="text-slate-500 text-xs">{message}</p>}
+    {message && <p className="text-[var(--color-text-muted)] text-xs">{message}</p>}
   </div>
 );
 
 const EmptyState = ({ icon: Icon, title, subtitle }) => (
   <div className="text-center py-20">
-    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
-      <Icon className="text-slate-600 text-2xl" />
+    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06] flex items-center justify-center">
+      <Icon className="text-[var(--color-text-faint)] text-2xl" />
     </div>
-    <p className="text-slate-400 text-sm font-semibold">{title}</p>
-    {subtitle && <p className="text-slate-600 text-xs mt-1.5">{subtitle}</p>}
+    <p className="text-[var(--color-text-muted)] text-sm font-semibold">{title}</p>
+    {subtitle && <p className="text-[var(--color-text-faint)] text-xs mt-1.5">{subtitle}</p>}
   </div>
 );
 
@@ -175,11 +175,11 @@ function SendNotifForm({ email, onDone }) {
     }
   }
 
-  const inputCls = 'w-full bg-slate-900/60 border border-white/[0.08] rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary/50 transition';
+  const inputCls = 'w-full bg-[var(--color-surface)]/60 border border-white/[0.08] rounded-xl px-3 py-2.5 text-xs text-[var(--color-text)] placeholder-slate-500 focus:outline-none focus:border-primary/50 transition';
 
   return (
-    <div className="space-y-2.5 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-      <p className="text-xs font-bold text-slate-400 mb-1">Enviar notificación al cliente</p>
+    <div className="space-y-2.5 p-4 rounded-2xl bg-[var(--color-surface)]/[0.03] border border-white/[0.06]">
+      <p className="text-xs font-bold text-[var(--color-text-muted)] mb-1">Enviar notificación al cliente</p>
       <select
         value={form.type}
         onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
@@ -328,8 +328,8 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                 </div>
 
                 <div className="flex-1 min-w-0 pt-0.5">
-                  <h2 className="text-base font-bold text-white truncate leading-tight">{displayName}</h2>
-                  <p className="text-xs text-slate-400 truncate mt-0.5 mb-2.5">{user.email}</p>
+                  <h2 className="text-base font-bold text-[var(--color-text)] truncate leading-tight">{displayName}</h2>
+                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5 mb-2.5">{user.email}</p>
                   <div className="flex flex-wrap gap-1.5">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                       👤 Cliente portal
@@ -350,7 +350,7 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                 <button
                   onClick={onClose}
                   aria-label="Cerrar panel"
-                  className="w-8 h-8 rounded-xl hover:bg-white/[0.08] text-slate-500 hover:text-white transition-colors flex items-center justify-center flex-shrink-0"
+                  className="w-8 h-8 rounded-xl hover:bg-[var(--color-surface)]/[0.08] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors flex items-center justify-center flex-shrink-0"
                 >
                   <FaTimes className="text-sm" />
                 </button>
@@ -426,7 +426,7 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                     ].map(({ label, value, color, bg }) => (
                       <div key={label} className={`${bg} rounded-2xl p-3.5 text-center border`}>
                         <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{label}</p>
                       </div>
                     ))}
                   </div>
@@ -437,7 +437,7 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                         <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
                           <FaMoneyBillWave className="text-amber-400 text-xs" />
                         </div>
-                        <p className="text-xs text-slate-400 font-medium">Valor total en contratos</p>
+                        <p className="text-xs text-[var(--color-text-muted)] font-medium">Valor total en contratos</p>
                       </div>
                       <p className="text-amber-400 font-bold text-sm">{fmtCOP(totalValue)}</p>
                     </div>
@@ -446,7 +446,7 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                   {/* Información de contacto */}
                   <div>
                     <SectionLabel>Información de contacto</SectionLabel>
-                    <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] px-4 py-1">
+                    <div className="bg-[var(--color-surface)]/[0.03] rounded-2xl border border-white/[0.06] px-4 py-1">
                       <InfoRow icon={FaEnvelope}      label="Correo electrónico" value={user.email} />
                       <InfoRow icon={FaPhone}         label="Teléfono"           value={clientData?.telefono || user.phone} />
                       <InfoRow icon={FaCalendarAlt}   label="Registrado"         value={fmt(user.createdAt)} />
@@ -463,15 +463,15 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                       <SectionLabel>Visitas recientes ({visits.length})</SectionLabel>
                       <div className="space-y-2">
                         {visits.slice(0, 6).map((v) => {
-                          const cfg = VISIT_STATUS_MAP[v.status] ?? { label: v.status || '–', cls: 'bg-slate-700/40 text-slate-400 border-slate-700/50' };
+                          const cfg = VISIT_STATUS_MAP[v.status] ?? { label: v.status || '–', cls: 'bg-[var(--color-input-bg)]/40 text-[var(--color-text-muted)] border-[var(--color-border)]/50' };
                           return (
-                            <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+                            <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06] hover:bg-[var(--color-surface)]/[0.06] transition-colors">
                               <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-200 truncate">{v.propertyName || 'Propiedad'}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">
+                                <p className="text-xs font-semibold text-[var(--color-text)] truncate">{v.propertyName || 'Propiedad'}</p>
+                                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                                   {v.requestedDate || '—'}{v.requestedTime ? ` · ${v.requestedTime}` : ''}
                                 </p>
-                                {v.agentName && <p className="text-[10px] text-slate-600 mt-0.5">Agente: {v.agentName}</p>}
+                                {v.agentName && <p className="text-[10px] text-[var(--color-text-faint)] mt-0.5">Agente: {v.agentName}</p>}
                                 {v.cancelledByClient && <p className="text-[10px] text-red-400 mt-0.5">Cancelada por el cliente</p>}
                               </div>
                               <span className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex-shrink-0 ${cfg.cls}`}>{cfg.label}</span>
@@ -488,11 +488,11 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                       <SectionLabel>Contratos ({contracts.length})</SectionLabel>
                       <div className="space-y-2">
                         {contracts.slice(0, 5).map((c) => (
-                          <div key={c.id} className="p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] transition-colors">
+                          <div key={c.id} className="p-3.5 rounded-xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06] hover:bg-[var(--color-surface)]/[0.07] transition-colors">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-slate-200 truncate">{c.propertyName || 'Propiedad'}</p>
-                                {c.type  && <p className="text-xs text-slate-500 mt-0.5">{c.type}</p>}
+                                <p className="text-xs font-semibold text-[var(--color-text)] truncate">{c.propertyName || 'Propiedad'}</p>
+                                {c.type  && <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{c.type}</p>}
                                 {c.value && <p className="text-xs text-amber-400 font-bold mt-1">{fmtCOP(c.value)}</p>}
                               </div>
                               <span className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex-shrink-0 ${CONTRACT_STATUS_STYLES[c.status] ?? CONTRACT_STATUS_STYLES.borrador}`}>
@@ -501,8 +501,8 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                             </div>
                             {c.endDate && (
                               <div className="flex items-center gap-1.5 mt-2.5 pt-2.5 border-t border-white/[0.05]">
-                                <FaClock className="text-slate-600 text-xs flex-shrink-0" />
-                                <p className="text-xs text-slate-500">Vence: {fmt(c.endDate)}</p>
+                                <FaClock className="text-[var(--color-text-faint)] text-xs flex-shrink-0" />
+                                <p className="text-xs text-[var(--color-text-muted)]">Vence: {fmt(c.endDate)}</p>
                               </div>
                             )}
                           </div>
@@ -516,8 +516,8 @@ const ViewerDetailPanel = ({ user, isOpen, onClose, onChangeStatus }) => {
                       <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                         <FaHome className="text-amber-400 text-xl" />
                       </div>
-                      <p className="text-slate-400 text-sm font-semibold">Cliente nuevo</p>
-                      <p className="text-slate-600 text-xs mt-1.5">Aún no tiene visitas ni contratos registrados.</p>
+                      <p className="text-[var(--color-text-muted)] text-sm font-semibold">Cliente nuevo</p>
+                      <p className="text-[var(--color-text-faint)] text-xs mt-1.5">Aún no tiene visitas ni contratos registrados.</p>
                     </div>
                   )}
                 </div>
@@ -656,7 +656,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                   {user.photoURL ? (
                     <img src={user.photoURL} alt={displayName} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/10" />
                   ) : (
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/30 to-blue-600/20 flex items-center justify-center text-2xl font-bold text-white ring-2 ring-white/10">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/30 to-blue-600/20 flex items-center justify-center text-2xl font-bold text-[var(--color-text)] ring-2 ring-white/10">
                       {initial}
                     </div>
                   )}
@@ -666,8 +666,8 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                 </div>
 
                 <div className="flex-1 min-w-0 pt-0.5">
-                  <h2 className="text-base font-bold text-white truncate leading-tight tracking-tight">{displayName}</h2>
-                  <p className="text-xs text-slate-400 truncate mt-0.5 mb-2.5">{user.email}</p>
+                  <h2 className="text-base font-bold text-[var(--color-text)] truncate leading-tight tracking-tight">{displayName}</h2>
+                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5 mb-2.5">{user.email}</p>
                   <div className="flex flex-wrap gap-1.5">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${roleBadge}`}>
                       {RoleIcon && <RoleIcon className={roleIconCls} />}
@@ -678,7 +678,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                         <FaCircle className="text-[6px]" /> En línea
                       </span>
                     ) : user.lastSeen ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-slate-400 border border-white/[0.07] bg-white/[0.04]">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--color-text-muted)] border border-white/[0.07] bg-[var(--color-surface)]/[0.04]">
                         {fmtShort(user.lastSeen)}
                       </span>
                     ) : null}
@@ -693,7 +693,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                 <button
                   onClick={onClose}
                   aria-label="Cerrar panel"
-                  className="w-8 h-8 rounded-xl hover:bg-white/[0.08] text-slate-500 hover:text-white transition-colors flex items-center justify-center flex-shrink-0"
+                  className="w-8 h-8 rounded-xl hover:bg-[var(--color-surface)]/[0.08] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors flex items-center justify-center flex-shrink-0"
                 >
                   <FaTimes className="text-sm" />
                 </button>
@@ -719,7 +719,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                     </button>
                   )}
                   {onResetPassword && (
-                    <button onClick={() => onResetPassword(user)} title="Resetear contraseña" className="w-10 inline-flex items-center justify-center py-2.5 bg-white/[0.05] hover:bg-white/[0.09] text-slate-400 hover:text-white rounded-xl text-xs transition-all border border-white/[0.07]">
+                    <button onClick={() => onResetPassword(user)} title="Resetear contraseña" className="w-10 inline-flex items-center justify-center py-2.5 bg-[var(--color-surface)]/[0.05] hover:bg-[var(--color-surface)]/[0.09] text-[var(--color-text-muted)] hover:text-[var(--color-text)] rounded-xl text-xs transition-all border border-white/[0.07]">
                       <FaKey className="text-xs" />
                     </button>
                   )}
@@ -734,7 +734,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors relative ${
-                    activeTab === tab.id ? 'text-white' : 'text-slate-600 hover:text-slate-400'
+                    activeTab === tab.id ? 'text-[var(--color-text)]' : 'text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)]'
                   }`}
                 >
                   {tab.icon}
@@ -754,17 +754,17 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                   <motion.div key="profile" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }} className="p-5 space-y-6">
                     <section>
                       <SectionLabel>Rol y acceso</SectionLabel>
-                      <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                      <div className="p-4 rounded-2xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06]">
                         <div className="flex items-center gap-2.5 mb-2">
                           {RoleIcon && <RoleIcon className={roleIconCls} />}
-                          <span className="text-white font-bold text-sm">{USER_ROLE_LABELS[user.role] ?? 'Sin rol'}</span>
+                          <span className="text-[var(--color-text)] font-bold text-sm">{USER_ROLE_LABELS[user.role] ?? 'Sin rol'}</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">{USER_ROLE_DESCRIPTIONS[user.role] ?? 'Sin descripción de rol'}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{USER_ROLE_DESCRIPTIONS[user.role] ?? 'Sin descripción de rol'}</p>
                       </div>
                     </section>
                     <section>
                       <SectionLabel>Información de contacto</SectionLabel>
-                      <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] px-4 py-1">
+                      <div className="bg-[var(--color-surface)]/[0.03] rounded-2xl border border-white/[0.06] px-4 py-1">
                         <InfoRow icon={FaEnvelope}   label="Correo electrónico" value={user.email} />
                         <InfoRow icon={FaPhone}      label="Teléfono"           value={user.phone} />
                         <InfoRow icon={FaCalendarAlt} label="Miembro desde"     value={fmt(user.createdAt)} />
@@ -778,12 +778,12 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                         <SectionLabel>Visitas recientes</SectionLabel>
                         <div className="space-y-2">
                           {visits.slice(0, 4).map((v) => {
-                            const st = VISIT_STATUS_MAP[v.status] ?? { label: v.status || '–', cls: 'bg-slate-700/40 text-slate-400 border-slate-700/50' };
+                            const st = VISIT_STATUS_MAP[v.status] ?? { label: v.status || '–', cls: 'bg-[var(--color-input-bg)]/40 text-[var(--color-text-muted)] border-[var(--color-border)]/50' };
                             return (
-                              <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+                              <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06] hover:bg-[var(--color-surface)]/[0.06] transition-colors">
                                 <div className="min-w-0">
-                                  <p className="text-xs font-semibold text-slate-200 truncate">{v.propertyName || 'Propiedad'}</p>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{v.clientName || v.clientEmail || '–'}</p>
+                                  <p className="text-xs font-semibold text-[var(--color-text)] truncate">{v.propertyName || 'Propiedad'}</p>
+                                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5">{v.clientName || v.clientEmail || '–'}</p>
                                 </div>
                                 <span className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex-shrink-0 ${st.cls}`}>{st.label}</span>
                               </div>
@@ -822,7 +822,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                               ].map(({ label, count, cls, bg }) => (
                                 <div key={label} className={`${bg} rounded-xl p-3.5 text-center border`}>
                                   <p className={`text-xl font-bold tabular-nums ${cls}`}>{count}</p>
-                                  <p className="text-xs text-slate-400 mt-1">{label}</p>
+                                  <p className="text-xs text-[var(--color-text-muted)] mt-1">{label}</p>
                                 </div>
                               ))}
                             </div>
@@ -842,7 +842,7 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                       <EmptyState icon={FaHistory} title="Sin actividad registrada" subtitle="Las notificaciones aparecerán aquí" />
                     ) : (
                       <div className="relative space-y-3">
-                        <div className="absolute left-4 top-4 bottom-4 w-px bg-white/[0.06]" />
+                        <div className="absolute left-4 top-4 bottom-4 w-px bg-[var(--color-surface)]/[0.06]" />
                         {activity.map((item, i) => (
                           <motion.div
                             key={item.id}
@@ -853,10 +853,10 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                             <div className="absolute left-0 w-8 h-8 rounded-full bg-[#0d1117] border border-white/[0.08] flex items-center justify-center shadow-sm">
                               {ACTIVITY_ICONS[item.type] ?? ACTIVITY_ICONS.default}
                             </div>
-                            <div className="flex-1 bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:bg-white/[0.05] transition-colors">
-                              <p className="text-xs font-semibold text-slate-200">{item.title || 'Notificación'}</p>
-                              {item.message && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.message}</p>}
-                              <p className="text-[11px] text-slate-600 mt-1.5">{fmtShort(item.createdAt)}</p>
+                            <div className="flex-1 bg-[var(--color-surface)]/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:bg-[var(--color-surface)]/[0.05] transition-colors">
+                              <p className="text-xs font-semibold text-[var(--color-text)]">{item.title || 'Notificación'}</p>
+                              {item.message && <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-relaxed">{item.message}</p>}
+                              <p className="text-[11px] text-[var(--color-text-faint)] mt-1.5">{fmtShort(item.createdAt)}</p>
                             </div>
                           </motion.div>
                         ))}
@@ -885,12 +885,12 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                             key={c.id}
                             initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }}
                             transition={{ delay: i * 0.04 }}
-                            className="p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] hover:border-primary/20 transition-all"
+                            className="p-4 rounded-2xl bg-[var(--color-surface)]/[0.04] border border-white/[0.06] hover:bg-[var(--color-surface)]/[0.07] hover:border-primary/20 transition-all"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-slate-100 truncate">{c.propertyName || 'Propiedad'}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Cliente: {c.clientName || c.clientEmail || '–'}</p>
+                                <p className="text-sm font-semibold text-[var(--color-text)] truncate">{c.propertyName || 'Propiedad'}</p>
+                                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Cliente: {c.clientName || c.clientEmail || '–'}</p>
                                 {c.value && (
                                   <p className="text-sm text-primary font-bold mt-1.5">
                                     {new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(c.value)}
@@ -903,8 +903,8 @@ const AgentDetailPanel = ({ user, isOpen, onClose, onEdit, onChangeStatus, onRes
                             </div>
                             {c.endDate && (
                               <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/[0.05]">
-                                <FaClock className="text-slate-600 text-xs flex-shrink-0" />
-                                <p className="text-xs text-slate-500">Vence: {fmt(c.endDate)}</p>
+                                <FaClock className="text-[var(--color-text-faint)] text-xs flex-shrink-0" />
+                                <p className="text-xs text-[var(--color-text-muted)]">Vence: {fmt(c.endDate)}</p>
                               </div>
                             )}
                           </motion.div>

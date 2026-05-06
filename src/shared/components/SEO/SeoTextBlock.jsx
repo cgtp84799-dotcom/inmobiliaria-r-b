@@ -57,14 +57,7 @@ export default function SeoTextBlock({
             className="font-display text-3xl sm:text-4xl leading-tight"
             style={{ color: "var(--color-text)" }}
           >
-            {title.includes("sobre") || title.includes("Todo") ? (
-              <>
-                {title.split(" ").slice(0, 2).join(" ")}{" "}
-                <em>{title.split(" ").slice(2).join(" ")}</em>
-              </>
-            ) : (
-              <em>{title}</em>
-            )}
+            <em>{title}</em>
           </h2>
         </div>
 

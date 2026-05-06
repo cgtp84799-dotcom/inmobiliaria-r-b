@@ -25,16 +25,16 @@ export default function DangerZone({ requesting, onRequestDeletion }) {
           <FaExclamationTriangle />
           Zona de peligro
         </h2>
-        <p className="text-slate-400 text-sm mb-5">
+        <p className="text-[var(--color-text-muted)] text-sm mb-5">
           Las acciones de esta sección no se pueden deshacer fácilmente. Procede con cuidado.
         </p>
 
-        <div className="flex items-start gap-4 p-4 bg-slate-900/60 rounded-xl border border-red-500/20">
+        <div className="flex items-start gap-4 p-4 bg-[var(--color-surface)]/60 rounded-xl border border-red-500/20">
           <div className="flex-1">
-            <p className="text-sm font-semibold text-slate-200">Solicitar eliminación de cuenta</p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-sm font-semibold text-[var(--color-text)]">Solicitar eliminación de cuenta</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">
               Genera una petición al administrador. Tu cuenta{' '}
-              <strong className="text-slate-300">no se eliminará inmediatamente</strong>. Un admin
+              <strong className="text-[var(--color-text)]">no se eliminará inmediatamente</strong>. Un admin
               la revisará y te contactará.
             </p>
           </div>
@@ -57,7 +57,7 @@ export default function DangerZone({ requesting, onRequestDeletion }) {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-slate-900 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            className="bg-[var(--color-surface)] border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -66,15 +66,15 @@ export default function DangerZone({ requesting, onRequestDeletion }) {
             <div className="w-12 h-12 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <FaExclamationTriangle className="text-red-500 text-xl" />
             </div>
-            <h3 id="delete-dialog-title" className="text-xl font-bold text-white text-center mb-2">
+            <h3 id="delete-dialog-title" className="text-xl font-bold text-[var(--color-text)] text-center mb-2">
               ¿Solicitar eliminación?
             </h3>
-            <p className="text-slate-400 text-sm text-center mb-4">
+            <p className="text-[var(--color-text-muted)] text-sm text-center mb-4">
               Esta acción notificará al administrador. Tu cuenta permanecerá activa hasta que se
               procese la solicitud.
             </p>
 
-            <label htmlFor="deletion-reason" className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="deletion-reason" className="block text-sm font-medium text-[var(--color-text)] mb-2">
               Motivo (opcional)
             </label>
             <textarea
@@ -83,14 +83,14 @@ export default function DangerZone({ requesting, onRequestDeletion }) {
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Cuéntanos por qué deseas eliminar tu cuenta..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm mb-4"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-light focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm mb-4"
             />
 
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition-all"
+                className="flex-1 px-4 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text)] rounded-xl font-semibold transition-all"
               >
                 Cancelar
               </button>
@@ -98,7 +98,7 @@ export default function DangerZone({ requesting, onRequestDeletion }) {
                 type="button"
                 disabled={requesting}
                 onClick={handleConfirm}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-[var(--color-text)] rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {requesting ? <FaSpinner className="animate-spin" /> : null}
                 Enviar solicitud

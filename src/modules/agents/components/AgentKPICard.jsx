@@ -15,9 +15,9 @@ const AgentKPICard = ({ icon: Icon, label, value, sub, color = 'primary', delay 
       <Icon className={`text-${color} text-xl`} />
     </div>
     <div className="min-w-0">
-      <p className="text-xs text-slate-400 truncate">{label}</p>
+      <p className="text-xs text-[var(--color-text-muted)] truncate">{label}</p>
       <p className={`text-3xl font-bold text-${color} tabular-nums leading-tight`}>{value}</p>
-      {sub && <p className="text-xs text-slate-500 mt-0.5 truncate">{sub}</p>}
+      {sub && <p className="text-xs text-[var(--color-text-muted)] mt-0.5 truncate">{sub}</p>}
     </div>
   </motion.div>
 );

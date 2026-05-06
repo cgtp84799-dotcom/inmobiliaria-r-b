@@ -62,10 +62,10 @@ const formatDate = (timestamp) => {
 // Separador de sub-sección (igual que en PropertyForm)
 const SubDivider = ({ label }) => (
   <div className="flex items-center gap-2 pt-3 pb-1">
-    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider whitespace-nowrap">
       {label}
     </span>
-    <div className="flex-1 h-px bg-slate-800" />
+    <div className="flex-1 h-px bg-[var(--color-surface)]" />
   </div>
 );
 
@@ -74,8 +74,8 @@ const InfoRow = ({ label, value, mono = false }) => {
   if (!value && value !== 0) return null;
   return (
     <div>
-      <p className="text-slate-500 text-xs mb-0.5">{label}</p>
-      <p className={`text-slate-300 text-sm ${mono ? "font-mono" : ""}`}>{value}</p>
+      <p className="text-[var(--color-text-muted)] text-xs mb-0.5">{label}</p>
+      <p className={`text-[var(--color-text)] text-sm ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
 };
@@ -169,7 +169,6 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
       toast.success("Propiedad eliminada");
       onClose?.();
     } catch (error) {
-      // ★ FIX (auditoría): si el error contiene mensaje específico (ej.
       // "contrato activo asociado"), mostrarlo. Antes siempre era genérico.
       const msg = error?.message && error.message.length < 200
         ? error.message
@@ -209,7 +208,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
       reservada:  "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       arrendada:  "bg-blue-500/20 text-blue-400 border-blue-500/30",
       vendida:    "bg-red-500/20 text-red-400 border-red-500/30",
-      inactiva:   "bg-slate-500/20 text-slate-400 border-slate-500/30",
+      inactiva:   "bg-slate-500/20 text-[var(--color-text-muted)] border-slate-500/30",
     };
     return (
       <span
@@ -239,11 +238,11 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.96, opacity: 0 }}
-          className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-y-auto overscroll-contain shadow-2xl"
+          className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-y-auto overscroll-contain shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header sticky ── */}
-          <div className="sticky top-0 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
+          <div className="sticky top-0 bg-[var(--color-bg)]/95 backdrop-blur border-b border-[var(--color-border)] px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h2 className="text-lg sm:text-2xl font-bold text-primary truncate">
@@ -251,13 +250,13 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                 </h2>
                 <StatusBadge status={property.status} />
               </div>
-              <p className="text-xs text-slate-500 mt-1 hidden sm:block">
+              <p className="text-xs text-[var(--color-text-muted)] mt-1 hidden sm:block">
                 ID: {property.id}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+              className="w-10 h-10 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
               aria-label="Cerrar"
             >
               <FaTimes className="text-light" />
@@ -273,8 +272,8 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
             }`}>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <FaFileContract className={`${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-slate-400'}`} size={14} />
-                  <span className={`text-sm font-bold ${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  <FaFileContract className={`${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-[var(--color-text-muted)]'}`} size={14} />
+                  <span className={`text-sm font-bold ${activeContract.statusGeneral === 'vigente' ? 'text-emerald-400' : 'text-[var(--color-text-muted)]'}`}>
                     {activeContract.type === 'arriendo' ? 'Arriendo' : activeContract.type === 'venta' ? 'Venta' : 'Promesa'} · {
                       activeContract.statusGeneral === 'vigente' ? 'Vigente' :
                       activeContract.statusGeneral === 'borrador' ? 'Borrador' : 'Pausado'
@@ -290,26 +289,26 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
                 {activeContract.clientName && (
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <FaUser size={10} className="text-slate-500" />
+                  <div className="flex items-center gap-2 text-[var(--color-text)]">
+                    <FaUser size={10} className="text-[var(--color-text-muted)]" />
                     <span><strong>{activeContract.type === 'arriendo' ? 'Arrendatario:' : 'Comprador:'}</strong> {activeContract.clientName}</span>
                   </div>
                 )}
                 {activeContract.clientEmail && (
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <FaEnvelope size={10} className="text-slate-500" />
+                  <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+                    <FaEnvelope size={10} className="text-[var(--color-text-muted)]" />
                     <span>{activeContract.clientEmail}</span>
                   </div>
                 )}
                 {activeContract.agentName && (
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <FaUserTie size={10} className="text-slate-500" />
+                  <div className="flex items-center gap-2 text-[var(--color-text)]">
+                    <FaUserTie size={10} className="text-[var(--color-text-muted)]" />
                     <span><strong>Agente:</strong> {activeContract.agentName}</span>
                   </div>
                 )}
                 {activeContract.startDate && (
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <FaCalendarAlt size={10} className="text-slate-500" />
+                  <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+                    <FaCalendarAlt size={10} className="text-[var(--color-text-muted)]" />
                     <span>{activeContract.startDate}{activeContract.endDate ? ` → ${activeContract.endDate}` : ''}</span>
                   </div>
                 )}
@@ -329,7 +328,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                 {/* Galería */}
                 {images.length > 0 ? (
                   <div className="space-y-3">
-                    <div className="relative bg-slate-900 rounded-xl overflow-hidden group">
+                    <div className="relative bg-[var(--color-surface)] rounded-xl overflow-hidden group">
                       <div className="relative aspect-video">
                         <img
                           src={images[currentImageIndex]}
@@ -345,7 +344,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         className="absolute top-3 right-3 w-10 h-10 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                         aria-label="Ampliar imagen"
                       >
-                        <FaSearchPlus className="text-white" />
+                        <FaSearchPlus className="text-[var(--color-text)]" />
                       </button>
 
                       {images.length > 1 && (
@@ -355,19 +354,19 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                             className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
                             aria-label="Anterior"
                           >
-                            <FaChevronLeft className="text-white" />
+                            <FaChevronLeft className="text-[var(--color-text)]" />
                           </button>
                           <button
                             onClick={nextImage}
                             className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
                             aria-label="Siguiente"
                           >
-                            <FaChevronRight className="text-white" />
+                            <FaChevronRight className="text-[var(--color-text)]" />
                           </button>
                         </>
                       )}
 
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full text-white text-xs">
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full text-[var(--color-text)] text-xs">
                         {currentImageIndex + 1} / {images.length}
                       </div>
                     </div>
@@ -381,7 +380,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                             className={`relative rounded-lg overflow-hidden border-2 transition-all ${
                               currentImageIndex === i
                                 ? "border-primary ring-2 ring-primary/40"
-                                : "border-slate-700 hover:border-slate-600"
+                                : "border-[var(--color-border)] hover:border-slate-600"
                             }`}
                             aria-label={`Miniatura ${i + 1}`}
                           >
@@ -397,26 +396,26 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     )}
                   </div>
                 ) : (
-                  <div className="bg-slate-900 rounded-xl aspect-video flex items-center justify-center">
+                  <div className="bg-[var(--color-surface)] rounded-xl aspect-video flex items-center justify-center">
                     <div className="text-center">
-                      <FaHome className="text-5xl sm:text-6xl text-slate-700 mx-auto mb-3" />
-                      <p className="text-slate-500 text-sm">Sin imágenes</p>
+                      <FaHome className="text-5xl sm:text-6xl text-[var(--color-text-faint)] mx-auto mb-3" />
+                      <p className="text-[var(--color-text-muted)] text-sm">Sin imágenes</p>
                     </div>
                   </div>
                 )}
 
                 {/* Descripción */}
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 sm:p-6">
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4 sm:p-6">
                   <h3 className="text-lg sm:text-xl font-bold text-light mb-3">
                     Descripción
                   </h3>
-                  <p className="text-slate-300 text-sm sm:text-base leading-relaxed whitespace-pre-line">
+                  <p className="text-[var(--color-text)] text-sm sm:text-base leading-relaxed whitespace-pre-line">
                     {property.description || "Sin descripción disponible."}
                   </p>
                 </div>
 
                 {/* Características */}
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 sm:p-6">
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4 sm:p-6">
                   <h3 className="text-lg sm:text-xl font-bold text-light mb-4">
                     Características
                   </h3>
@@ -435,10 +434,10 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       .map(({ val, label, icon: Icon, unit }) => (
                         <div
                           key={label}
-                          className="bg-slate-800/50 rounded-lg p-3 sm:p-4 text-center"
+                          className="bg-[var(--color-surface)]/50 rounded-lg p-3 sm:p-4 text-center"
                         >
                           <Icon className="text-xl sm:text-2xl text-primary mx-auto mb-2" />
-                          <p className="text-slate-400 text-xs sm:text-sm">{label}</p>
+                          <p className="text-[var(--color-text-muted)] text-xs sm:text-sm">{label}</p>
                           <p className="text-light font-bold text-sm sm:text-base">
                             {val}{unit && ` ${unit}`}
                           </p>
@@ -449,7 +448,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* Amenidades */}
                 {amenities.length > 0 && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 sm:p-6">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4 sm:p-6">
                     <div className="flex items-center justify-between gap-3 mb-4">
                       <h3 className="text-lg sm:text-xl font-bold text-light">
                         Amenidades
@@ -471,10 +470,10 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       {visibleAmenities.map((amenity, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-2 px-2.5 py-2 bg-slate-900/60 border border-slate-800 rounded-lg"
+                          className="flex items-center gap-2 px-2.5 py-2 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-lg"
                         >
                           <FaCheckCircle className="text-primary text-sm flex-shrink-0" />
-                          <span className="text-slate-200 text-xs leading-snug line-clamp-2">
+                          <span className="text-[var(--color-text)] text-xs leading-snug line-clamp-2">
                             {amenity}
                           </span>
                         </div>
@@ -482,7 +481,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     </div>
 
                     {!amenitiesExpanded && amenities.length > AMENITIES_LIMIT && (
-                      <p className="text-slate-500 text-xs mt-3">
+                      <p className="text-[var(--color-text-muted)] text-xs mt-3">
                         Mostrando {AMENITIES_LIMIT} de {amenities.length}.
                       </p>
                     )}
@@ -490,7 +489,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                 )}
 
                 {/* Ubicación */}
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 sm:p-6">
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4 sm:p-6">
                   <h3 className="text-lg sm:text-xl font-bold text-light mb-4 flex items-center gap-2">
                     <FaMapMarkerAlt className="text-primary" /> Ubicación
                   </h3>
@@ -500,7 +499,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     <InfoRow label="Ciudad"       value={property.city} />
                     <InfoRow label="Departamento" value={property.department} />
                   </div>
-                  <div className="bg-slate-800 rounded-lg h-64 overflow-hidden">
+                  <div className="bg-[var(--color-surface)] rounded-lg h-64 overflow-hidden">
                     <PropertyMap
                       address={property.address}
                       city={property.city}
@@ -514,7 +513,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* Documentos */}
                 {documents.length > 0 && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 sm:p-6">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4 sm:p-6">
                     <h3 className="text-lg sm:text-xl font-bold text-light mb-4">
                       Documentos Legales
                     </h3>
@@ -522,7 +521,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       {documents.map((doc, i) => (
                         <div
                           key={i}
-                          className="flex items-center justify-between gap-3 p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors"
+                          className="flex items-center justify-between gap-3 p-3 bg-[var(--color-surface)]/50 rounded-lg hover:bg-[var(--color-surface)] transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <FaFilePdf className="text-red-400 text-xl flex-shrink-0" />
@@ -533,7 +532,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                               window.open(doc.url, "_blank");
                               toast.success(`Descargando ${doc.name}`);
                             }}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center gap-2 transition-colors flex-shrink-0 text-sm"
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-[var(--color-text)] rounded-lg flex items-center gap-2 transition-colors flex-shrink-0 text-sm"
                           >
                             <FaFileDownload /> Descargar
                           </button>
@@ -551,7 +550,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* Precio */}
                 <div className="bg-gradient-to-br from-primary/20 to-yellow-500/20 border border-primary/30 rounded-xl p-5 sm:p-6">
-                  <p className="text-slate-400 text-xs sm:text-sm mb-1">
+                  <p className="text-[var(--color-text-muted)] text-xs sm:text-sm mb-1">
                     {property.transactionType === "venta"
                       ? "Precio de venta"
                       : "Canon de arriendo"}
@@ -560,18 +559,18 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     {formatPrice(property.price)}
                   </p>
                   {property.transactionType === "arriendo" && (
-                    <p className="text-slate-400 text-sm mt-1">/mes</p>
+                    <p className="text-[var(--color-text-muted)] text-sm mt-1">/mes</p>
                   )}
                 </div>
 
                 {/* Comisión */}
                 {property.commissionPercentage && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <FaPercentage className="text-primary" />
                       <h4 className="text-light font-bold">Comisión</h4>
                     </div>
-                    <p className="text-slate-400 text-sm">{property.commissionPercentage}%</p>
+                    <p className="text-[var(--color-text-muted)] text-sm">{property.commissionPercentage}%</p>
                     <p className="text-2xl font-bold text-primary mt-2">
                       {formatPrice(calculateCommission())}
                     </p>
@@ -579,24 +578,24 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                 )}
 
                 {/* Tipo */}
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
-                  <p className="text-slate-400 text-xs mb-1">Tipo de propiedad</p>
+                <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
+                  <p className="text-[var(--color-text-muted)] text-xs mb-1">Tipo de propiedad</p>
                   <p className="text-light font-bold capitalize">{property.type}</p>
                 </div>
 
                 {/* Propietario */}
                 {property.ownerName && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <FaUser className="text-primary" />
                       <h4 className="text-light font-bold">Contacto del propietario</h4>
                     </div>
                     <div className="space-y-2 text-sm">
-                      <p className="text-slate-300 font-semibold">{property.ownerName}</p>
+                      <p className="text-[var(--color-text)] font-semibold">{property.ownerName}</p>
                       {property.ownerPhone && (
                         <a
                           href={`tel:${property.ownerPhone}`}
-                          className="flex items-center gap-2 text-slate-400 hover:text-primary transition-colors"
+                          className="flex items-center gap-2 text-[var(--color-text-muted)] hover:text-primary transition-colors"
                         >
                           <FaPhone className="text-xs" />
                           {property.ownerPhone}
@@ -605,7 +604,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       {property.ownerEmail && (
                         <a
                           href={`mailto:${property.ownerEmail}`}
-                          className="flex items-center gap-2 text-slate-400 hover:text-primary transition-colors break-all"
+                          className="flex items-center gap-2 text-[var(--color-text-muted)] hover:text-primary transition-colors break-all"
                         >
                           <FaEnvelope className="text-xs" />
                           {property.ownerEmail}
@@ -617,7 +616,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* ── INFORMACIÓN JURÍDICA ──────────────── */}
                 {hasLegal && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <FaBalanceScale className="text-red-400" />
                       <h4 className="text-light font-bold">Información Jurídica</h4>
@@ -666,7 +665,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <div className="space-y-3 mt-2">
                           {property.legalStatus && (
                             <div>
-                              <p className="text-slate-500 text-xs mb-0.5">Estado jurídico</p>
+                              <p className="text-[var(--color-text-muted)] text-xs mb-0.5">Estado jurídico</p>
                               <span
                                 className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold border ${
                                   property.legalStatus === "saneado"
@@ -682,8 +681,8 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                           )}
                           {property.cadastralAppraisal && (
                             <div>
-                              <p className="text-slate-500 text-xs mb-0.5">Avalúo catastral</p>
-                              <p className="text-slate-300 text-sm font-semibold">
+                              <p className="text-[var(--color-text-muted)] text-xs mb-0.5">Avalúo catastral</p>
+                              <p className="text-[var(--color-text)] text-sm font-semibold">
                                 {formatPrice(property.cadastralAppraisal)}
                               </p>
                             </div>
@@ -699,12 +698,12 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <div className="mt-2 space-y-2">
                           <div className="flex items-center gap-2">
                             <FaBuilding className="text-primary text-xs" />
-                            <span className="text-slate-300 text-sm font-semibold">
+                            <span className="text-[var(--color-text)] text-sm font-semibold">
                               Régimen de Propiedad Horizontal
                             </span>
                           </div>
                           {property.horizontalPropertyRegime && (
-                            <p className="text-slate-400 text-xs leading-relaxed pl-4">
+                            <p className="text-[var(--color-text-muted)] text-xs leading-relaxed pl-4">
                               {property.horizontalPropertyRegime}
                             </p>
                           )}
@@ -726,7 +725,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                                 : "text-yellow-400"
                             }`}
                           />
-                          <p className="text-slate-300 text-xs leading-relaxed">
+                          <p className="text-[var(--color-text)] text-xs leading-relaxed">
                             {property.liensAndLimitations}
                           </p>
                         </div>
@@ -737,7 +736,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* ── COSTOS ADICIONALES ───────────────── */}
                 {hasCosts && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <FaDollarSign className="text-primary" />
                       <h4 className="text-light font-bold">Costos adicionales</h4>
@@ -745,7 +744,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     <div className="space-y-2 text-sm">
                       {property.propertyTax && (
                         <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">Predial (anual)</span>
+                          <span className="text-[var(--color-text-muted)]">Predial (anual)</span>
                           <span className="text-light font-semibold">
                             {formatPrice(property.propertyTax)}
                           </span>
@@ -753,7 +752,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       )}
                       {property.administrationFee && (
                         <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">Administración</span>
+                          <span className="text-[var(--color-text-muted)]">Administración</span>
                           <span className="text-light font-semibold">
                             {formatPrice(property.administrationFee)}/mes
                           </span>
@@ -761,7 +760,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       )}
                       {property.rentalDeposit && (
                         <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">Depósito</span>
+                          <span className="text-[var(--color-text-muted)]">Depósito</span>
                           <span className="text-light font-semibold">
                             {property.rentalDeposit} mes(es)
                           </span>
@@ -769,7 +768,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                       )}
                       {property.minimumRentalPeriod && (
                         <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">Período mínimo</span>
+                          <span className="text-[var(--color-text-muted)]">Período mínimo</span>
                           <span className="text-light font-semibold">
                             {property.minimumRentalPeriod} meses
                           </span>
@@ -781,13 +780,13 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
                 {/* Publicada el */}
                 {property.createdAt && (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
-                    <p className="text-slate-400 text-xs mb-1">Publicada el</p>
+                  <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)] rounded-xl p-4">
+                    <p className="text-[var(--color-text-muted)] text-xs mb-1">Publicada el</p>
                     <p className="text-light text-sm">{formatDate(property.createdAt)}</p>
                     {property.updatedAt && (
                       <>
-                        <p className="text-slate-400 text-xs mb-1 mt-2">Última actualización</p>
-                        <p className="text-slate-400 text-sm">{formatDate(property.updatedAt)}</p>
+                        <p className="text-[var(--color-text-muted)] text-xs mb-1 mt-2">Última actualización</p>
+                        <p className="text-[var(--color-text-muted)] text-sm">{formatDate(property.updatedAt)}</p>
                       </>
                     )}
                   </div>
@@ -805,7 +804,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         PRIVADO
                       </span>
                     </div>
-                    <p className="text-slate-500 text-xs mb-3 leading-relaxed">
+                    <p className="text-[var(--color-text-muted)] text-xs mb-3 leading-relaxed">
                       Esta información es solo visible para el equipo.
                       No se muestra en la página pública.
                     </p>
@@ -815,7 +814,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-orange-400/70 text-xs font-semibold mb-1 uppercase tracking-wide">
                           Observaciones del inmueble
                         </p>
-                        <p className="text-slate-300 text-xs leading-relaxed whitespace-pre-line bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[var(--color-text)] text-xs leading-relaxed whitespace-pre-line bg-[var(--color-surface)]/60 p-3 rounded-lg border border-[var(--color-border)]">
                           {property.propertyObservations}
                         </p>
                       </div>
@@ -826,7 +825,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                         <p className="text-orange-400/70 text-xs font-semibold mb-1 uppercase tracking-wide">
                           Recomendaciones del propietario
                         </p>
-                        <p className="text-slate-300 text-xs leading-relaxed whitespace-pre-line bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[var(--color-text)] text-xs leading-relaxed whitespace-pre-line bg-[var(--color-surface)]/60 p-3 rounded-lg border border-[var(--color-border)]">
                           {property.ownerRecommendations}
                         </p>
                       </div>
@@ -845,7 +844,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
 
 <button
   onClick={() => setShowAdminPrint(true)}
-  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-[var(--color-text)] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
 >
   <FaFilePdf /> Ficha Completa (Admin)
 </button>
@@ -864,7 +863,7 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
                     <button
                       onClick={() => setConfirmModal(true)}
                       disabled={isDeleting}
-                      className="w-full px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full px-4 py-3 bg-red-600 hover:bg-red-500 text-[var(--color-text)] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <FaTrash />
                       {isDeleting ? "Eliminando..." : "Eliminar Propiedad"}
@@ -889,10 +888,10 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
           >
             <button
               onClick={() => setShowImageModal(false)}
-              className="absolute top-3 sm:top-4 right-3 sm:right-4 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+              className="absolute top-3 sm:top-4 right-3 sm:right-4 w-12 h-12 bg-[var(--color-surface)]/10 hover:bg-[var(--color-surface)]/20 rounded-full flex items-center justify-center transition-colors"
               aria-label="Cerrar imagen"
             >
-              <FaTimes className="text-white text-xl" />
+              <FaTimes className="text-[var(--color-text)] text-xl" />
             </button>
 
             <img
@@ -906,17 +905,17 @@ const PropertyDetail = ({ property, onClose, onEdit, onDelete }) => {
               <>
                 <button
                   onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                  className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                  className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-[var(--color-surface)]/10 hover:bg-[var(--color-surface)]/20 rounded-full flex items-center justify-center transition-colors"
                   aria-label="Anterior"
                 >
-                  <FaChevronLeft className="text-white text-xl" />
+                  <FaChevronLeft className="text-[var(--color-text)] text-xl" />
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-[var(--color-surface)]/10 hover:bg-[var(--color-surface)]/20 rounded-full flex items-center justify-center transition-colors"
                   aria-label="Siguiente"
                 >
-                  <FaChevronRight className="text-white text-xl" />
+                  <FaChevronRight className="text-[var(--color-text)] text-xl" />
                 </button>
               </>
             )}

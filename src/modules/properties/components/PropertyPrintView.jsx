@@ -69,8 +69,6 @@ function getOptionalGalleryGroups(list = [], startIndex = 0, minRequired = 2, si
 export default function PropertyPrintView({ property, onClose }) {
   const docRef = useRef(null);
   const [loading, setLoading] = useState(false);
-
-  // ★ FIX rules-of-hooks: early return movido DESPUÉS de todos los hooks.
   // Usamos safeProperty para evitar TypeErrors cuando property es null.
   const safeProperty = property || {};
 
@@ -215,8 +213,6 @@ export default function PropertyPrintView({ property, onClose }) {
   ].filter(([, value]) => value || value === 0);
 
   const amenityGroups = useMemo(() => chunk(amenities, 12), [amenities]);
-
-  // ★ Early return DESPUÉS de todos los hooks (rules-of-hooks).
   // safeProperty usado arriba permite que los hooks corran sin crashear.
   if (!property) return null;
 

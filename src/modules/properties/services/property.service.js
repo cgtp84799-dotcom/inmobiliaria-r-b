@@ -1,12 +1,6 @@
 // src/modules/properties/services/property.service.js
 //
-// FIX: Se agregaron los métodos faltantes:
-//   - getPublicPropertyById(id)    ← lo llama PropertyDetailPage
-//   - getPropertyById(id)          ← alias para el panel admin
-//   - getPublicPropertyBySlug(slug) ← búsqueda por slug para SEO
-//
-// Sin estos métodos, hacer clic en una propiedad del catálogo o del portal
-// arrojaba "propertyService.getPublicPropertyById is not a function".
+// Servicio CRUD + listados de propiedades (catálogo público y panel interno).
 
 import {
   collection,
@@ -32,6 +26,12 @@ import {
 import { db } from '../../../core/config/firebase.config';
 import { optimizeImage } from '../../../shared/utils/imageOptimization';
 import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
+import {
+  PROPERTY_STATUS,
+  PUBLIC_STATUSES,
+  isPublicStatus as isPublicStatusValue,
+  normalizePropertyStatus,
+} from '../types/property.types';
 
 const COLLECTION = 'properties';
 
@@ -51,8 +51,8 @@ const resolveCity       = (p) => String(p.location?.city ?? p.city ?? '').trim()
 const resolveRooms      = (p) => Number(p.features?.rooms ?? p.features?.bedrooms ?? p.rooms ?? 0);
 const resolveBathrooms  = (p) => Number(p.features?.bathrooms ?? p.bathrooms ?? 0);
 
-const PUBLIC_STATUSES = new Set(['disponible', 'reservada', 'published', 'active', 'available']);
-const isPublicStatus  = (p) => !p.status || PUBLIC_STATUSES.has(String(p.status).toLowerCase());
+// Wrapper para mantener la firma del helper local (p) → bool.
+const isPublicStatus = (p) => isPublicStatusValue(p?.status);
 
 // ─── Matching de clientes ─────────────────────────────────────────────────────
 
@@ -150,26 +150,34 @@ class PropertyService {
 
   // ── Propiedades PÚBLICAS con filtros ──────────────────────────────────────
   //
-  // PAGINACIÓN (Ronda C):
-  //   • Default: trae 200 docs (cubre 99% de catálogos).
-  //   • Para cargar más: pasar `lastDoc` del resultado anterior.
-  //   • Filtros se aplican en cliente (Firestore no soporta filtros multi-campo
-  //     sin crear un índice por combinación, lo cual es inviable).
-  //   • Si en el futuro hay >1000 propiedades activas, migrar a Algolia/Typesense.
+  // Estrategia:
+  //   • La query a Firestore filtra por `status == 'published'` directamente.
+  //     Las Firestore Rules ya restringen lectura pública a ese status, así
+  //     que es la única forma sostenible de listar el catálogo.
+  //   • Otros filtros (transactionType, type, city, precio, habitaciones)
+  //     se aplican en cliente porque Firestore no soporta multi-campo sin
+  //     un índice por combinación.
+  //   • Para >1000 propiedades activas, migrar a Algolia/Typesense.
   //
-  // Retrocompatibilidad: por default retorna array (como antes). Solo si se
-  // pasa `paginated: true` retorna { items, hasMore, lastDoc }.
+  // Retrocompatibilidad: por default retorna array. Solo si se pasa
+  // `paginated: true` retorna { items, hasMore, lastDoc }.
   async getPublicProperties(filters = {}, options = {}) {
     const { pageSize = 200, lastDoc = null, paginated = false } = options;
     try {
-      const constraints = [orderBy('createdAt', 'desc'), limit(pageSize)];
+      const constraints = [
+        where('status', '==', PROPERTY_STATUS.PUBLISHED),
+        orderBy('createdAt', 'desc'),
+        limit(pageSize),
+      ];
       if (lastDoc) constraints.push(startAfter(lastDoc));
       const q = query(collection(db, COLLECTION), ...constraints);
       const snapshot = await getDocs(q);
       const docs = snapshot.docs;
       let properties = docs.map((d) => ({ id: d.id, ...d.data() }));
 
-      properties = properties.filter(isPublicStatus);
+      // Defensa en profundidad: si entra data legacy con aliases, los
+      // normalizamos y re-filtramos.
+      properties = properties.filter((p) => isPublicStatus(p));
 
       if (filters.transactionType) {
         const ft = filters.transactionType.toLowerCase();
@@ -257,7 +265,7 @@ class PropertyService {
         currentContractId: contractId,
         updatedAt: Timestamp.now(),
       };
-      if (status) patch.status = status;
+      if (status) patch.status = normalizePropertyStatus(status);
       await updateDoc(doc(db, COLLECTION, propertyId), patch);
     } catch (err) {
       console.error('Error en setPropertyContractState:', err);
@@ -344,7 +352,6 @@ class PropertyService {
   }
 
   // ── Eliminar propiedad ────────────────────────────────────────────────────
-  // ★ FIX (auditoría):
   //   1. Antes se borraba el doc sin verificar contratos activos → quedaban
   //      contratos huérfanos apuntando a una propiedad inexistente.
   //   2. Antes no se cancelaban visitas pendientes → cliente iba a una
@@ -416,7 +423,6 @@ class PropertyService {
 
     for (const file of imageFiles) {
       try {
-        // ★ FIX (auditoría): validaciones antes del upload
         if (!file || file.size === 0) continue;
         if (file.size > 10 * 1024 * 1024) {
           console.warn('[uploadImages] archivo > 10MB ignorado:', file.name);
@@ -427,7 +433,7 @@ class PropertyService {
           continue;
         }
         const safeName = String(file.name || 'image')
-          .replace(/[\/\\?%*:|"<>]/g, '_')
+          .replace(/[/\\?%*:|"<>]/g, '_')
           .replace(/\s+/g, '_')
           .slice(0, 200);
 
@@ -462,14 +468,13 @@ class PropertyService {
 
     for (const file of documentFiles) {
       try {
-        // ★ FIX (auditoría): validaciones antes del upload
         if (!file || file.size === 0) continue;
         if (file.size > 20 * 1024 * 1024) {
           console.warn('[uploadDocuments] archivo > 20MB ignorado:', file.name);
           continue;
         }
         const safeName = String(file.name || 'doc')
-          .replace(/[\/\\?%*:|"<>]/g, '_')
+          .replace(/[/\\?%*:|"<>]/g, '_')
           .replace(/\s+/g, '_')
           .slice(0, 200);
         const storageRef = ref(

@@ -33,7 +33,6 @@ import { USER_ROLES } from '../../users/types/user.types';
 export function useClientPortal() {
   const { currentUser } = useAuth();
   const email = currentUser?.email ?? null;
-  // ★ FIX (auditoría): si el usuario es staff (admin/member) no creamos doc
   // /clients para él. Esto resuelve el bug "admin entra al portal por
   // equivocación y aparece como cliente en el panel".
   const isStaff = currentUser?.role === USER_ROLES.ADMIN
@@ -57,7 +56,6 @@ export function useClientPortal() {
   useEffect(() => {
     isMounted.current = true;
     if (!email) { setLoadingProfile(false); return; }
-    // ★ FIX (auditoría): si es staff, no resolvemos perfil de cliente.
     // El portal entero debería redirigir staff a /dashboard, pero si por algo
     // este hook se monta antes del redirect, no creamos el doc fantasma.
     if (isStaff) {
@@ -232,4 +230,4 @@ export function useClientPortal() {
     cancelClientVisit,
     readNotification, readAllNotifications, removeNotification,
   };
-} 
+}

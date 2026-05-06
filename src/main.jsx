@@ -9,6 +9,11 @@ import './index.css';
 // No duplicarlo aquí para evitar dos boundaries anidados (el interno
 // captura primero y el externo nunca se dispara).
 
+// Prerender.io espera a que esto sea `true` antes de tomar el snapshot.
+// Se pone false aquí para que nunca tome el snapshot antes de que
+// React termine de cargar los datos de Firestore.
+window.prerenderReady = false;
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider>

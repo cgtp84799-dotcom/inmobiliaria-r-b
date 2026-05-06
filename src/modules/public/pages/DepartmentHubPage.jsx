@@ -17,7 +17,7 @@
 // en un batch posterior, sin cambiar esta firma/API.
 // ─────────────────────────────────────────────────────────────
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Link, useParams, Navigate } from "react-router-dom";
 import { FaMapMarkerAlt, FaArrowRight, FaWhatsapp, FaSearch } from "react-icons/fa";
 
@@ -36,8 +36,8 @@ import {
   buildItemListSchema,
 } from "../../../shared/components/SEO";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME = "Inmobiliaria Rincón Bedoya y Asociados";
 const COMPANY_PHONE_DISPLAY = "+57 310 596 8202";
 
@@ -53,6 +53,11 @@ export default function DepartmentHubPage() {
     () => (department ? getCitiesByDepartment(department.slug) : []),
     [department]
   );
+
+  // Señal para Prerender.io: la página no carga datos async
+  useEffect(() => {
+    if (typeof window !== "undefined") window.prerenderReady = true;
+  }, []);
 
   // Slug inválido → 302 al catálogo
   if (!department) {

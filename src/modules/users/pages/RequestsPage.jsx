@@ -37,7 +37,6 @@ const formatDate = (date) => {
 
 // ─── Mapas de clases COMPLETAS — Tailwind JIT no puede generar clases dinámicas
 // ❌ MAL: `text-${color}-400`  →  Tailwind lo purga
-// ✅ BIEN: objeto con strings completos que Tailwind sí incluye en el bundle
 
 const STAT_COLOR_MAP = {
   primary:     'text-primary',
@@ -280,9 +279,7 @@ const RequestsPage = () => {
             onClick={() => setFilterStatus(value)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
               ${filterStatus === value
-                // ✅ Activo: acento de marca
-                ? 'bg-primary text-white'
-                // ✅ Inactivo: usa variables CSS del tema en lugar de slate hardcodeado
+                ? 'bg-primary text-[var(--color-text)]'
                 : 'bg-[var(--color-surface-offset)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dynamic)]'
               }`}
           >
@@ -319,7 +316,6 @@ const RequestsPage = () => {
         <AnimatePresence mode="popLayout">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {requests.map((req) => {
-              // ✅ Obtiene estilos del mapa — sin interpolación dinámica
               const statusStyle = STATUS_STYLES[req.status] ?? STATUS_STYLES.pending;
               const selectedRole = approveState[req.id] || USER_ROLES.MEMBER;
 

@@ -1,4 +1,3 @@
-// FIX [CALIDAD]: feedback visible en errores de carga y respeto de reduced motion.
 // src/modules/public/pages/LocationPage.jsx
 // ─────────────────────────────────────────────────────────────
 // Página de zona/ciudad editorial — misma lógica de SEO y slugs,
@@ -34,8 +33,8 @@ import propertyService from "../../properties/services/property.service";
 import PropertyCard from "../components/PropertyCard";
 import Breadcrumbs from "../../../shared/components/UI/Breadcrumbs";
 import toast from "react-hot-toast";
+import { SITE_URL as BASE_URL } from '../../../core/config/site.config';
 
-const BASE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 const COMPANY_NAME = "Inmobiliaria Rincón Bedoya y Asociados";
 
 const CITY_LABELS = {
@@ -414,6 +413,7 @@ const LocationPage = () => {
         setProperties([]);
       } finally {
         setLoading(false);
+        if (typeof window !== "undefined") window.prerenderReady = true;
       }
     };
 

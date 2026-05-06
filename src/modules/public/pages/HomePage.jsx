@@ -1,4 +1,3 @@
-// FIX [SEO]: incluye WebSite+SearchAction explícito en Home para rich results de búsqueda.
 // src/modules/public/pages/HomePage.jsx
 // ─────────────────────────────────────────────────────────────
 // Home editorial — Inmobiliaria Rincón Bedoya & Asociados
@@ -8,7 +7,7 @@
 // · Refleja la esencia: gestión integral + respaldo jurídico
 // ─────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -150,6 +149,10 @@ const slugifyCity = (city = "") =>
 
 const HomePage = () => {
   const navigate = useNavigate();
+  useEffect(() => {
+    if (typeof window !== "undefined") window.prerenderReady = true;
+  }, []);
+
   const [searchForm, setSearchForm] = useState({
     city: "",
     operation: "",

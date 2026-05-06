@@ -1,48 +1,93 @@
+// src/modules/profile/components/ProfileHeader.jsx
+//
+// Cabecera de perfil — rediseño con tokens CSS y soporte para light/dark.
+// Sin colores hardcodeados (slate-*, white, etc.) salvo los badges que ya
+// existían como clases estáticas (USER_ROLE_BADGE_CLASSES) que sí compilan.
+
 import { useRef } from 'react';
 import { motion } from 'framer-motion';
-import { FaCamera, FaSpinner, FaClock } from 'react-icons/fa';
+import { FaCamera, FaSpinner, FaClock, FaCheckCircle } from 'react-icons/fa';
 import {
   USER_ROLE_LABELS,
-  USER_ROLE_COLORS,
+  USER_ROLE_BADGE_CLASSES,
   USER_STATUS_LABELS,
   USER_STATUS,
 } from '../../../modules/users/types/user.types';
 
-/**
- * Muestra avatar (foto o iniciales), nombre, rol, estado online/offline.
- * El input de archivo está oculto — el clic lo dispara el botón de cámara.
- */
-export default function ProfileHeader({ currentUser, userData, avatarPreview, uploadingAvatar, onAvatarChange }) {
+const FALLBACK_BADGE = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+
+export default function ProfileHeader({
+  currentUser,
+  userData,
+  avatarPreview,
+  uploadingAvatar,
+  onAvatarChange,
+}) {
   const fileInputRef = useRef(null);
 
-  const displayName = userData?.displayName || currentUser?.displayName || currentUser?.email || 'Usuario';
+  const displayName =
+    userData?.displayName ||
+    currentUser?.displayName ||
+    currentUser?.email ||
+    'Usuario';
   const initial = displayName.charAt(0).toUpperCase();
   const photoURL = avatarPreview || userData?.photoURL || currentUser?.photoURL;
   const role = userData?.role || 'viewer';
   const status = userData?.status || 'pending';
   const isOnline = userData?.online ?? false;
-  const roleColor = USER_ROLE_COLORS[role] || 'slate';
   const isPending = status === USER_STATUS.PENDING;
 
+  const roleBadgeCls = USER_ROLE_BADGE_CLASSES[role] || FALLBACK_BADGE;
+
   return (
-    <div className="card-soft p-6 border border-slate-800">
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+    <div
+      className="rounded-2xl p-5 sm:p-7 border"
+      style={{
+        background: 'var(--color-surface)',
+        borderColor: 'var(--color-border)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      }}
+    >
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
-          <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-primary/30 bg-gradient-to-br from-primary/20 to-blue-500/20 flex items-center justify-center">
+          <div
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden flex items-center justify-center"
+            style={{
+              background:
+                'linear-gradient(135deg, var(--color-gold-soft) 0%, var(--color-gold) 100%)',
+              boxShadow:
+                '0 0 0 4px var(--color-surface), 0 0 0 5px var(--color-border)',
+            }}
+          >
             {photoURL ? (
-              <img src={photoURL} alt={displayName} className="w-full h-full object-cover" />
+              <img
+                src={photoURL}
+                alt={displayName}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             ) : (
-              <span className="text-4xl font-bold text-primary">{initial}</span>
+              <span
+                className="text-3xl sm:text-4xl font-bold"
+                style={{ color: 'var(--color-bg)' }}
+              >
+                {initial}
+              </span>
             )}
           </div>
 
           {/* Indicador online */}
           <span
-            className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${
-              isOnline ? 'bg-green-500' : 'bg-slate-500'
-            }`}
+            className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full"
+            style={{
+              background: isOnline
+                ? '#10b981'
+                : 'var(--color-text-faint)',
+              boxShadow: '0 0 0 2px var(--color-surface)',
+            }}
             title={isOnline ? 'En línea' : 'Desconectado'}
+            aria-hidden="true"
           />
 
           {/* Botón cámara */}
@@ -50,13 +95,18 @@ export default function ProfileHeader({ currentUser, userData, avatarPreview, up
             type="button"
             disabled={uploadingAvatar}
             onClick={() => fileInputRef.current?.click()}
-            className="absolute -bottom-1 -right-1 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-slate-900 hover:bg-yellow-400 transition-all disabled:opacity-50"
+            className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-50"
+            style={{
+              background: 'var(--color-gold)',
+              color: 'var(--color-bg)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            }}
             aria-label="Cambiar foto de perfil"
           >
             {uploadingAvatar ? (
-              <FaSpinner className="animate-spin text-xs" />
+              <FaSpinner className="animate-spin text-sm" />
             ) : (
-              <FaCamera className="text-xs" />
+              <FaCamera className="text-sm" />
             )}
           </button>
 
@@ -69,45 +119,65 @@ export default function ProfileHeader({ currentUser, userData, avatarPreview, up
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onAvatarChange(file);
-              e.target.value = ''; // reset para permitir reseleccionar el mismo archivo
+              e.target.value = '';
             }}
           />
         </div>
 
         {/* Info */}
-        <div className="flex-1 text-center sm:text-left">
-          <h1 className="text-2xl font-bold text-white mb-1">{displayName}</h1>
-          <p className="text-slate-400 text-sm mb-3">{currentUser?.email}</p>
+        <div className="flex-1 min-w-0 text-center sm:text-left w-full">
+          <h1
+            className="text-xl sm:text-2xl font-bold mb-1 truncate"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {displayName}
+          </h1>
+          <p
+            className="text-sm mb-4 truncate"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            {currentUser?.email}
+          </p>
 
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-            {/* Badge rol */}
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-${roleColor}-500/10 text-${roleColor}-400 border-${roleColor}-500/30`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${roleBadgeCls}`}
             >
               {USER_ROLE_LABELS[role] || role}
             </span>
 
-            {/* Badge estado */}
             {isPending && (
               <motion.span
                 animate={{ opacity: [1, 0.5, 1] }}
                 transition={{ repeat: Infinity, duration: 2 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-500/10 text-amber-500 border-amber-500/30"
               >
-                <FaClock className="text-xs" />
+                <FaClock className="text-[10px]" />
                 {USER_STATUS_LABELS[status]}
               </motion.span>
             )}
 
-            {/* Online/Offline */}
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border ${
-                isOnline
-                  ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                  : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
-              }`}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border"
+              style={{
+                background: isOnline
+                  ? 'rgba(16, 185, 129, 0.10)'
+                  : 'var(--color-inner-card)',
+                color: isOnline
+                  ? '#10b981'
+                  : 'var(--color-text-muted)',
+                borderColor: isOnline
+                  ? 'rgba(16, 185, 129, 0.30)'
+                  : 'var(--color-border)',
+              }}
             >
-              {isOnline ? 'En línea' : 'Desconectado'}
+              {isOnline ? (
+                <>
+                  <FaCheckCircle className="text-[10px]" /> En línea
+                </>
+              ) : (
+                'Desconectado'
+              )}
             </span>
           </div>
         </div>

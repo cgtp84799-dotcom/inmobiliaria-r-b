@@ -18,9 +18,6 @@ import { hasPermission } from '../../users/types/user.types'; // ✅
 
 const DocumentsPage = () => {
   const { currentUser, userData } = useAuth();
-
-  // ✅ Permisos granulares
-// ✅ DESPUÉS
   const canCreate = hasPermission(userData?.role, 'documents', 'create');
   const canDelete = hasPermission(userData?.role, 'documents', 'delete');
 
@@ -184,7 +181,7 @@ const DocumentsPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.5 }}
-        className="card-soft border border-slate-800/80"
+        className="card-soft border border-[var(--color-border)]/80"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -193,7 +190,7 @@ const DocumentsPage = () => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-light">Filtros</h2>
-              <p className="text-xs text-slate-400">Busca documentos específicos</p>
+              <p className="text-xs text-[var(--color-text-muted)]">Busca documentos específicos</p>
             </div>
           </div>
           <button
@@ -211,9 +208,9 @@ const DocumentsPage = () => {
             className="grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">Búsqueda</label>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Búsqueda</label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-slate-500 text-sm">
+                <span className="absolute left-3 top-2.5 text-[var(--color-text-muted)] text-sm">
                   <FaSearch />
                 </span>
                 <input
@@ -221,17 +218,17 @@ const DocumentsPage = () => {
                   placeholder="Buscar por título, descripción..."
                   value={filters.searchTerm}
                   onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 pl-9 pr-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Categoría</label>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Categoría</label>
               <select
                 value={filters.category}
                 onChange={(e) => handleFilterChange('category', e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               >
                 <option value="">Todas las categorías</option>
                 {Object.entries(DOCUMENT_CATEGORY_LABELS).map(([key, label]) => (
@@ -250,7 +247,7 @@ const DocumentsPage = () => {
               </button>
               <button
                 onClick={clearFilters}
-                className="inline-flex items-center justify-center gap-1 px-4 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl py-2.5 hover:border-slate-600 transition-all"
+                className="inline-flex items-center justify-center gap-1 px-4 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-xl py-2.5 hover:border-slate-600 transition-all"
               >
                 <FaTimesCircle />
                 Limpiar
@@ -263,7 +260,7 @@ const DocumentsPage = () => {
       {/* CONTADOR */}
       {!loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <p className="text-slate-400 text-sm">
+          <p className="text-[var(--color-text-muted)] text-sm">
             <span className="text-primary font-bold">{filteredDocuments.length}</span>{' '}
             {filteredDocuments.length === 1 ? 'documento encontrado' : 'documentos encontrados'}
           </p>
@@ -278,13 +275,13 @@ const DocumentsPage = () => {
           className="card-soft py-16 text-center"
         >
           <FaSpinner className="animate-spin text-primary text-4xl mx-auto mb-4" />
-          <p className="text-slate-400">Cargando documentos...</p>
+          <p className="text-[var(--color-text-muted)]">Cargando documentos...</p>
         </motion.div>
       ) : filteredDocuments.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="card-soft py-16 px-6 text-center border border-dashed border-slate-700"
+          className="card-soft py-16 px-6 text-center border border-dashed border-[var(--color-border)]"
         >
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <FaFolder className="text-primary text-3xl" />
@@ -292,7 +289,7 @@ const DocumentsPage = () => {
           <h2 className="text-2xl font-bold text-light mb-2">
             {documents.length === 0 ? 'Aún no hay documentos' : 'No se encontraron documentos'}
           </h2>
-          <p className="text-slate-400 max-w-md mx-auto mb-6">
+          <p className="text-[var(--color-text-muted)] max-w-md mx-auto mb-6">
             {documents.length === 0
               ? 'Sube tu primer documento usando el botón de arriba.'
               : 'Intenta ajustar los filtros de búsqueda.'}
@@ -329,26 +326,26 @@ const DocumentsPage = () => {
 
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
+                <label className="block text-sm text-[var(--color-text)] mb-1">
                   Título <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={uploadData.title}
                   onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   placeholder="Ej: Contrato arriendo - Juan Pérez"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
+                <label className="block text-sm text-[var(--color-text)] mb-1">
                   Categoría <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={uploadData.category}
                   onChange={(e) => setUploadData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Selecciona una categoría</option>
                   {Object.entries(DOCUMENT_CATEGORY_LABELS).map(([key, label]) => (
@@ -358,26 +355,26 @@ const DocumentsPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
+                <label className="block text-sm text-[var(--color-text)] mb-1">
                   Descripción (opcional)
                 </label>
                 <textarea
                   value={uploadData.description}
                   onChange={(e) => setUploadData(prev => ({ ...prev, description: e.target.value }))}
                   rows={3}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   placeholder="Detalles adicionales del documento..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
+                <label className="block text-sm text-[var(--color-text)] mb-1">
                   Archivo <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="file"
                   onChange={(e) => setUploadData(prev => ({ ...prev, file: e.target.files[0] }))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-primary/20 file:text-primary file:cursor-pointer"
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl py-2.5 px-3 text-sm text-light focus:outline-none focus:border-primary file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-primary/20 file:text-primary file:cursor-pointer"
                 />
               </div>
 
@@ -388,7 +385,7 @@ const DocumentsPage = () => {
                 <button
                   type="button"
                   onClick={() => setUploadModalOpen(false)}
-                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all"
+                  className="px-6 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-input-bg)] text-[var(--color-text)] rounded-xl transition-all"
                 >
                   Cancelar
                 </button>

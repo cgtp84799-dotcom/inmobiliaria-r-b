@@ -86,31 +86,18 @@
         }
       ],
       "rewrites": [
-        {
-          "source": "/sitemap.xml",
-          "function": "generateSitemap"
-        },
-        {
-          "source": "/sitemap-index.xml",
-          "function": "generateSitemap"
-        },
-        {
-          "source": "/sitemap-properties.xml",
-          "function": "generateSitemap"
-        },
-        {
-          "source": "/sitemap-cities.xml",
-          "function": "generateSitemap"
-        },
-        {
-          "source": "/sitemap-static.xml",
-          "function": "generateSitemap"
-        },
-        {
-          "source": "**",
-          "dynamicLinks": false,
-          "function": "serveApp"
-        }
+        { "source": "/sitemap.xml",           "function": "generateSitemap" },
+        { "source": "/sitemap-index.xml",     "function": "generateSitemap" },
+        { "source": "/sitemap-properties.xml","function": "generateSitemap" },
+        { "source": "/sitemap-cities.xml",    "function": "generateSitemap" },
+        { "source": "/sitemap-static.xml",    "function": "generateSitemap" },
+
+        { "source": "/",                      "function": "serveApp" },
+        { "source": "/catalogo{,/**}",        "function": "serveApp" },
+        { "source": "/propiedades/**",        "function": "serveApp" },
+        { "source": "/contacto",              "function": "serveApp" },
+
+        { "source": "**",                     "destination": "/index.html" }
       ],
       "headers": [
         {
@@ -541,7 +528,7 @@
             },
             {
               "key": "Content-Security-Policy",
-              "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://apis.google.com https://*.firebaseapp.com; script-src-elem 'self' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' data: https://fonts.gstatic.com https://api.fontshare.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://www.google.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://fcm.googleapis.com https://firebasestorage.googleapis.com https://www.google-analytics.com https://*.cloudfunctions.net https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net wss://*.firebaseio.com; frame-src 'self' https://www.google.com https://accounts.google.com https://inmobiliaria-ryb-y-asociados.firebaseapp.com; media-src 'self' blob: https://firebasestorage.googleapis.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+              "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://apis.google.com https://maps.googleapis.com https://*.firebaseapp.com; script-src-elem 'self' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://apis.google.com https://maps.googleapis.com https://*.firebaseapp.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' data: https://fonts.gstatic.com https://api.fontshare.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://www.google.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://fcm.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://firebasestorage.googleapis.com https://www.google-analytics.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://*.cloudfunctions.net https://us-central1-inmobiliaria-ryb-y-asociados.cloudfunctions.net wss://*.firebaseio.com; frame-src 'self' https://www.google.com https://www.recaptcha.net https://accounts.google.com https://inmobiliaria-ryb-y-asociados.firebaseapp.com; media-src 'self' blob: https://firebasestorage.googleapis.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
             }
           ]
         }

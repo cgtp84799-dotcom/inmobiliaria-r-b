@@ -27,7 +27,6 @@ class ProfileService {
    */
   async updatePersonalInfo(email, { displayName, phone }) {
     if (!email) throw new Error('Email requerido');
-    // ★ FIX (auditoría): sanitizar y limitar longitud para evitar inyección
     // de payloads anormales en el doc del usuario.
     const safeName  = String(displayName ?? '').trim().slice(0, 200);
     const safePhone = String(phone ?? '').trim().slice(0, 30);
@@ -47,7 +46,6 @@ class ProfileService {
    */
   async uploadAvatar(uid, email, file) {
     if (!uid || !email || !file) throw new Error('Parámetros incompletos');
-    // ★ FIX (auditoría): validar tamaño y tipo del archivo antes de subir.
     if (file.size === 0) throw new Error('El archivo está vacío');
     if (file.size > 5 * 1024 * 1024) throw new Error('La imagen excede 5 MB');
     if (file.type && !/^image\//i.test(file.type)) {
@@ -72,7 +70,6 @@ class ProfileService {
   async changePassword(currentPassword, newPassword) {
     const user = auth.currentUser;
     if (!user?.email) throw new Error('No hay sesión activa');
-    // ★ FIX (auditoría): validar complejidad mínima.
     if (!newPassword || newPassword.length < 8) {
       throw new Error('La nueva contraseña debe tener al menos 8 caracteres');
     }
@@ -116,7 +113,6 @@ class ProfileService {
    */
   async requestAccountDeletion(uid, email, reason) {
     const { addDoc, collection, query, where, getDocs, limit } = await import('firebase/firestore');
-    // ★ FIX (auditoría): evitar duplicados — si ya hay una solicitud
     // pending para el mismo email, no crear otra (rules ya restringen
     // por authEmail pero igualmente protegemos del lado cliente).
     try {

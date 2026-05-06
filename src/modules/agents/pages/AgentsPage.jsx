@@ -93,16 +93,16 @@ export default function AgentsPage() {
   ];
 
   const rankIcons = [FaTrophy, FaMedal, FaMedal];
-  const rankColors = ['text-yellow-400', 'text-slate-400', 'text-amber-600'];
+  const rankColors = ['text-yellow-400', 'text-[var(--color-text-muted)]', 'text-amber-600'];
 
   return (
     <div className="space-y-8">
       {/* ── Encabezado ── */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1">
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text)] mb-1">
           Control de Agentes
         </h1>
-        <p className="text-slate-400 text-sm">
+        <p className="text-[var(--color-text-muted)] text-sm">
           Métricas en tiempo real de todo el equipo inmobiliario
         </p>
       </div>
@@ -115,11 +115,11 @@ export default function AgentsPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08 }}
-            className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4"
+            className="bg-[var(--color-surface)]/70 border border-[var(--color-border)] rounded-2xl p-4"
           >
             <div className="flex items-center gap-2 mb-1">
               <Icon className={`${color} text-sm`} />
-              <span className="text-slate-400 text-xs">{label}</span>
+              <span className="text-[var(--color-text-muted)] text-xs">{label}</span>
             </div>
             <p className={`text-xl font-extrabold ${color}`}>{loading ? '…' : value}</p>
           </motion.div>
@@ -128,8 +128,8 @@ export default function AgentsPage() {
 
       {/* ── Ranking top 3 ── */}
       {!loading && ranking.length > 0 && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-          <h2 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+        <div className="bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-2xl p-5">
+          <h2 className="text-[var(--color-text)] font-bold text-sm mb-4 flex items-center gap-2">
             <FaTrophy className="text-yellow-400" /> Ranking de conversión este período
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -140,18 +140,18 @@ export default function AgentsPage() {
               return (
                 <div
                   key={agent.id}
-                  className="flex items-center gap-3 bg-slate-800/60 rounded-xl p-3"
+                  className="flex items-center gap-3 bg-[var(--color-surface)]/60 rounded-xl p-3"
                 >
                   <RankIcon className={`${rankColors[i]} text-xl flex-shrink-0`} />
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/30
                     to-slate-700 flex items-center justify-center text-xs font-bold
-                    text-primary border border-slate-700 overflow-hidden flex-shrink-0">
+                    text-primary border border-[var(--color-border)] overflow-hidden flex-shrink-0">
                     {agent.photoURL
                       ? <img src={agent.photoURL} alt="" className="w-full h-full object-cover" />
                       : initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-slate-200 text-xs font-semibold truncate">
+                    <p className="text-[var(--color-text)] text-xs font-semibold truncate">
                       {agent.displayName || agent.email}
                     </p>
                     <p className="text-green-400 text-xs font-bold">{s.conversionRate}% conv.</p>
@@ -165,14 +165,14 @@ export default function AgentsPage() {
 
       {/* ── Buscador ── */}
       <div className="relative max-w-sm">
-        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={12} />
         <input
           type="text"
           placeholder="Buscar agente..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-700 rounded-xl
-            pl-9 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500
+          className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl
+            pl-9 pr-4 py-2.5 text-sm text-[var(--color-text)] placeholder-slate-500
             focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
         />
       </div>
@@ -181,11 +181,11 @@ export default function AgentsPage() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-72 bg-slate-900/60 border border-slate-800 rounded-2xl animate-pulse" />
+            <div key={i} className="h-72 bg-[var(--color-surface)]/60 border border-[var(--color-border)] rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-slate-500">
+        <div className="py-16 text-center text-[var(--color-text-muted)]">
           <FaUsers className="mx-auto text-4xl mb-3 opacity-20" />
           <p className="text-sm">No se encontraron agentes</p>
         </div>
