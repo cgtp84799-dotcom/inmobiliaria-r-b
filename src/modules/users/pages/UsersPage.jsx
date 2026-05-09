@@ -20,6 +20,9 @@ import UserEditModal   from '../components/UserEditModal';
 import UserDetailPanel from '../components/UserDetailPanel';
 import { useAuth }     from '../../../core/contexts/AuthContext';
 import ConfirmModal    from '../../../shared/components/UI/ConfirmModal';
+import { notificationService } from '../../../core/services/notificationService';
+import { getDocs, query, where, collection } from 'firebase/firestore';
+import { db } from '../../../core/config/firebase.config';
 
 const PANEL_ROLES  = [USER_ROLES.ADMIN, USER_ROLES.MEMBER];
 const PORTAL_ROLES = [USER_ROLES.VIEWER];
@@ -125,6 +128,26 @@ const UsersPage = () => {
         formData.password
       );
       toast.success('Usuario creado exitosamente');
+
+      // ── NUEVO: Notificar a todos los administradores (excepto al creador) ──
+      try {
+        const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+        await Promise.all(
+          adminsSnap.docs
+            .filter((d) => d.id !== currentUser?.email)
+            .map((d) =>
+              notificationService.createNotification({
+                userId: d.id,
+                type: 'new_user',
+                title: '🧑‍💼 Nuevo usuario creado',
+                message: `Se ha creado el usuario ${formData.email} (${formData.displayName}) con rol ${formData.role}.`,
+                actionUrl: '/usuarios',
+              })
+            )
+        );
+      } catch (e) {
+        console.warn('[UsersPage] error notificando nuevo usuario:', e?.message);
+      }
     }
     loadUsers();
   };
@@ -150,6 +173,26 @@ const UsersPage = () => {
           // FIX: pasar el rol para que se limpie /clients si es viewer
           await userService.deleteUser(user.id, user.role);
           toast.success(isClient ? 'Cliente eliminado del portal y del sistema' : 'Usuario eliminado');
+
+          // ── NUEVO: Notificar a todos los administradores ──────────────────
+          try {
+            const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+            const deletedUserEmail = user.email || user.id;
+            await Promise.all(
+              adminsSnap.docs.map((d) =>
+                notificationService.createNotification({
+                  userId: d.id,
+                  type: 'user_deleted',
+                  title: '🗑️ Usuario eliminado',
+                  message: `El usuario ${deletedUserEmail} fue eliminado${isClient ? ' (cliente del portal)' : ''}.`,
+                  actionUrl: '/usuarios',
+                })
+              )
+            );
+          } catch (e) {
+            console.warn('[UsersPage] error notificando usuario eliminado:', e?.message);
+          }
+
           loadUsers();
           closePanel();
         } catch (err) {

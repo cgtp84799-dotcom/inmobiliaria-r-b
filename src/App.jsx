@@ -9,10 +9,42 @@
 //   - AuthenticatedRootRedirect: espera a que userData llegue de Firestore
 //     antes de redirigir según el rol.
 //   - NotificationInitializer: efectos separados para que un fallo del SW
-//     no bloquee Firebase Messaging.
+//     no bloquee Firebase Messaging. Cada efecto tiene responsabilidad única.
 //   - ConditionalSettingsFab: oculta el FAB de ajustes en rutas auth.
 //
 // NOTA: HelmetProvider vive en src/main.jsx — no se duplica aquí.
+//
+// ─── CORRECCIONES APLICADAS ────────────────────────────────────────────────
+//  [FIX 1] NotificationInitializer — registro del SW eliminado del efecto
+//          independiente. getOrRegisterSW() dentro de notificationService ya
+//          lo registra y ESPERA a que esté "activated". Tener dos registros
+//          del mismo SW crea una race condition: el registro manual puede
+//          resolver ANTES de que el SW esté activo, y getToken() recibe
+//          un registro inactivo.
+//
+//  [FIX 2] NotificationInitializer — initializeMessaging() movido a DESPUÉS
+//          de confirmar que currentUser existe, dentro del tercer useEffect.
+//          Antes se llamaba incondicionalmente al montar (sin usuario),
+//          lo que significa que en móvil/PWA el handler de foreground se
+//          registraba antes de que el SW estuviera listo.
+//
+//  [FIX 3] NotificationInitializer — requestNotificationPermission se llama
+//          solo si Notification.permission !== 'denied'. Si el usuario ya
+//          denegó, no volver a solicitar (no tiene efecto y genera ruido
+//          en la consola de DevTools móvil).
+//
+//  [FIX 4] NotificationInitializer — el timeout de 3 s se mantiene para dar
+//          margen al SW de activarse, pero ahora initializeMessaging() se
+//          llama ANTES que requestNotificationPermission en el mismo efecto,
+//          garantizando que el handler foreground esté registrado antes de
+//          que se intente obtener el token.
+//
+//  [FIX 5] NotificationInitializer — se agrega llamada directa a
+//          requestNotificationPermission si Notification.permission ya es
+//          'granted' al montar (usuario que ya aceptó antes). En ese caso
+//          solo se refresca el token FCM sin volver a pedir permiso.
+// ──────────────────────────────────────────────────────────────────────────
+
 
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -29,6 +61,7 @@ import PublicLayout   from './shared/components/Layout/PublicLayout';
 import AdminLayout    from './shared/components/Layout/AdminLayout';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import ErrorBoundary  from './shared/components/UI/ErrorBoundary';
+
 
 // Boundary ligero para rutas individuales — muestra mensaje sin tumbar el layout
 const RouteError = () => (
@@ -53,40 +86,42 @@ const RE = ({ children }) => (
   <ErrorBoundary fallback={<RouteError />}>{children}</ErrorBoundary>
 );
 
+
 // ── Páginas públicas (Home eager, resto lazy) ───────────────────────────────
-import HomePage           from './modules/public/pages/HomePage';
+import HomePage from './modules/public/pages/HomePage';
 
 // ── Páginas lazy públicas secundarias ──────────────────────────────────────
-const DepartmentHubPage = lazy(() => import('./modules/public/pages/DepartmentHubPage'));
-const NotFoundPage      = lazy(() => import('./modules/public/pages/NotFoundPage'));
-const AuthPage          = lazy(() => import('./modules/auth/pages/AuthPage'));
-const ContactPage       = lazy(() => import('./modules/public/pages/ContactPage'));
-const LocationPage      = lazy(() => import('./modules/public/pages/LocationPage'));
-const PrivacyPolicyPage = lazy(() => import('./modules/public/pages/PrivacyPolicyPage'));
-const AccessRequestPage = lazy(() => import('./modules/users/pages/AccessRequestPage'));
-const ProfilePage       = lazy(() => import('./modules/profile/pages/ProfilePage'));
-const CatalogPage       = lazy(() => import('./modules/public/pages/CatalogPage'));
-const PropertyDetailPage= lazy(() => import('./modules/public/pages/PropertyDetailPage'));
+const DepartmentHubPage     = lazy(() => import('./modules/public/pages/DepartmentHubPage'));
+const NotFoundPage          = lazy(() => import('./modules/public/pages/NotFoundPage'));
+const AuthPage              = lazy(() => import('./modules/auth/pages/AuthPage'));
+const ContactPage           = lazy(() => import('./modules/public/pages/ContactPage'));
+const LocationPage          = lazy(() => import('./modules/public/pages/LocationPage'));
+const PrivacyPolicyPage     = lazy(() => import('./modules/public/pages/PrivacyPolicyPage'));
+const AccessRequestPage     = lazy(() => import('./modules/users/pages/AccessRequestPage'));
+const ProfilePage           = lazy(() => import('./modules/profile/pages/ProfilePage'));
+const CatalogPage           = lazy(() => import('./modules/public/pages/CatalogPage'));
+const PropertyDetailPage    = lazy(() => import('./modules/public/pages/PropertyDetailPage'));
 
 // ── Páginas lazy privadas ──────────────────────────────────────────────────
-const ClientAuthPage     = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
-const EmailVerificationPage = lazy(() => import('./modules/auth/pages/EmailVerificationPage'));
-const EmailVerifyTokenPage  = lazy(() => import('./modules/auth/pages/EmailVerifyTokenPage'));
-const ClientPortal       = lazy(() => import('./modules/clients/pages/ClientPortal'));
-const DashboardPage      = lazy(() => import('./modules/dashboard/pages/DashboardPage'));
-const PropertyManagement = lazy(() => import('./modules/properties/pages/PropertyManagement'));
-const ClientManagement   = lazy(() => import('./modules/clients/pages/ClientManagement'));
-const ContractsPage      = lazy(() => import('./modules/contracts/pages/ContractsPage'));
-const DocumentsPage      = lazy(() => import('./modules/documents/pages/DocumentsPage'));
-const ContactsPage       = lazy(() => import('./modules/contacts/pages/ContactsPage'));
-const CalendarPage       = lazy(() => import('./modules/visits/pages/CalendarPage'));
-const VisitsPage         = lazy(() => import('./modules/visits/pages/VisitsPage'));
-const ScheduleVisitPage  = lazy(() => import('./modules/visits/pages/ScheduleVisitPage'));
-const UsersPage          = lazy(() => import('./modules/users/pages/UsersPage'));
-const RequestsPage       = lazy(() => import('./modules/users/pages/RequestsPage'));
-const AgentDashboard     = lazy(() => import('./modules/agents/pages/AgentDashboard'));
-const AgentsPage         = lazy(() => import('./modules/agents/pages/AgentsPage'));
-const AgentDetailPage    = lazy(() => import('./modules/agents/pages/AgentDetailPage'));
+const ClientAuthPage          = lazy(() => import('./modules/auth/pages/ClientAuthPage'));
+const EmailVerificationPage   = lazy(() => import('./modules/auth/pages/EmailVerificationPage'));
+const EmailVerifyTokenPage    = lazy(() => import('./modules/auth/pages/EmailVerifyTokenPage'));
+const ClientPortal            = lazy(() => import('./modules/clients/pages/ClientPortal'));
+const DashboardPage           = lazy(() => import('./modules/dashboard/pages/DashboardPage'));
+const PropertyManagement      = lazy(() => import('./modules/properties/pages/PropertyManagement'));
+const ClientManagement        = lazy(() => import('./modules/clients/pages/ClientManagement'));
+const ContractsPage           = lazy(() => import('./modules/contracts/pages/ContractsPage'));
+const DocumentsPage           = lazy(() => import('./modules/documents/pages/DocumentsPage'));
+const ContactsPage            = lazy(() => import('./modules/contacts/pages/ContactsPage'));
+const CalendarPage            = lazy(() => import('./modules/visits/pages/CalendarPage'));
+const VisitsPage              = lazy(() => import('./modules/visits/pages/VisitsPage'));
+const ScheduleVisitPage       = lazy(() => import('./modules/visits/pages/ScheduleVisitPage'));
+const UsersPage               = lazy(() => import('./modules/users/pages/UsersPage'));
+const RequestsPage            = lazy(() => import('./modules/users/pages/RequestsPage'));
+const AgentDashboard          = lazy(() => import('./modules/agents/pages/AgentDashboard'));
+const AgentsPage              = lazy(() => import('./modules/agents/pages/AgentsPage'));
+const AgentDetailPage         = lazy(() => import('./modules/agents/pages/AgentDetailPage'));
+
 
 // ─────────────────────────────────────────────────────────────
 // COMPORTAMIENTO DE "/" CUANDO HAY SESION ACTIVA:
@@ -96,6 +131,7 @@ const AgentDetailPage    = lazy(() => import('./modules/agents/pages/AgentDetail
 //           (comportamiento original, menos flexible)
 // ─────────────────────────────────────────────────────────────
 const REDIRECT_HOME_WHEN_AUTHED = false;
+
 
 // ── Spinner para Suspense ──────────────────────────────────────────────────
 const PageLoader = () => (
@@ -107,29 +143,87 @@ const PageLoader = () => (
 
 const S = ({ children }) => <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 
+
 // ── Inicializador de notificaciones push ───────────────────────────────────
+//
+// Tres efectos con responsabilidades separadas para que un fallo en uno
+// no bloquee a los otros (comportamiento original conservado).
+//
+// [FIX 1] Efecto 1: ELIMINADO el registro manual del SW.
+//         getOrRegisterSW() en notificationService.js ya lo registra y
+//         espera a "activated". Dos registros del mismo SW causan race
+//         condition: el manual puede resolver con un SW inactivo.
+//
+// [FIX 2+4] Efecto 2: initializeMessaging() pasa a estar en el efecto del
+//           usuario, no en un efecto sin dependencias. En móvil/PWA el
+//           usuario puede ya estar disponible en el primer render
+//           (sesión persistida), y el handler foreground debe registrarse
+//           junto con el token, no antes.
+//
+// [FIX 3+5] Efecto 3: requestNotificationPermission solo si el permiso no
+//           está 'denied'. Si ya es 'granted', solo refresca el token
+//           (sin modal de permiso). Si es 'default', solicita permiso.
+//
 function NotificationInitializer() {
   const { currentUser } = useAuth();
 
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker
-      .register('/firebase-messaging-sw.js')
-      .catch((e) => console.error('SW error:', e));
-  }, []);
-
-  useEffect(() => {
-    initializeMessaging();
-  }, []);
-
+  // [FIX 2+3+4+5] Un único efecto por usuario:
+  //   1. Inicializa messaging (registra handler foreground + sonido del SW)
+  //   2. Si el permiso ya está granted → solo refresca token sin pedir permiso
+  //   3. Si el permiso es default → espera 3 s y solicita permiso + token
+  //   4. Si el permiso es denied → no hacer nada (respeta la decisión del usuario)
   useEffect(() => {
     if (!currentUser?.email) return;
-    const t = setTimeout(() => requestNotificationPermission(currentUser.email), 3000);
-    return () => clearTimeout(t);
+
+    let cancelled = false;
+
+    const run = async () => {
+      // [FIX 2] initializeMessaging SIEMPRE primero — registra el handler
+      // foreground y el listener de sonido del SW antes de cualquier token.
+      await initializeMessaging();
+      if (cancelled) return;
+
+      const permission = typeof Notification !== 'undefined'
+        ? Notification.permission
+        : 'denied';
+
+      if (permission === 'denied') {
+        // [FIX 3] El usuario ya denegó — no volver a solicitar.
+        // No hay nada que hacer, FCM no puede entregar notificaciones.
+        return;
+      }
+
+      if (permission === 'granted') {
+        // [FIX 5] Ya tiene permiso → solo refrescar el token FCM.
+        // Puede haber expirado o cambiado de dispositivo/instalación.
+        // No mostramos ningún modal al usuario.
+        await requestNotificationPermission(currentUser.email);
+        return;
+      }
+
+      // permission === 'default' → solicitar con delay para no interrumpir
+      // la carga inicial de la app (UX: el usuario ya vio algo antes del modal).
+      // [FIX 4] 3 s de margen también da tiempo al SW de activarse en móvil.
+      const t = setTimeout(async () => {
+        if (cancelled) return;
+        await requestNotificationPermission(currentUser.email);
+      }, 3000);
+
+      return () => clearTimeout(t);
+    };
+
+    const cleanup = run();
+
+    return () => {
+      cancelled = true;
+      // Si run() devolvió una función de cleanup (clearTimeout), ejecutarla
+      cleanup?.then?.((fn) => fn?.());
+    };
   }, [currentUser?.email]);
 
   return null;
 }
+
 
 // ── Redirect al home correcto según rol ───────────────────────────────────
 function AuthenticatedRootRedirect() {
@@ -139,11 +233,12 @@ function AuthenticatedRootRedirect() {
   if (loading || !userData) return null;
 
   const { role } = userData;
-  if (role === USER_ROLES.VIEWER)                               return <Navigate to={PRIVATE_ROUTES.CLIENT_PORTAL} replace />;
-  if (role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER)  return <Navigate to={PRIVATE_ROUTES.DASHBOARD}     replace />;
+  if (role === USER_ROLES.VIEWER)                              return <Navigate to={PRIVATE_ROUTES.CLIENT_PORTAL} replace />;
+  if (role === USER_ROLES.ADMIN || role === USER_ROLES.MEMBER) return <Navigate to={PRIVATE_ROUTES.DASHBOARD}     replace />;
 
   return null; // rol desconocido → mostrar home pública
 }
+
 
 // ── Wrapper de la home pública ─────────────────────────────────────────────
 function HomeOrRedirect() {
@@ -156,6 +251,7 @@ function HomeOrRedirect() {
 
   return <HomePage />;
 }
+
 
 // ── SettingsFab condicional ────────────────────────────────────────────────
 // Oculta el FAB de ajustes en rutas de autenticación, donde no aplica y
@@ -173,6 +269,7 @@ function ConditionalSettingsFab() {
   if (hide) return null;
   return <SettingsFab />;
 }
+
 
 // ── Árbol de rutas ─────────────────────────────────────────────────────────
 function AppRoutes() {
@@ -321,6 +418,7 @@ function AppRoutes() {
     </>
   );
 }
+
 
 // ── Entry point ────────────────────────────────────────────────────────────
 export default function App() {

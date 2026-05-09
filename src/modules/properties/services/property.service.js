@@ -25,6 +25,7 @@ import {
 } from 'firebase/storage';
 import { db } from '../../../core/config/firebase.config';
 import { optimizeImage } from '../../../shared/utils/imageOptimization';
+import { notificationService } from '../../notifications/services/notification.service';
 import { sendClientNotification, NOTIF_TYPES } from '../../../core/services/notificationService';
 import {
   PROPERTY_STATUS,
@@ -127,7 +128,6 @@ async function notifyMatchingClients(property, propertyId) {
 class PropertyService {
 
   // ── Propiedad individual por ID (PÚBLICA) ─────────────────────────────────
-  // FIX: Este método faltaba y causaba el error "getPublicPropertyById is not a function"
   async getPublicPropertyById(id) {
     if (!id) return null;
     try {
@@ -135,7 +135,6 @@ class PropertyService {
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return null;
       const data = { id: docSnap.id, ...docSnap.data() };
-      // No filtrar por status aquí — la página decide si mostrar propiedades no públicas
       return data;
     } catch (err) {
       console.error('Error obteniendo propiedad por ID:', err);
@@ -149,18 +148,6 @@ class PropertyService {
   }
 
   // ── Propiedades PÚBLICAS con filtros ──────────────────────────────────────
-  //
-  // Estrategia:
-  //   • La query a Firestore filtra por `status == 'published'` directamente.
-  //     Las Firestore Rules ya restringen lectura pública a ese status, así
-  //     que es la única forma sostenible de listar el catálogo.
-  //   • Otros filtros (transactionType, type, city, precio, habitaciones)
-  //     se aplican en cliente porque Firestore no soporta multi-campo sin
-  //     un índice por combinación.
-  //   • Para >1000 propiedades activas, migrar a Algolia/Typesense.
-  //
-  // Retrocompatibilidad: por default retorna array. Solo si se pasa
-  // `paginated: true` retorna { items, hasMore, lastDoc }.
   async getPublicProperties(filters = {}, options = {}) {
     const { pageSize = 200, lastDoc = null, paginated = false } = options;
     try {
@@ -175,8 +162,6 @@ class PropertyService {
       const docs = snapshot.docs;
       let properties = docs.map((d) => ({ id: d.id, ...d.data() }));
 
-      // Defensa en profundidad: si entra data legacy con aliases, los
-      // normalizamos y re-filtramos.
       properties = properties.filter((p) => isPublicStatus(p));
 
       if (filters.transactionType) {
@@ -228,7 +213,7 @@ class PropertyService {
       if (paginated) {
         return {
           items:    properties,
-          hasMore:  docs.length === pageSize,  // si trajo el máximo, puede haber más
+          hasMore:  docs.length === pageSize,
           lastDoc:  docs.length > 0 ? docs[docs.length - 1] : null,
         };
       }
@@ -240,21 +225,6 @@ class PropertyService {
   }
 
   // ── Sincronizar estado/contrato actual desde contract.service ─────────────
-  //
-  // Helper de bajo nivel. NO contiene lógica de negocio sobre qué status
-  // corresponde a qué etapa de contrato — esa lógica vive en
-  // contract.types.getPropertyStatusFromContract y se aplica en
-  // contract.service._syncPropertyStatus.
-  //
-  // Uso típico (desde contract.service):
-  //   await propertyService.setPropertyContractState(propertyId, {
-  //     status: 'arrendada',
-  //     contractId: 'abc123',
-  //   });
-  //
-  // Si pasan status === null, no se modifica el status (solo se actualiza
-  // currentContractId). Útil para etapas intermedias de venta donde no
-  // queremos cambiar el status visible pero sí dejar registro del contrato.
   async setPropertyContractState(
     propertyId,
     { status = null, contractId = null } = {}
@@ -297,8 +267,48 @@ class PropertyService {
 
       const docRef = await addDoc(collection(db, COLLECTION), propertyToSave);
 
-      // Notificación a clientes (no se espera a que termine)
+      // Notificación a clientes
       notifyMatchingClients(propertyToSave, docRef.id);
+
+      // ── NUEVO: Notificar al agente y a los administradores ────────────
+      try {
+        const propertyTitle = propertyData.title || 'Propiedad sin título';
+
+        // Agente asignado
+        if (propertyData.agentEmail) {
+          await notificationService.createNotification({
+            userId: propertyData.agentEmail,
+            type: 'property_created',
+            title: '🏠 Nueva propiedad asignada',
+            message: `Se ha creado "${propertyTitle}" bajo tu gestión.`,
+            relatedId: docRef.id,
+            actionUrl: '/propiedades-admin',
+          });
+        }
+
+        // Todos los administradores
+        const adminsSnap = await getDocs(
+          query(collection(db, 'users'), where('role', '==', 'admin'))
+        );
+        const agentEmail = propertyData.agentEmail || '';
+
+        await Promise.all(
+          adminsSnap.docs
+            .filter((d) => d.id !== agentEmail)
+            .map((d) =>
+              notificationService.createNotification({
+                userId: d.id,
+                type: 'property_created',
+                title: '🏠 Nueva propiedad en cartera',
+                message: `Se ha agregado "${propertyTitle}" al inventario.`,
+                relatedId: docRef.id,
+                actionUrl: '/propiedades-admin',
+              })
+            )
+        );
+      } catch (e) {
+        console.warn('[property.service] error notificando nueva propiedad:', e?.message);
+      }
 
       return { id: docRef.id, ...propertyToSave };
     } catch (err) {
@@ -308,8 +318,6 @@ class PropertyService {
   }
 
   // ── Todas las propiedades (admin) ─────────────────────────────────────────
-  // Cap a 1000 para proteger costos. Si necesitas más, considera paginación
-  // en el panel de admin (similar al patrón de getPublicProperties).
   async getAllProperties() {
     try {
       const q = query(
@@ -328,6 +336,12 @@ class PropertyService {
   // ── Actualizar propiedad ──────────────────────────────────────────────────
   async updateProperty(id, propertyData, newImageFiles = [], newDocumentFiles = []) {
     try {
+      // ── Leer datos anteriores para detectar cambios ────────────────────
+      const oldSnap = await getDoc(doc(db, COLLECTION, id));
+      const oldData = oldSnap.exists() ? oldSnap.data() : null;
+      const oldStatus = oldData?.status || '';
+      const newStatus = propertyData.status || oldStatus;
+
       let updates = {
         ...propertyData,
         updatedAt: Timestamp.now(),
@@ -344,6 +358,50 @@ class PropertyService {
       }
 
       await updateDoc(doc(db, COLLECTION, id), updates);
+
+      // ── NUEVO: Notificar si cambió el estado ──────────────────────────
+      if (oldData && newStatus !== oldStatus) {
+        try {
+          const propertyTitle = propertyData.title || oldData.title || 'Propiedad sin título';
+          const statusLabel = newStatus;
+
+          // Agente asignado
+          if (oldData.agentEmail) {
+            await notificationService.createNotification({
+              userId: oldData.agentEmail,
+              type: 'property_status_changed',
+              title: `🏷️ Estado de propiedad: ${statusLabel}`,
+              message: `"${propertyTitle}" cambió de estado a "${statusLabel}".`,
+              relatedId: id,
+              actionUrl: '/propiedades-admin',
+            });
+          }
+
+          // Administradores
+          const adminsSnap = await getDocs(
+            query(collection(db, 'users'), where('role', '==', 'admin'))
+          );
+          const agentEmail = oldData.agentEmail || '';
+
+          await Promise.all(
+            adminsSnap.docs
+              .filter((d) => d.id !== agentEmail)
+              .map((d) =>
+                notificationService.createNotification({
+                  userId: d.id,
+                  type: 'property_status_changed',
+                  title: `🏷️ Estado de propiedad: ${statusLabel}`,
+                  message: `"${propertyTitle}" ahora está como "${statusLabel}".`,
+                  relatedId: id,
+                  actionUrl: '/propiedades-admin',
+                })
+              )
+          );
+        } catch (e) {
+          console.warn('[property.service] error notificando cambio de estado:', e?.message);
+        }
+      }
+
       return { id, ...updates };
     } catch (err) {
       console.error('Error actualizando propiedad:', err);
@@ -352,15 +410,11 @@ class PropertyService {
   }
 
   // ── Eliminar propiedad ────────────────────────────────────────────────────
-  //   1. Antes se borraba el doc sin verificar contratos activos → quedaban
-  //      contratos huérfanos apuntando a una propiedad inexistente.
-  //   2. Antes no se cancelaban visitas pendientes → cliente iba a una
-  //      propiedad que ya no existe.
-  //   3. Las imágenes en Storage quedaban huérfanas indefinidamente.
-  //
-  //   Ahora: pre-check + cancela visitas pendientes/aprobadas + intenta
-  //   limpiar Storage. Si hay contrato activo, lanza error explicativo.
   async deleteProperty(id) {
+    // ── NUEVO: Leer documento antes de eliminar para la notificación ─────
+    const oldSnap = await getDoc(doc(db, COLLECTION, id));
+    const oldData = oldSnap.exists() ? oldSnap.data() : null;
+
     try {
       // 1) Verificar si hay contratos no terminales asociados
       const contractsSnap = await getDocs(
@@ -379,7 +433,7 @@ class PropertyService {
         );
       }
 
-      // 2) Cancelar visitas pendientes/aprobadas (no borrarlas, mantener historial)
+      // 2) Cancelar visitas pendientes/aprobadas
       try {
         const visitsSnap = await getDocs(
           query(
@@ -403,11 +457,47 @@ class PropertyService {
       // 3) Borrar el doc principal
       await deleteDoc(doc(db, COLLECTION, id));
 
-      // 4) Best-effort: limpiar imágenes y documentos en Storage.
-      //    Si falla por permisos o no existe el folder, seguimos.
-      //    NOTA: requiere `listAll` del SDK de Storage que no estaba importado;
-      //    para no añadir imports nuevos riesgosos, dejamos esta limpieza al
-      //    siguiente refactor — la documentamos.
+      // ── NUEVO: Notificar al agente y administradores ─────────────────
+      if (oldData) {
+        try {
+          const propertyTitle = oldData.title || 'Propiedad sin título';
+
+          // Agente asignado
+          if (oldData.agentEmail) {
+            await notificationService.createNotification({
+              userId: oldData.agentEmail,
+              type: 'property_deleted',
+              title: '🗑️ Propiedad eliminada',
+              message: `"${propertyTitle}" fue eliminada bajo tu gestión.`,
+              relatedId: id,
+              actionUrl: '/propiedades-admin',
+            }).catch(() => {});
+          }
+
+          // Administradores
+          const adminsSnap = await getDocs(
+            query(collection(db, 'users'), where('role', '==', 'admin'))
+          );
+          const agentEmail = oldData.agentEmail || '';
+
+          await Promise.all(
+            adminsSnap.docs
+              .filter((d) => d.id !== agentEmail)
+              .map((d) =>
+                notificationService.createNotification({
+                  userId: d.id,
+                  type: 'property_deleted',
+                  title: '🗑️ Propiedad eliminada',
+                  message: `"${propertyTitle}" ha sido eliminada.`,
+                  relatedId: id,
+                  actionUrl: '/propiedades-admin',
+                })
+              )
+          );
+        } catch (e) {
+          console.warn('[property.service] error notificando eliminación:', e?.message);
+        }
+      }
 
       return true;
     } catch (err) {

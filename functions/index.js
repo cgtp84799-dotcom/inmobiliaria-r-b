@@ -1,236 +1,407 @@
 // functions/index.js
-// ─── v2 imports ───────────────────────────────────────────────────────────────
-const { onRequest }                          = require("firebase-functions/v2/https");
-const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { defineSecret }                       = require("firebase-functions/params");
-const { setGlobalOptions }                   = require("firebase-functions/v2");
-const { onSchedule }                         = require("firebase-functions/v2/scheduler");
-const admin                                  = require("firebase-admin");
-const nodemailer                             = require("nodemailer");
+  // ─── v2 imports ───────────────────────────────────────────────────────────────
+  const { onRequest }                          = require("firebase-functions/v2/https");
+  const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+  const { defineSecret }                       = require("firebase-functions/params");
+  const { setGlobalOptions }                   = require("firebase-functions/v2");
+  const { onSchedule }                         = require("firebase-functions/v2/scheduler");
+  const admin                                  = require("firebase-admin");
+  const nodemailer                             = require("nodemailer");
 
-const { handleSitemapRequest }   = require("./src/sitemap");
-const { handlePrerenderRequest } = require("./src/prerender");
+  const { handleSitemapRequest }   = require("./src/sitemap");
+  const { handlePrerenderRequest } = require("./src/prerender");
 
-// ─── Emails (todos los builders centralizados) ────────────────────────────────
-const {
-  // Visitas
-  pendingVisitEmail,
-  approvedVisitEmail,
-  rejectedVisitEmail,
-  rescheduledVisitEmail,
-  agentVisitAssignedEmail,
-  visitCancelledByClientEmail,
-  visitCancelledAgentEmail,
-  visitCancelledAdminEmail,
-  // Usuarios
-  welcomeEmail,
-  accessRequestNotificationEmail,
-  accessRequestApprovedEmail,
-  accessRequestRejectedEmail,
-  accountDeletionRequestEmail,
-  // Contratos
-  contractCreatedEmail,
-  contractCreatedAgentEmail,
-  contractStageAgentEmail,
-  contractStageAdminEmail,
-  getContractStageEmail,
-  // Pagos y alertas — cliente
-  paymentConfirmedEmail,
-  paymentReminderEmail,
-  paymentDueTodayEmail,
-  latePaymentEmail,
-  contractExpiryEmail,
-  renewalWindowEmail,
-  // Pagos y alertas — agente
-  paymentConfirmedAgentEmail,
-  paymentDueAgentEmail,
-  latePaymentAgentEmail,
-  contractExpiryAgentEmail,
-  renewalWindowAgentEmail,
-  // Pagos y alertas — admin
-  paymentConfirmedAdminEmail,
-  latePaymentAdminEmail,
-  // Contactos / leads web
-  contactReceivedEmail,
-  contactReceivedAgentEmail,
-  contactReceivedAdminEmail,
-  // Documentos
-  contractDocumentUploadedClientEmail,
-} = require("./src/emails");
+  // ─── Emails (todos los builders centralizados) ────────────────────────────────
+  const {
+    // Visitas
+    pendingVisitEmail,
+    approvedVisitEmail,
+    rejectedVisitEmail,
+    rescheduledVisitEmail,
+    agentVisitAssignedEmail,
+    visitCancelledByClientEmail,
+    visitCancelledAgentEmail,
+    visitCancelledAdminEmail,
+    // Usuarios
+    welcomeEmail,
+    accessRequestNotificationEmail,
+    accessRequestApprovedEmail,
+    accessRequestRejectedEmail,
+    accountDeletionRequestEmail,
+    // Contratos
+    contractCreatedEmail,
+    contractCreatedAgentEmail,
+    contractStageAgentEmail,
+    contractStageAdminEmail,
+    getContractStageEmail,
+    // Pagos y alertas — cliente
+    paymentConfirmedEmail,
+    paymentReminderEmail,
+    paymentDueTodayEmail,
+    latePaymentEmail,
+    contractExpiryEmail,
+    renewalWindowEmail,
+    // Pagos y alertas — agente
+    paymentConfirmedAgentEmail,
+    paymentDueAgentEmail,
+    latePaymentAgentEmail,
+    contractExpiryAgentEmail,
+    renewalWindowAgentEmail,
+    // Pagos y alertas — admin
+    paymentConfirmedAdminEmail,
+    latePaymentAdminEmail,
+    // Contactos / leads web
+    contactReceivedEmail,
+    contactReceivedAgentEmail,
+    contactReceivedAdminEmail,
+    // Documentos
+    contractDocumentUploadedClientEmail,
+  } = require("./src/emails");
 
-// ─── Email Verification (sistema custom) ───────────────────────────────────
-const {
-  buildRequestEmailVerification,
-  buildConfirmEmailVerification,
-  sendStaffPasswordSetup,
-} = require("./src/emailVerification");
+  // ─── Email Verification (sistema custom) ───────────────────────────────────
+  const {
+    buildRequestEmailVerification,
+    buildConfirmEmailVerification,
+    sendStaffPasswordSetup,
+  } = require("./src/emailVerification");
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
-const { ymd, diffDays, parseDate } = require("./src/emails/utils");
+  // ─── Utils ────────────────────────────────────────────────────────────────────
+  const { ymd, diffDays, parseDate } = require("./src/emails/utils");
 
-// ─── Rate Limiter ───────────────────────────────────────────────────────────
-const { rateLimiter } = require("./src/utils/rateLimiter");
+  // ─── Rate Limiter ───────────────────────────────────────────────────────────
+  const { rateLimiter } = require("./src/utils/rateLimiter");
 
-const { SITE_URL: BASE_URL } = require('./src/site.config');
+  const { SITE_URL: BASE_URL } = require('./src/site.config');
+  const SITE_URL = "https://inmobiliaria-ryb-y-asociados.com";
 
-// ─── Opciones globales ────────────────────────────────────────────────────────
-setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+  // ─── Opciones globales ────────────────────────────────────────────────────────
+  setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
-if (!admin.apps.length) admin.initializeApp();
+  if (!admin.apps.length) admin.initializeApp();
 
-// ─── Secrets ──────────────────────────────────────────────────────────────────
-const PRERENDER_TOKEN = defineSecret("PRERENDER_TOKEN");
-const GMAIL_USER = defineSecret("GMAIL_USER");  
-const GMAIL_PASS = defineSecret("GMAIL_PASS");
+  // ─── Secrets ──────────────────────────────────────────────────────────────────
+  const PRERENDER_TOKEN = defineSecret("PRERENDER_TOKEN");
+  const GMAIL_USER = defineSecret("GMAIL_USER");  
+  const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const FROM_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
+  // ─── Constantes ───────────────────────────────────────────────────────────────
+  const FROM_NAME  = "Inmobiliaria Rincón Bedoya y Asociados";
 
-// Status que se publican en el catálogo. Acepta canónicos + aliases legacy
-// para data antigua.
-const PUBLIC_STATUS = new Set([
-  "", "published", "reserved",
-  "disponible", "reservada", "active", "available",
-]);
+  // Status que se publican en el catálogo. Acepta canónicos + aliases legacy
+  // para data antigua.
+  const PUBLIC_STATUS = new Set([
+    "", "published", "reserved",
+    "disponible", "reservada", "active", "available",
+  ]);
 
-// Orígenes permitidos para CORS — solo dominios de producción y desarrollo local.
-// Rechaza cualquier otro origen para prevenir llamadas cross-origin no autorizadas.
-const ALLOWED_ORIGINS = new Set([
-  "https://inmobiliaria-ryb-y-asociados.com",
-  "https://www.inmobiliaria-ryb-y-asociados.com",
-  "https://inmobiliaria-ryb-y-asociados.web.app",
-  "https://inmobiliaria-ryb-y-asociados.firebaseapp.com",
-  "http://localhost:5173",
-  "http://localhost:4173",
-  "http://127.0.0.1:5173",
-]);
+  // Orígenes permitidos para CORS — solo dominios de producción y desarrollo local.
+  // Rechaza cualquier otro origen para prevenir llamadas cross-origin no autorizadas.
+  const ALLOWED_ORIGINS = new Set([
+    "https://inmobiliaria-ryb-y-asociados.com",
+    "https://www.inmobiliaria-ryb-y-asociados.com",
+    "https://inmobiliaria-ryb-y-asociados.web.app",
+    "https://inmobiliaria-ryb-y-asociados.firebaseapp.com",
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:5173",
+  ]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HELPERS
+  // ─────────────────────────────────────────────────────────────────────────────
 
-function setCorsHeaders(req, res) {
-  const origin = req.headers.origin || "";
-  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : "";
-  if (allowed) {
-    res.set("Access-Control-Allow-Origin", allowed);
-    res.set("Vary", "Origin");
+  function setCorsHeaders(req, res) {
+    const origin = req.headers.origin || "";
+    const allowed = ALLOWED_ORIGINS.has(origin) ? origin : "";
+    if (allowed) {
+      res.set("Access-Control-Allow-Origin", allowed);
+      res.set("Vary", "Origin");
+    }
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
 
-function handlePreflight(req, res) {
-  if (req.method === "OPTIONS") {
-    setCorsHeaders(req, res);
-    return res.status(204).send("");
+  function handlePreflight(req, res) {
+    if (req.method === "OPTIONS") {
+      setCorsHeaders(req, res);
+      return res.status(204).send("");
+    }
+    return null;
   }
-  return null;
-}
 
-async function assertAdminFromRequest(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    const err = new Error("No autenticado"); err.status = 401; throw err;
+  async function assertAdminFromRequest(req) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      const err = new Error("No autenticado"); err.status = 401; throw err;
+    }
+    // revocadas o usuarios deshabilitados desde Admin. Antes: bastaba con que
+    // el token no hubiera expirado (~1h) aunque el admin ya hubiera bloqueado
+    // la cuenta desde la consola.
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(
+        authHeader.split("Bearer ")[1],
+        true,
+      );
+    } catch (_e) {
+      const err = new Error("Token inválido o revocado"); err.status = 401; throw err;
+    }
+    const callerEmail = String(decoded.email || "").trim().toLowerCase();
+    if (!callerEmail) { const err = new Error("Token sin email"); err.status = 401; throw err; }
+    // existe, probar versión lowercased. Evita DoS cuando un doc legacy
+    // quedó con mayúsculas (migraciones antiguas).
+    const users = admin.firestore().collection("users");
+    let callerDoc = await users.doc(callerEmail).get();
+    if (!callerDoc.exists) {
+      const alt = decoded.email.trim();
+      if (alt && alt !== callerEmail) {
+        callerDoc = await users.doc(alt).get();
+      }
+    }
+    if (!callerDoc.exists || callerDoc.data()?.role !== "admin") {
+      const err = new Error("Solo administradores"); err.status = 403; throw err;
+    }
+    return { callerEmail };
   }
-  // revocadas o usuarios deshabilitados desde Admin. Antes: bastaba con que
-  // el token no hubiera expirado (~1h) aunque el admin ya hubiera bloqueado
-  // la cuenta desde la consola.
-  let decoded;
-  try {
-    decoded = await admin.auth().verifyIdToken(
-      authHeader.split("Bearer ")[1],
-      true,
-    );
-  } catch (_e) {
-    const err = new Error("Token inválido o revocado"); err.status = 401; throw err;
+  // cree usuarios con roles arbitrarios ("superadmin", "root", etc.).
+  const VALID_ROLES = new Set(["admin", "member", "viewer"]);
+  const VALID_STATUSES = new Set(["active", "inactive", "pending", "blocked"]);
+
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  PUSH_WORTHY_TYPES — DEBE estar SINCRONIZADO con NOTIF_TYPES en       ║
+  // ║  src/core/services/notificationService.js                            ║
+  // ║                                                                      ║
+  // ║  Este Set es la whitelist de tipos que disparan FCM push automático  ║
+  // ║  vía el trigger onNotificationCreated. Si un tipo no está aquí, la   ║
+  // ║  notificación queda solo in-app (campana) y NUNCA llega como push    ║
+  // ║  al celular del usuario.                                             ║
+  // ║                                                                      ║
+  // ║  ★ FIX CRÍTICO: antes faltaban los tipos de visitas confirmadas,     ║
+  // ║  contratos creados, propiedades nuevas, documentos, consultas,       ║
+  // ║  perfil — TODO el sistema estaba parcialmente roto porque sólo se    ║
+  // ║  enviaban push para una pequeña fracción de eventos.                 ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+  const PUSH_WORTHY_TYPES = new Set([
+    // ── Visitas ────────────────────────────────────────────────────────
+    "visit_request",
+    "visit_approved",
+    "visit_rejected",
+    "visit_rescheduled",
+    "visit_cancelled_by_client",
+    "visit_completed",
+    "visit_assigned",
+
+    // ── Contratos ──────────────────────────────────────────────────────
+    "new_contract",
+    "contract_assigned",
+    "contract_status_changed",
+    "contract_stage_changed",
+    "contract_deleted",
+    "milestone_completed",
+    "payment_confirmed",
+    "payment_late",
+    "contract_document_uploaded",
+
+    // ── Propiedades ────────────────────────────────────────────────────
+    "property_created",
+    "property_status_changed",
+    "property_deleted",
+
+    // ── Clientes / Usuarios ────────────────────────────────────────────
+    "new_client",
+    "client_deleted",
+    "new_user",
+    "user_deleted",
+    "new_access_request",
+    "account_deletion_requested",
+
+    // ── Documentos (NUEVO) ─────────────────────────────────────────────
+    "document_uploaded",
+    "document_expiring",
+    "document_deleted",
+
+    // ── Consultas / Contactos (NUEVO) ──────────────────────────────────
+    "new_contact",
+    "contact_reply",
+
+    // ── Perfil (NUEVO) ─────────────────────────────────────────────────
+    "profile_updated",
+    "password_changed",
+
+    // ── Generales ──────────────────────────────────────────────────────
+    "welcome",
+    "manual",
+    "task_assigned",
+    "comment_reply",
+    "system",
+  ]);
+
+  // Email validator — RFC 5322 simplificado para ganar en seguridad práctica.
+  function isValidEmail(email) {
+    return typeof email === "string"
+        && email.length >= 5
+        && email.length <= 254
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
-  const callerEmail = String(decoded.email || "").trim().toLowerCase();
-  if (!callerEmail) { const err = new Error("Token sin email"); err.status = 401; throw err; }
-  // existe, probar versión lowercased. Evita DoS cuando un doc legacy
-  // quedó con mayúsculas (migraciones antiguas).
-  const users = admin.firestore().collection("users");
-  let callerDoc = await users.doc(callerEmail).get();
-  if (!callerDoc.exists) {
-    const alt = decoded.email.trim();
-    if (alt && alt !== callerEmail) {
-      callerDoc = await users.doc(alt).get();
+
+  function createTransport(gmailUser, gmailPass) {
+    return nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailPass } });
+  }
+
+  async function sendMail(transporter, gmailUser, { to, subject, html }, tag = "") {
+    if (!to) { console.warn(`[${tag}] sendMail: destinatario vacío para "${subject}". Ignorado.`); return; }
+    await transporter.sendMail({ from: `"${FROM_NAME}" <${gmailUser}>`, to, subject, html });
+    console.log(`[${tag}] Email enviado → ${to} — ${subject}`);
+  }
+  // ─── Helper de push notifications ────────────────────────────────────────────
+  // Envía una notificación push al dispositivo del usuario (si tiene token FCM).
+  // Se llama automáticamente desde el trigger onNotificationCreated.
+  async function sendPushToUser(userEmail, notification) {
+    if (!userEmail) return;
+
+    try {
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(userEmail)
+        .get();
+
+      if (!userDoc.exists) return;
+
+      const fcmToken = userDoc.data().fcmToken;
+      if (!fcmToken) return;
+
+      // URL final a abrir
+      const finalUrl = notification.actionUrl
+        ? (
+            notification.actionUrl.startsWith("http")
+              ? notification.actionUrl
+              : `${SITE_URL}${notification.actionUrl}`
+          )
+        : `${SITE_URL}/`;
+
+      await admin.messaging().send({
+        token: fcmToken,
+
+        notification: {
+          title: notification.title || "Nueva notificación",
+          body: notification.message || "",
+        },
+
+        webpush: {
+          notification: {
+            icon: `${SITE_URL}/android-chrome-192x192.png`,
+            badge: `${SITE_URL}/favicon-32x32.png`,
+            vibrate: [200, 100, 200],
+            requireInteraction: true,
+            tag: notification.type || "notif-ryb",
+            renotify: true,
+
+            data: {
+              url: finalUrl,
+              notifId: notification.id || null,
+              type: notification.type || "manual",
+              soundUrl: `${SITE_URL}/notification-sound.mp3`,
+            },
+          },
+
+          fcmOptions: {
+            link: finalUrl,
+          },
+        },
+
+        android: {
+          priority: "high",
+          notification: {
+            sound: "default",
+            clickAction: "FLUTTER_NOTIFICATION_CLICK",
+            channelId: "ryb_default",
+          },
+        },
+
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      });
+
+      console.log(`[PUSH] Enviado a ${userEmail}: ${notification.title}`);
+
+    } catch (error) {
+
+      // Limpiar token inválido
+      if (
+        error.code === "messaging/invalid-registration-token" ||
+        error.code === "messaging/registration-token-not-registered"
+      ) {
+        await admin
+          .firestore()
+          .collection("users")
+          .doc(userEmail)
+          .update({
+            fcmToken: admin.firestore.FieldValue.delete(),
+          })
+          .catch(() => {});
+      }
+
+      console.error(
+        `[PUSH] Error enviando a ${userEmail}:`,
+        error.message
+      );
     }
   }
-  if (!callerDoc.exists || callerDoc.data()?.role !== "admin") {
-    const err = new Error("Solo administradores"); err.status = 403; throw err;
-  }
-  return { callerEmail };
-}
-// cree usuarios con roles arbitrarios ("superadmin", "root", etc.).
-const VALID_ROLES = new Set(["admin", "member", "viewer"]);
-const VALID_STATUSES = new Set(["active", "inactive", "pending", "blocked"]);
 
-// Email validator — RFC 5322 simplificado para ganar en seguridad práctica.
-function isValidEmail(email) {
-  return typeof email === "string"
-      && email.length >= 5
-      && email.length <= 254
-      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function createTransport(gmailUser, gmailPass) {
-  return nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailPass } });
-}
-
-async function sendMail(transporter, gmailUser, { to, subject, html }, tag = "") {
-  if (!to) { console.warn(`[${tag}] sendMail: destinatario vacío para "${subject}". Ignorado.`); return; }
-  await transporter.sendMail({ from: `"${FROM_NAME}" <${gmailUser}>`, to, subject, html });
-  console.log(`[${tag}] Email enviado → ${to} — ${subject}`);
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
-// ═════════════════════════════════════════════════════════════════════════════
-exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
-  const rateKey = req.headers.authorization
-    ? `user:${req.headers.authorization}` 
-    : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
-  const rateCheck = rateLimiter.check(rateKey, 20, 60000);
-  res.set('X-RateLimit-Limit', 20);
-  res.set('X-RateLimit-Remaining', rateCheck.remaining);
-  if (!rateCheck.allowed) {
-    return res.status(429).json({ error: 'Too many requests. Intenta de nuevo más tarde.' });
-  }
-
-  try {
-    if (handlePreflight(req, res)) return;
-    setCorsHeaders(req, res);
-    if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-    const { callerEmail } = await assertAdminFromRequest(req);
-    const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
-    if (!userId) return res.status(400).json({ error: "userId es requerido" });
-    if (!isValidEmail(userId)) return res.status(400).json({ error: "userId debe ser un email válido" });
-    if (userId === callerEmail) {
-      return res.status(400).json({ error: "No puedes eliminar tu propia cuenta" });
+  // ═════════════════════════════════════════════════════════════════════════════
+  // FUNCIÓN 1: deleteUserComplete  (v2 HTTP)
+  // ═════════════════════════════════════════════════════════════════════════════
+  exports.deleteUserComplete = onRequest({ cors: true }, async (req, res) => {
+    const rateKey = req.headers.authorization
+      ? `user:${req.headers.authorization}` 
+      : `ip:${req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown'}`;
+    const rateCheck = rateLimiter.check(rateKey, 20, 60000);
+    res.set('X-RateLimit-Limit', 20);
+    res.set('X-RateLimit-Remaining', rateCheck.remaining);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Intenta de nuevo más tarde.' });
     }
-    const userDoc = await admin.firestore().collection("users").doc(userId).get();
-    if (!userDoc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
-    const userUid = userDoc.data()?.uid;
-    if (userUid) await admin.auth().deleteUser(userUid);
-    await admin.firestore().collection("users").doc(userId).delete();
-    if (userUid) {
-      await admin.database().ref(`status/${userUid}`).remove();
-      await admin.database().ref(`presence/${userUid}`).remove();
+
+    try {
+      if (handlePreflight(req, res)) return;
+      setCorsHeaders(req, res);
+      if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
+      const { callerEmail } = await assertAdminFromRequest(req);
+      const userId = String(req.body?.data?.userId || "").trim().toLowerCase();
+      if (!userId) return res.status(400).json({ error: "userId es requerido" });
+      if (!isValidEmail(userId)) return res.status(400).json({ error: "userId debe ser un email válido" });
+      if (userId === callerEmail) {
+        return res.status(400).json({ error: "No puedes eliminar tu propia cuenta" });
+      }
+      const userDoc = await admin.firestore().collection("users").doc(userId).get();
+      if (!userDoc.exists) return res.status(404).json({ error: "Usuario no encontrado" });
+      const userUid = userDoc.data()?.uid;
+      if (userUid) await admin.auth().deleteUser(userUid);
+      await admin.firestore().collection("users").doc(userId).delete();
+      if (userUid) {
+        await admin.database().ref(`status/${userUid}`).remove();
+        await admin.database().ref(`presence/${userUid}`).remove();
+      }
+      return res.status(200).json({
+        result: {
+          success: true,
+          message: `Usuario ${userId} eliminado completamente`,
+          deletedFrom: ["Authentication", "Firestore", "Realtime Database"],
+        },
+      });
+    } catch (error) {
+      setCorsHeaders(req, res);
+      console.error("deleteUserComplete Error:", error);
+      return res.status(error.status || 500).json({ error: error.message });
     }
-    return res.status(200).json({
-      result: {
-        success: true,
-        message: `Usuario ${userId} eliminado completamente`,
-        deletedFrom: ["Authentication", "Firestore", "Realtime Database"],
-      },
-    });
-  } catch (error) {
-    setCorsHeaders(req, res);
-    console.error("deleteUserComplete Error:", error);
-    return res.status(error.status || 500).json({ error: error.message });
-  }
-});
+  });
 
 // ═════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN 2: createUserByAdmin  (v2 HTTP) — CON RATE LIMITING
@@ -1527,6 +1698,118 @@ exports.onVisitApprovedAdminNotice = onDocumentWritten(
       }));
     } catch (e) {
       console.error("[onVisitApprovedAdminNotice] error:", e);
+    }
+  }
+);
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 17: onNotificationCreated  (v2 Firestore trigger)
+//
+// Envía automáticamente una notificación push cuando se crea un documento
+// en /notifications y su tipo está en PUSH_WORTHY_TYPES.
+// Así cualquier notificación in‑app (creada por frontend o backend) también
+// llega como push al dispositivo del usuario.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onNotificationCreated = onDocumentCreated(
+  { document: "notifications/{notificationId}" },
+  async (event) => {
+    const notif = event.data?.data() ?? null;
+    if (!notif || !notif.userId) return;
+    if (!PUSH_WORTHY_TYPES.has(notif.type)) return;
+    await sendPushToUser(notif.userId, notif);
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 18: onContactCreatedNotify  (v2 Firestore trigger)  — NUEVO
+//
+// Cuando llega una consulta pública (/contacts), notifica a TODO el staff
+// (admins + members). Esto es necesario porque el visitante público no tiene
+// sesión y las reglas de Firestore le bloquean crear notifs directamente.
+//
+// Es independiente de onContactCreated (que envía emails) — éste solo
+// crea las notifs in-app, que luego disparan push automáticamente vía
+// onNotificationCreated.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onContactCreatedNotify = onDocumentCreated(
+  { document: "contacts/{contactId}" },
+  async (event) => {
+    try {
+      const contact = event.data?.data() ?? null;
+      if (!contact) return;
+
+      const contactId = event.params?.contactId;
+      const subject = contact.propertyTitle
+        ? `${contact.name || 'Alguien'} consulta sobre "${contact.propertyTitle}"`
+        : `${contact.name || 'Alguien'} envió una consulta`;
+
+      const staffSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "in", ["admin", "member"])
+        .get();
+
+      const batch = admin.firestore().batch();
+      staffSnap.docs.forEach((u) => {
+        const ref = admin.firestore().collection("notifications").doc();
+        batch.set(ref, {
+          userId:    u.id,
+          type:      "new_contact",
+          title:     "✉️ Nueva consulta recibida",
+          message:   `${subject} (${contact.email || 'sin email'})`,
+          actionUrl: "/consultas",
+          relatedId: contactId,
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: null,
+        });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("[onContactCreatedNotify] error:", e);
+    }
+  }
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN 19: onAccessRequestCreatedNotify  (v2 Firestore trigger)  — NUEVO
+//
+// Cuando llega una solicitud de acceso pública (/accessRequests), notifica
+// a todos los admins. Mismo motivo: el solicitante no tiene sesión y no
+// puede crear notifs por sí mismo.
+// ═════════════════════════════════════════════════════════════════════════════
+exports.onAccessRequestCreatedNotify = onDocumentCreated(
+  { document: "accessRequests/{requestId}" },
+  async (event) => {
+    try {
+      const req = event.data?.data() ?? null;
+      if (!req) return;
+
+      const requestId = event.params?.requestId;
+
+      const adminsSnap = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+
+      const batch = admin.firestore().batch();
+      adminsSnap.docs.forEach((u) => {
+        const ref = admin.firestore().collection("notifications").doc();
+        batch.set(ref, {
+          userId:    u.id,
+          type:      "new_access_request",
+          title:     "🔔 Nueva solicitud de acceso",
+          message:   `${req.name || 'Alguien'} (${req.email || 'sin email'}) solicitó acceso al sistema.`,
+          actionUrl: "/solicitudes",
+          relatedId: requestId,
+          read:      false,
+          readAt:    null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: null,
+        });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("[onAccessRequestCreatedNotify] error:", e);
     }
   }
 );

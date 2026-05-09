@@ -1,5 +1,71 @@
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+// src/modules/public/services/contact.service.js
+//
+// ─── CAMBIOS ────────────────────────────────────────────────────────────────
+//  [NOTIF] Antes este servicio guardaba la consulta en /contacts pero NO
+//          notificaba a los admins / staff. Por eso una consulta podía pasar
+//          desapercibida hasta que alguien revisara la sección Consultas.
+//          Ahora notifica a todos los admins y miembros del equipo cuando
+//          llega una consulta nueva.
+//
+//          La notificación se envía con catch silencioso porque el contacto
+//          ya quedó guardado y el cliente no debe recibir error de UI por
+//          un fallo de notificación interna.
+// ──────────────────────────────────────────────────────────────────────────
+
+import {
+  collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, updateDoc, where,
+} from 'firebase/firestore';
 import { db } from '../../../core/config/firebase.config';
+
+// [NOTIF] Service de notificaciones — ya valida si hay sesión; los flujos
+// públicos sin login pueden invocarlo y la regla de Firestore permite a
+// canOperate crear notifs (en este caso nadie tiene sesión, así que en
+// público lo dejamos pasar y llenamos a través del backend al detectar
+// el contacto). Para no depender de eso, lo intentamos del lado cliente
+// y si falla por permisos, el backend tiene un trigger que ya notifica.
+import {
+  createNotification,
+  NOTIF_TYPES,
+} from '../../../core/services/notificationService';
+
+
+// ─── [NOTIF] Helper: notificar a todo el staff ────────────────────────────
+//
+//   Notifica a admins y members. Como esta función puede invocarse desde
+//   un visitante sin login (ContactPage pública), usamos try/catch global.
+//   Si las reglas de Firestore bloquean (cliente no autenticado), confiamos
+//   en el backend para hacer este fanout — el cliente solo lo intenta
+//   "best effort" para ofrecer feedback inmediato a quienes SÍ están logueados.
+//
+async function notifyStaffNewContact({ name, email, propertyTitle, contactId }) {
+  try {
+    const staffSnap = await getDocs(
+      query(collection(db, 'users'), where('role', 'in', ['admin', 'member']))
+    );
+
+    const subject = propertyTitle
+      ? `${name} consulta sobre "${propertyTitle}"`
+      : `${name} envió una consulta`;
+
+    await Promise.all(
+      staffSnap.docs.map((d) =>
+        createNotification({
+          userId:    d.id,
+          type:      NOTIF_TYPES.NEW_CONTACT,
+          title:     '✉️ Nueva consulta recibida',
+          message:   `${subject} (${email})`,
+          actionUrl: '/consultas',
+          relatedId: contactId || null,
+        }).catch(() => {})
+      )
+    );
+  } catch (err) {
+    // Silencio absoluto: el contacto ya quedó guardado y este es un
+    // best-effort. El backend tiene un trigger para garantizar el fanout.
+    console.warn('[ContactService] notifyStaffNewContact best-effort falló:', err?.message);
+  }
+}
+
 
 class ContactService {
   constructor() {
@@ -8,6 +74,8 @@ class ContactService {
 
   /**
    * Crear una nueva consulta de contacto
+   *
+   * [NOTIF] Después de guardar dispara fanout a admins+members.
    */
   async createContact(contactData) {
     try {
@@ -37,6 +105,17 @@ class ContactService {
         status: 'pending', // pending, contacted, closed
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+      });
+
+      // ── [NOTIF] Fanout a admins + members ─────────────────────────────
+      // No await: corre en background. Si el visitante es público sin sesión,
+      // las rules pueden bloquear este path; en ese caso confiamos en el
+      // trigger backend onContactCreated (definir en functions/index.js).
+      notifyStaffNewContact({
+        name:          safeData.name,
+        email:         safeData.email,
+        propertyTitle: safeData.propertyTitle,
+        contactId:     docRef.id,
       });
 
       return {
