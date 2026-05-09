@@ -28,6 +28,7 @@ import { userService } from '../../users/services/user.service';
 import ConfirmModal from '../../../shared/components/UI/ConfirmModal';
 import ClientDetail from '../components/ClientDetail';
 import { formatCOP } from '../../../shared/utils/formatCurrency';
+import { notificationService } from '../../../core/services/notificationService';
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 const TipoBadge = ({ tipo }) => {
@@ -429,9 +430,8 @@ export default function ClientManagement() {
 
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  //   - Tiene protección contra auto-eliminación
-  //   - Maneja Cloud Function + fallback de forma segura
-  //   - NO elimina directamente /users/{email} de forma insegura
+
+  // ── Manejo de eliminación con notificación ─────────────────────────────
   const handleDelete = (clientId) => {
     const client = clients.find((c) => c.id === clientId);
     const isPortalClient = client?.createdViaPortal || client?.tipoCliente === 'portal';
@@ -452,18 +452,38 @@ export default function ClientManagement() {
       onConfirm: async () => {
         setConfirmModal((p) => ({ ...p, isOpen: false }));
         try {
+          const clientName = client?.nombre || 'Cliente desconocido';
+
           // 1. Eliminar doc de /clients
           await deleteDoc(doc(db, 'clients', clientId));
 
           // 2. Si es cliente del portal, eliminar su cuenta completa
-          //    usando userService que maneja todo de forma segura
           if (isPortalClient && client?.email) {
             try {
               await userService.deleteUser(client.email, 'viewer');
             } catch (e) {
-              // No bloquear si falla — el doc de /clients ya se eliminó
               console.warn('Error eliminando usuario del portal:', e.message);
             }
+          }
+
+          // ── NUEVO: Notificar a todos los administradores ─────────────
+          try {
+            const adminsSnap = await getDocs(
+              query(collection(db, 'users'), where('role', '==', 'admin'))
+            );
+            await Promise.all(
+              adminsSnap.docs.map((d) =>
+                notificationService.createNotification({
+                  userId: d.id,
+                  type: 'client_deleted',
+                  title: '🗑️ Cliente eliminado',
+                  message: `El cliente "${clientName}" fue eliminado${isPortalClient ? ' (incluyendo su cuenta del portal)' : ''}.`,
+                  actionUrl: '/clientes',
+                })
+              )
+            );
+          } catch (e) {
+            console.warn('[ClientManagement] error notificando cliente eliminado:', e?.message);
           }
 
           toast.success(isPortalClient ? 'Cliente eliminado del portal y del sistema' : 'Cliente eliminado');
@@ -514,6 +534,27 @@ export default function ClientManagement() {
           createdAt:        serverTimestamp(),
           updatedAt:        serverTimestamp(),
         });
+
+        // ── NUEVO: Notificar a todos los administradores ──────────────────
+        try {
+          const adminsSnap = await getDocs(
+            query(collection(db, 'users'), where('role', '==', 'admin'))
+          );
+          await Promise.all(
+            adminsSnap.docs.map((d) =>
+              notificationService.createNotification({
+                userId: d.id,
+                type: 'new_client',
+                title: '👤 Nuevo cliente registrado',
+                message: `Se ha creado el cliente "${formData.nombre}".`,
+                actionUrl: '/clientes',
+              })
+            )
+          );
+        } catch (e) {
+          console.warn('[ClientManagement] error notificando nuevo cliente:', e?.message);
+        }
+
         toast.success('Cliente creado ✓');
       }
       handleCloseForm();

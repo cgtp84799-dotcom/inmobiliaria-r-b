@@ -43,6 +43,8 @@ import {
   getStageSequenceByContract,
   getDefaultBusinessStage,
   getStageLabel,
+  getStatusLabel,
+  getTypeLabel,
   getPropertyStatusFromContract,
   resolveContractBusinessStage,
 } from "../types/contract.types";
@@ -144,19 +146,14 @@ export const contractService = {
       createdAt: serverTimestamp(),
     }).catch(() => {});
 
-    // FIX: Solo generar milestones y payments si el contrato NO es borrador.
-    // Antes se generaban siempre — si el agente creaba el contrato como borrador
-    // para afinar detalles, igual se creaban 12-24 cuotas mensuales fantasma.
-    // Ahora se generan cuando se activa el contrato (en updateStatus).
+    // Solo generar milestones y payments si el contrato NO es borrador.
     const isDraft = payload.status === CONTRACT_STATUS.DRAFT;
 
     if (!isDraft) {
-      // Milestones iniciales
       this._createInitialMilestones(docRef.id, payload).catch((e) =>
         console.warn("[contractService] milestones:", e?.message)
       );
 
-      // Payments iniciales (solo arriendo con duración definida)
       if (payload.type === CONTRACT_TYPE.RENT) {
         this._createInitialRentPayments(docRef.id, payload).catch((e) =>
           console.warn("[contractService] payments:", e?.message)
@@ -189,23 +186,36 @@ export const contractService = {
         actionUrl: "/contratos",
       }).catch(() => {});
     }
-// Notificar a todos los administradores (además de los triggers de email)
-try {
-  const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-  await Promise.all(adminsSnap.docs.map((d) =>
-    notificationService.createNotification({
-      userId:    d.id,
-      type:      'new_contract',
-      title:     '📄 Nuevo contrato registrado',
-      message:   `Contrato de "${payload.propertyName}" con ${payload.clientName} (${contractTypeLabel}) ha sido creado.`,
-      relatedId: docRef.id,
-      actionUrl: '/contratos',
-    })
-  ));
-} catch (e) { console.warn('Error notificando admins nuevo contrato:', e); }
+
+    // ── NUEVO: Notificar a todos los administradores ─────────────────────
+    try {
+      const adminsSnap = await getDocs(
+        query(collection(db, "users"), where("role", "==", "admin"))
+      );
+      const createdBy = norm(createdByEmail);
+      const agent = norm(payload.agentEmail);
+
+      await Promise.all(
+        adminsSnap.docs
+          .map((d) => d.id)
+          .filter((adminEmail) => adminEmail !== createdBy && adminEmail !== agent)
+          .map((adminEmail) =>
+            notificationService.createNotification({
+              userId: adminEmail,
+              type: "new_contract",
+              title: "📄 Nuevo contrato registrado",
+              message: `Contrato de "${payload.propertyName}" con ${payload.clientName} (${getTypeLabel(payload.type)}) ha sido creado.`,
+              relatedId: docRef.id,
+              actionUrl: "/contratos",
+            })
+          )
+      );
+    } catch (e) {
+      console.warn("[contractService] error notificando admins nuevo contrato:", e?.message);
+    }
+
     return docRef.id;
   },
-  
 
   // ── 2. CREAR MILESTONES INICIALES ────────────────────────────────────────
 
@@ -257,7 +267,6 @@ try {
     const { startDate, endDate, financial = {} } = contractPayload;
     if (!startDate || !endDate) return;
 
-    // Usar parseLocalDate para evitar desfase UTC (new Date('2026-04-17') = 16 abril en Colombia)
     const start = parseLocalDate(startDate);
     const end = parseLocalDate(endDate);
     if (!start || !end || end <= start) return;
@@ -272,17 +281,14 @@ try {
     const adminFee = Number(financial.adminFee) || 0;
     const paymentDay = Number(financial.paymentDay) || start.getDate();
 
-    // Primer pago = mes SIGUIENTE al inicio del contrato.
-    // Usamos construcción directa de fecha para evitar cualquier bug de addMonths/UTC.
     const startYear = start.getFullYear();
     const startMonth = start.getMonth(); // 0-indexed
 
     const batch = writeBatch(db);
     for (let i = 0; i < totalMonths; i++) {
-      // Mes i+1 después del inicio (primer pago = mes siguiente)
       const monthOffset = startMonth + 1 + i;
       const year = startYear + Math.floor(monthOffset / 12);
-      const month = monthOffset % 12; // 0-indexed
+      const month = monthOffset % 12;
       const lastDay = new Date(year, month + 1, 0).getDate();
       const day = Math.min(paymentDay, lastDay);
       const dueDate = `${year}-${pad2(month + 1)}-${pad2(day)}`;
@@ -308,16 +314,12 @@ try {
   },
 
   // ── 4. SINCRONIZAR ESTADO DE PROPIEDAD ──────────────────────────────────
-  //
-  // ÚNICO lugar donde se traduce contrato → status de propiedad.
-  // Llamado tras crear, cambiar status o cambiar businessStage.
 
   async _syncPropertyStatus(contract) {
     if (!contract?.propertyId) return;
     const newPropertyStatus = getPropertyStatusFromContract(contract);
     if (!newPropertyStatus) return;
 
-    // Si la propiedad vuelve a "disponible", limpiar el contractId vinculado
     const isFreeing = newPropertyStatus === "disponible";
 
     try {
@@ -337,16 +339,12 @@ try {
   async updateContract(id, data) {
     const update = { ...data, updatedAt: serverTimestamp() };
 
-    // Normalizar emails
     if (data.clientEmail !== undefined) update.clientEmail = norm(data.clientEmail);
     if (data.agentEmail  !== undefined) update.agentEmail  = norm(data.agentEmail);
 
-    // Si cambia status sincronizamos statusGeneral; si no viene businessStage,
-    // recalculamos uno coherente.
     if (data.status) {
       update.statusGeneral = data.status;
       if (!data.businessStage && !data.keepBusinessStage) {
-        // Necesitamos type/operationMode actuales
         const snap = await getDoc(ref_(id));
         if (snap.exists()) {
           const cur = snap.data();
@@ -361,22 +359,14 @@ try {
 
     await updateDoc(ref_(id), update);
 
-    // Re-sync propiedad
     const fresh = await this.getContractById(id);
     if (fresh) this._syncPropertyStatus(fresh).catch(() => {});
   },
 
   async updateStatus(id, newStatus, notes = "", actorEmail = "") {
-    // Leer contrato actual para calcular businessStage coherente
     const cur = await this.getContractById(id);
     if (!cur) throw new Error("Contrato no encontrado");
-    // podía mover un contrato de "cancelado" a "vigente" — eso rompe la
-    // trazabilidad legal. Las transiciones siguen una máquina de estados:
-    //   draft   → active | cancelled
-    //   active  → paused | completed | cancelled | expired
-    //   paused  → active | cancelled
-    //   expired → completed | cancelled
-    //   completed, cancelled → (terminal — solo admin con history especial)
+
     const ALLOWED_TRANSITIONS = {
       [CONTRACT_STATUS.DRAFT]:     [CONTRACT_STATUS.ACTIVE, CONTRACT_STATUS.CANCELLED],
       [CONTRACT_STATUS.ACTIVE]:    [CONTRACT_STATUS.PAUSED, CONTRACT_STATUS.COMPLETED, CONTRACT_STATUS.CANCELLED, CONTRACT_STATUS.EXPIRED],
@@ -420,14 +410,10 @@ try {
       createdAt: serverTimestamp(),
     }).catch(() => {});
 
-    // FIX: Si pasa de borrador a vigente, generar milestones y payments
-    // que no se crearon antes (esto permite crear contratos en borrador
-    // sin ensuciar con pagos fantasma, y generarlos cuando realmente se activa).
     const wasDraft = (cur.statusGeneral || cur.status) === CONTRACT_STATUS.DRAFT;
     const isNowActive = newStatus === CONTRACT_STATUS.ACTIVE;
 
     if (wasDraft && isNowActive) {
-      // Verificar si ya tiene milestones (por si se activó y desactivó)
       const existingMilestones = await getDocs(milestonesCol(id));
       if (existingMilestones.empty) {
         this._createInitialMilestones(id, { ...cur, businessStage: newBusinessStage })
@@ -443,16 +429,15 @@ try {
       }
     }
 
-    // Sincronizar propiedad
     this._syncPropertyStatus({ ...cur, status: newStatus, statusGeneral: newStatus, businessStage: newBusinessStage })
       .catch(() => {});
 
-    // Notificar al cliente y agente del cambio de estado
-    const statusLabel = {
+    // Notificaciones existentes: cliente y agente
+    const statusLabelLocal = {
       vigente: 'Vigente', borrador: 'Borrador', pausado: 'Pausado',
       vencido: 'Vencido', finalizado: 'Finalizado', cancelado: 'Cancelado',
     };
-    const label = statusLabel[newStatus] || newStatus;
+    const label = statusLabelLocal[newStatus] || newStatus;
 
     if (cur.clientEmail) {
       notificationService.createNotification({
@@ -472,20 +457,43 @@ try {
         actionUrl: '/contratos',
       }).catch(() => {});
     }
+
+    // ── NUEVO: Notificar a administradores sobre cambio de estado ───────
+    try {
+      const adminsSnap = await getDocs(
+        query(collection(db, "users"), where("role", "==", "admin"))
+      );
+      const actor = norm(actorEmail);
+      const client = norm(cur.clientEmail);
+      const agent = norm(cur.agentEmail);
+
+      await Promise.all(
+        adminsSnap.docs
+          .map((d) => d.id)
+          .filter((adminEmail) => adminEmail !== actor && adminEmail !== client && adminEmail !== agent)
+          .map((adminEmail) =>
+            notificationService.createNotification({
+              userId: adminEmail,
+              type: "contract_status_changed",
+              title: `📌 Contrato ${label}`,
+              message: `El contrato de "${cur.propertyName}" (${cur.clientName}) ha pasado a ${label}.`,
+              relatedId: id,
+              actionUrl: "/contratos",
+            })
+          )
+      );
+    } catch (e) {
+      console.warn("[contractService] error notificando admins cambio estado:", e?.message);
+    }
   },
 
   async updateBusinessStage(id, newStage, { notes = "", actorEmail = "" } = {}) {
     const cur = await this.getContractById(id);
     if (!cur) throw new Error("Contrato no encontrado");
 
-    // ── Auto-promover statusGeneral según la etapa ──────────────────────
-    // Cuando el agente avanza la etapa manualmente, el statusGeneral debe
-    // reflejar el nuevo estado del contrato. Esto resuelve el bug donde
-    // avanzabas a "Arriendo activo" pero el badge seguía diciendo "Borrador".
     const curStatus = cur.statusGeneral || cur.status;
     let newStatus = curStatus;
 
-    // Etapas que implican contrato ACTIVO (vigente)
     const ACTIVE_STAGES = [
       CONTRACT_BUSINESS_STAGE.RENT_SIGNED,
       CONTRACT_BUSINESS_STAGE.RENT_ACTIVE,
@@ -503,7 +511,6 @@ try {
       CONTRACT_BUSINESS_STAGE.SIGNED,
       CONTRACT_BUSINESS_STAGE.ACTIVE,
     ];
-    // Etapas que implican COMPLETADO
     const COMPLETED_STAGES = [
       CONTRACT_BUSINESS_STAGE.RENT_FINISHED,
       CONTRACT_BUSINESS_STAGE.SALE_DELIVERED,
@@ -518,7 +525,6 @@ try {
 
     const statusChanged = newStatus !== curStatus;
 
-    // Escribir businessStage + statusGeneral si cambió
     const updatePayload = {
       businessStage: newStage,
       updatedAt: serverTimestamp(),
@@ -539,7 +545,6 @@ try {
       createdAt: serverTimestamp(),
     }).catch(() => {});
 
-    // ── Si pasó de borrador a activo, generar milestones y pagos ────────
     if (statusChanged && curStatus === CONTRACT_STATUS.DRAFT && newStatus === CONTRACT_STATUS.ACTIVE) {
       const existingMilestones = await getDocs(milestonesCol(id));
       if (existingMilestones.empty) {
@@ -555,7 +560,6 @@ try {
       }
     }
 
-    // Marcar milestone correspondiente como completado si existe
     try {
       const sequence = getStageSequenceByContract({ type: cur.type, operationMode: cur.operationMode });
       const newIdx = sequence.indexOf(newStage);
@@ -597,7 +601,7 @@ try {
     this._syncPropertyStatus({ ...cur, businessStage: newStage, status: newStatus, statusGeneral: newStatus })
       .catch(() => {});
 
-    // Notificación al cliente
+    // Notificaciones existentes: cliente y agente
     if (cur.clientEmail) {
       notificationService.createNotification({
         userId: cur.clientEmail,
@@ -608,23 +612,94 @@ try {
       }).catch(() => {});
     }
 
-    // Notificar cambio de estado si aplica
     if (statusChanged && cur.agentEmail && cur.agentEmail !== norm(actorEmail)) {
-      const statusLabel = { vigente: 'Vigente', finalizado: 'Finalizado', cancelado: 'Cancelado' };
+      const statusLabelLocal = { vigente: 'Vigente', finalizado: 'Finalizado', cancelado: 'Cancelado' };
       notificationService.createNotification({
         userId: cur.agentEmail,
         type: "contract_status_changed",
-        title: `Contrato ahora: ${statusLabel[newStatus] || newStatus}`,
-        message: `El contrato de "${cur.propertyName}" cambió automáticamente a ${statusLabel[newStatus] || newStatus} al avanzar a ${getStageLabel(newStage)}.`,
+        title: `Contrato ahora: ${statusLabelLocal[newStatus] || newStatus}`,
+        message: `El contrato de "${cur.propertyName}" cambió automáticamente a ${statusLabelLocal[newStatus] || newStatus} al avanzar a ${getStageLabel(newStage)}.`,
         actionUrl: "/contratos",
       }).catch(() => {});
+    }
+
+    // ── NUEVO: Notificar a administradores sobre cambio de etapa ─────────
+    try {
+      const adminsSnap = await getDocs(
+        query(collection(db, "users"), where("role", "==", "admin"))
+      );
+      const stageLabel = getStageLabel(newStage);
+      const actor = norm(actorEmail);
+      const client = norm(cur.clientEmail);
+      const agent = norm(cur.agentEmail);
+
+      await Promise.all(
+        adminsSnap.docs
+          .map((d) => d.id)
+          .filter((adminEmail) => adminEmail !== actor && adminEmail !== client && adminEmail !== agent)
+          .map((adminEmail) =>
+            notificationService.createNotification({
+              userId: adminEmail,
+              type: "contract_stage_changed",
+              title: `🔄 Etapa de contrato: ${stageLabel}`,
+              message: `El contrato de "${cur.propertyName}" (${cur.clientName}) ha avanzado a "${stageLabel}".`,
+              relatedId: id,
+              actionUrl: "/contratos",
+            })
+          )
+      );
+    } catch (e) {
+      console.warn("[contractService] error notificando admins cambio etapa:", e?.message);
     }
   },
 
   // ── 6. DELETE / READS ───────────────────────────────────────────────────
 
   async deleteContract(id) {
-    // Liberar propiedad antes de borrar (mejor UX)
+    // ── NUEVO: Notificar antes de eliminar ──────────────────────────────
+    try {
+      const contractSnap = await getDoc(ref_(id));
+      if (contractSnap.exists()) {
+        const data = contractSnap.data();
+        const propertyName = data.propertyName || 'Propiedad sin nombre';
+        const clientName = data.clientName || 'Cliente desconocido';
+
+        // Agente
+        if (data.agentEmail) {
+          await notificationService.createNotification({
+            userId: data.agentEmail,
+            type: 'contract_deleted',
+            title: '🗑️ Contrato eliminado',
+            message: `El contrato de "${propertyName}" con ${clientName} ha sido eliminado.`,
+            actionUrl: '/contratos',
+          }).catch(() => {});
+        }
+
+        // Administradores
+        const adminsSnap = await getDocs(
+          query(collection(db, "users"), where("role", "==", "admin"))
+        );
+        const agentEmail = norm(data.agentEmail);
+        await Promise.all(
+          adminsSnap.docs
+            .map((d) => d.id)
+            .filter((adminEmail) => adminEmail !== agentEmail)
+            .map((adminEmail) =>
+              notificationService.createNotification({
+                userId: adminEmail,
+                type: 'contract_deleted',
+                title: '🗑️ Contrato eliminado',
+                message: `El contrato de "${propertyName}" con ${clientName} fue eliminado.`,
+                actionUrl: '/contratos',
+              })
+            )
+        );
+      }
+    } catch (e) {
+      console.warn("[contractService] error notificando eliminación contrato:", e?.message);
+    }
+
+    // Liberar propiedad antes de borrar
     try {
       const cur = await this.getContractById(id);
       if (cur?.propertyId) {
@@ -635,19 +710,12 @@ try {
         }).catch(() => {});
       }
     } catch { /* no romper el delete */ }
-    // subcolecciones (milestones, payments, documents, history, alerts_sent)
-    // quedaban huérfanas en Firestore. Aquí limpiamos las subcolecciones
-    // metadata-only (los archivos en Storage ya tienen su propio cleanup
-    // a través de contractDocumentService.remove cuando borras un documento
-    // individual; un delete de contrato no las borra del bucket — eso
-    // requiere un onDocumentDeleted trigger backend para Storage que está
-    // fuera del alcance de este servicio).
+
     const subcols = ["milestones", "payments", "documents", "history", "alerts_sent"];
     for (const sub of subcols) {
       try {
         const subSnap = await getDocs(collection(db, COL, id, sub));
         if (subSnap.empty) continue;
-        // Batched delete (máximo 500 ops por batch)
         const batches = [];
         let batch = writeBatch(db);
         let count = 0;
@@ -688,9 +756,6 @@ try {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  // Devuelve el contrato activo (vigente) de una propiedad, o null.
-  // Un contrato es "activo" si su statusGeneral es 'vigente' o 'borrador'
-  // (borrador también bloquea porque indica que se está gestionando la propiedad).
   async getActiveContractByProperty(propertyId) {
     const snap = await getDocs(
       query(col(), where("propertyId", "==", propertyId))
@@ -729,7 +794,6 @@ try {
     );
   },
 
-  // Alias para mantener compatibilidad con código antiguo
   subscribeByClient(clientEmail, callback) {
     return this.subscribeByClientEmail(clientEmail, callback);
   },
@@ -740,7 +804,6 @@ try {
       query(col(), where("clientEmail", "==", email)),
       (snap) => {
         const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        // ordenar en cliente para evitar exigir índice
         docs.sort((a, b) => {
           const ta = a.createdAt?.toDate?.()?.getTime?.() ?? a.createdAt?.seconds ?? 0;
           const tb = b.createdAt?.toDate?.()?.getTime?.() ?? b.createdAt?.seconds ?? 0;

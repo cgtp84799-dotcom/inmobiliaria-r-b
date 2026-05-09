@@ -1,4 +1,19 @@
 // src/shared/components/Layout/Sidebar.jsx
+//
+// ─── CORRECCIONES APLICADAS ────────────────────────────────────────────────
+//  [FIX] Cada item del menú ahora tiene una `moduleKey` que se cruza con
+//        useModuleAlerts() para pintar un badge rojo PULSANTE con el número
+//        de notificaciones no leídas del módulo.
+//
+//        El badge:
+//          - Aparece arriba a la derecha del ícono (versión colapsada) o al
+//            final del label (versión expandida)
+//          - Pulsa con dos rings (animación CSS pura, sin framer-motion en el
+//            anillo para no saturar el GPU)
+//          - Muestra el número exacto si es ≤ 9, "9+" si es mayor
+//          - Cuando count = 0 no se renderiza (sin reservar espacio)
+// ──────────────────────────────────────────────────────────────────────────
+
 import { useCallback } from "react";
 import { Link, useLocation }     from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,6 +27,8 @@ import { useAuth }       from "../../../core/contexts/AuthContext";
 import { PRIVATE_ROUTES } from "../../../core/config/routes.config";
 import { hasPermission, USER_ROLES } from "../../../modules/users/types/user.types";
 import { useBreakpoint } from "../../hooks/useMediaQuery";
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { useModuleAlerts } from '../../../modules/notifications/hooks/useModuleAlerts';
 
 /* ─── Variables CSS del sidebar (siempre oscuro) ───────────── */
 const SB = {
@@ -24,8 +41,6 @@ const SB = {
 };
 
 /* ─── Metadatos de rol — sin clases dinámicas no compiladas ─── */
-// ⚠️  Tailwind no compila clases construidas con interpolación
-//     (ej: `text-${color}-400`). Se usan valores estáticos completos.
 const ROLE_META = {
   [USER_ROLES.ADMIN]: {
     label: "Administrador",
@@ -58,6 +73,57 @@ const ROLE_META = {
 };
 const FALLBACK_ROLE = ROLE_META[USER_ROLES.VIEWER];
 
+
+/* ═══════════════════════════════════════════════════════════════
+   ALERT BADGE — número rojo pulsante con anillos
+═══════════════════════════════════════════════════════════════ */
+//
+// Dos versiones porque la posición y tamaño cambian según el sidebar
+// esté colapsado (sobre el ícono) o expandido (al final del label).
+//
+function AlertBadge({ count, compact = false }) {
+  if (!count || count <= 0) return null;
+  const display = count > 9 ? "9+" : String(count);
+
+  if (compact) {
+    // Versión sobre el ícono (sidebar colapsado / móvil con showLabel:false)
+    return (
+      <span
+        aria-label={`${count} pendiente${count !== 1 ? 's' : ''}`}
+        className="absolute -top-0.5 -right-0.5 z-10 flex items-center justify-center
+                   min-w-[18px] h-[18px] px-1 rounded-full
+                   text-[10px] font-bold leading-none text-white
+                   bg-red-500 shadow-[0_0_0_2px_var(--color-sidebar-bg)]"
+      >
+        {/* Anillo pulsante exterior — pure CSS para no cargar GPU */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full bg-red-500/60 animate-ping"
+        />
+        <span className="relative">{display}</span>
+      </span>
+    );
+  }
+
+  // Versión inline (sidebar expandido) — al final del item
+  return (
+    <span
+      aria-label={`${count} pendiente${count !== 1 ? 's' : ''}`}
+      className="relative ml-auto flex items-center justify-center
+                 min-w-[20px] h-[20px] px-1.5 rounded-full
+                 text-[10px] font-bold leading-none text-white
+                 bg-red-500"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full bg-red-500/50 animate-ping"
+      />
+      <span className="relative">{display}</span>
+    </span>
+  );
+}
+
+
 /* ═══════════════════════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════════════════════ */
@@ -72,48 +138,55 @@ export default function Sidebar({
   const location  = useLocation();
   const { signOut, currentUser, userData } = useAuth();
 
-  // userData tiene el rol real; currentUser.role puede no estar hidratado aún
   const role = userData?.role ?? USER_ROLES.VIEWER;
   const roleMeta     = ROLE_META[role] ?? FALLBACK_ROLE;
   const RoleIcon     = roleMeta.icon;
   const isDesktop    = useBreakpoint('lg');
 
-  /* ── Menú según permisos — organizado por secciones ──── */
+  // ─── Hook de instalación PWA ──────────────────────────────────────────
+  const { canInstall, promptInstall } = usePwaInstall();
+
+  // ─── [FIX] Alertas por módulo (badges rojos pulsantes) ───────────────
+  const { counts: alertCounts } = useModuleAlerts();
+
+  /* ── Menú según permisos ────────────────────────────────────────── */
+  // moduleKey es la pieza nueva: identifica el módulo para cruzar con
+  // useModuleAlerts. Cada key debe coincidir con las del NOTIF_MODULE_MAP
+  // del notificationService (properties, visits, contracts, clients,
+  // queries, documents, users, requests, profile, dashboard, calendar).
   const menuSections = [
     {
-      label: null, // sin título = sección principal
+      label: null,
       items: [
-        { icon: FaChartLine,     label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true },
+        { icon: FaChartLine,     label: "Dashboard",   path: PRIVATE_ROUTES.DASHBOARD,  visible: true,                                                  moduleKey: "dashboard" },
       ],
     },
     {
       label: "Gestión",
       items: [
-        { icon: FaBuilding,      label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read") },
-        { icon: FaFileContract,  label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts",  "read") },
-        { icon: FaUsers,         label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients",    "read") },
+        { icon: FaBuilding,      label: "Propiedades", path: PRIVATE_ROUTES.PROPERTIES, visible: hasPermission(role, "properties", "read"),             moduleKey: "properties" },
+        { icon: FaFileContract,  label: "Contratos",   path: PRIVATE_ROUTES.CONTRACTS,  visible: hasPermission(role, "contracts",  "read"),             moduleKey: "contracts" },
+        { icon: FaUsers,         label: "Clientes",    path: PRIVATE_ROUTES.CLIENTS,    visible: hasPermission(role, "clients",    "read"),             moduleKey: "clients" },
       ],
     },
     {
       label: "Agenda",
       items: [
-        { icon: FaCalendarCheck, label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits",     "read") },
-        { icon: FaCalendar,      label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true },
+        { icon: FaCalendarCheck, label: "Visitas",     path: PRIVATE_ROUTES.VISITS,     visible: hasPermission(role, "visits",     "read"),             moduleKey: "visits" },
+        { icon: FaCalendar,      label: "Calendario",  path: PRIVATE_ROUTES.CALENDAR,   visible: true,                                                  moduleKey: "calendar" },
       ],
     },
     {
       label: "Sistema",
       items: [
-        { icon: FaEnvelope,      label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true },
-        { icon: FaFolder,        label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents",  "read") },
-        { icon: FaUserCog,       label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users",      "read") },
-        { icon: FaUserCog,       label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users",      "create") },
-        { icon: FaUser,          label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true },
+        { icon: FaEnvelope,      label: "Consultas",   path: PRIVATE_ROUTES.QUERIES,    visible: true,                                                  moduleKey: "queries" },
+        { icon: FaFolder,        label: "Documentos",  path: PRIVATE_ROUTES.DOCUMENTS,  visible: hasPermission(role, "documents",  "read"),             moduleKey: "documents" },
+        { icon: FaUserCog,       label: "Usuarios",    path: PRIVATE_ROUTES.USERS,      visible: hasPermission(role, "users",      "read"),             moduleKey: "users" },
+        { icon: FaUserCog,       label: "Solicitudes", path: PRIVATE_ROUTES.REQUESTS,   visible: hasPermission(role, "users",      "create"),           moduleKey: "requests" },
+        { icon: FaUser,          label: "Mi Perfil",   path: PRIVATE_ROUTES.PROFILE,    visible: true,                                                  moduleKey: "profile" },
       ],
     },
   ];
-
-  // (menuSections se itera directamente en renderNavItems; no se necesita flatten.)
 
   const handleNavigation = useCallback(() => {
     if (!isDesktop) onClose();
@@ -127,13 +200,9 @@ export default function Sidebar({
   }, [signOut, isDesktop, onClose, onRequestCloseOverlay]);
 
   /* ─────────────────────────────────────────────────────────────
-     SUB-RENDERS — son funciones que retornan JSX, no componentes.
-     Se llaman como { renderHeader(...) }, no como <Header />.
-     Esto evita el warning react-hooks/static-components que se
-     dispara cuando un componente se define dentro de otro.
+     SUB-RENDERS
   ───────────────────────────────────────────────────────────── */
 
-  /* Badge de rol */
   const renderRoleBadge = () => (
     <span
       className={[
@@ -149,7 +218,6 @@ export default function Sidebar({
     </span>
   );
 
-  /* Header del sidebar */
   const renderSidebarHeader = ({ showClose = false } = {}) => (
     <div
       className="px-4 sm:px-6 h-20 flex items-center justify-between shrink-0 border-b"
@@ -185,14 +253,12 @@ export default function Sidebar({
     </div>
   );
 
-  /* Tarjeta del usuario */
   const renderUserCard = ({ mini = false } = {}) => (
     <div
       className="p-4 shrink-0 border-b"
       style={{ background: "rgba(255,255,255,0.03)", borderColor: SB.border }}
     >
       <div className={`flex ${mini ? "justify-center" : "items-center gap-3"}`}>
-        {/* Avatar */}
         <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden
                         bg-gradient-to-br from-yellow-500/30 to-yellow-700/20
                         border-2 border-yellow-500/30 shadow-md
@@ -209,7 +275,6 @@ export default function Sidebar({
           }
         </div>
 
-        {/* Info — solo en modo expandido */}
         {!mini && (
           <div className="overflow-hidden flex-1 min-w-0">
             <p
@@ -231,7 +296,6 @@ export default function Sidebar({
     </div>
   );
 
-  /* Ítems de navegación con secciones */
   const renderNavItems = ({ showLabel = true } = {}) => (
     <nav
       className="flex-1 min-h-0 overflow-y-auto px-2 py-3"
@@ -245,7 +309,6 @@ export default function Sidebar({
           <div key={sIdx} className={sIdx > 0 ? "mt-3 pt-3 border-t" : ""}
             style={sIdx > 0 ? { borderColor: SB.border } : {}}>
 
-            {/* Título de sección */}
             {section.label && showLabel && (
               <p className="text-[10px] font-bold uppercase tracking-widest px-4 mb-2"
                 style={{ color: SB.muted }}>
@@ -259,12 +322,17 @@ export default function Sidebar({
                   (item.path !== PRIVATE_ROUTES.DASHBOARD && location.pathname.startsWith(item.path));
                 const Icon = item.icon;
 
+                // [FIX] Conteo de alertas para este módulo
+                const alertCount = item.moduleKey ? (alertCounts[item.moduleKey] || 0) : 0;
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
                     onClick={handleNavigation}
-                    title={!showLabel ? item.label : undefined}
+                    title={!showLabel
+                      ? (alertCount > 0 ? `${item.label} (${alertCount} pendiente${alertCount !== 1 ? 's' : ''})` : item.label)
+                      : undefined}
                     aria-current={isActive ? "page" : undefined}
                     className={[
                       "flex items-center py-2.5 rounded-xl",
@@ -291,13 +359,23 @@ export default function Sidebar({
                         transition={{ type: "spring", stiffness: 400, damping: 30 }}
                       />
                     )}
-                    <Icon
-                      className="text-base flex-shrink-0"
-                      style={{ color: isActive ? "#fbbf24" : SB.muted }}
-                      aria-hidden="true"
-                    />
+
+                    {/* Wrapper del ícono — relative para anclar el badge en modo compacto */}
+                    <span className="relative flex items-center justify-center flex-shrink-0">
+                      <Icon
+                        className="text-base"
+                        style={{ color: isActive ? "#fbbf24" : SB.muted }}
+                        aria-hidden="true"
+                      />
+                      {!showLabel && <AlertBadge count={alertCount} compact />}
+                    </span>
+
                     {showLabel && (
-                      <span className="text-sm truncate">{item.label}</span>
+                      <>
+                        <span className="text-sm truncate">{item.label}</span>
+                        {/* En modo expandido: badge inline al final */}
+                        <AlertBadge count={alertCount} />
+                      </>
                     )}
                     {!showLabel && (
                       <span
@@ -312,6 +390,11 @@ export default function Sidebar({
                         }}
                       >
                         {item.label}
+                        {alertCount > 0 && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                            {alertCount > 9 ? '9+' : alertCount}
+                          </span>
+                        )}
                       </span>
                     )}
                   </Link>
@@ -323,6 +406,50 @@ export default function Sidebar({
       })}
     </nav>
   );
+
+  /* ─── Botón de instalación PWA ─────────────────────────────────────────── */
+  const renderPwaInstallButton = ({ compact = false } = {}) => {
+    if (!canInstall) return null;
+
+    return (
+      <div
+        className="p-3 shrink-0"
+        style={{ background: "rgba(255,255,255,0.02)", borderColor: SB.border }}
+      >
+        <button
+          onClick={promptInstall}
+          className={[
+            "flex items-center w-full py-2.5 rounded-xl",
+            "transition-all duration-150",
+            "text-[var(--color-sidebar-muted)] hover:text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover-bg)]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/40",
+            compact ? "justify-center px-2" : "gap-3 px-4",
+          ].join(" ")}
+          aria-label="Instalar aplicación"
+          title="Instalar aplicación"
+        >
+          {/* Icono de descarga */}
+          <svg
+            className="text-base flex-shrink-0"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          {!compact && <span className="text-sm font-medium">Instalar App</span>}
+        </button>
+      </div>
+    );
+  };
 
   /* Botón cerrar sesión */
   const renderSignOutBtn = ({ compact = false } = {}) => (
@@ -347,15 +474,14 @@ export default function Sidebar({
     </div>
   );
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════════
      RENDER: MÓVIL
-  ───────────────────────────────────────────────────────────── */
+  ═══════════════════════════════════════════════════════════════ */
   if (!isDesktop) {
     return (
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               key="sb-overlay"
               initial={{ opacity: 0 }}
@@ -367,7 +493,6 @@ export default function Sidebar({
               aria-hidden="true"
             />
 
-            {/* Panel */}
             <motion.aside
               key="sb-panel"
               role="complementary"
@@ -382,6 +507,7 @@ export default function Sidebar({
               {renderSidebarHeader({ showClose: true })}
               {renderUserCard()}
               {renderNavItems()}
+              {renderPwaInstallButton()}
               {renderSignOutBtn()}
             </motion.aside>
           </>
@@ -390,9 +516,9 @@ export default function Sidebar({
     );
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════════
      RENDER: DESKTOP COLAPSADO (solo íconos)
-  ───────────────────────────────────────────────────────────── */
+  ═══════════════════════════════════════════════════════════════ */
   if (collapsed && !isHoverExpanded) {
     return (
       <aside
@@ -400,7 +526,6 @@ export default function Sidebar({
         style={{ background: SB.bg, borderColor: SB.border }}
         aria-label="Menú lateral colapsado"
       >
-        {/* Botón expandir */}
         <div
           className="h-20 flex items-center justify-center shrink-0 border-b"
           style={{ borderColor: SB.border }}
@@ -416,14 +541,15 @@ export default function Sidebar({
         </div>
         {renderUserCard({ mini: true })}
         {renderNavItems({ showLabel: false })}
+        {renderPwaInstallButton({ compact: true })}
         {renderSignOutBtn({ compact: true })}
       </aside>
     );
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════════
      RENDER: DESKTOP EXPANDIDO
-  ───────────────────────────────────────────────────────────── */
+  ═══════════════════════════════════════════════════════════════ */
   return (
     <aside
       className="hidden lg:flex flex-col h-full w-64 shrink-0 border-r overflow-hidden"
@@ -433,6 +559,7 @@ export default function Sidebar({
       {renderSidebarHeader({ showClose: true })}
       {renderUserCard()}
       {renderNavItems()}
+      {renderPwaInstallButton()}
       {renderSignOutBtn()}
     </aside>
   );

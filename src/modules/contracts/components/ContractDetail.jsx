@@ -29,6 +29,7 @@ import {
   paymentService, contractDocumentService, milestoneService,
 } from '../services/contract.subcollections.service';
 import { useContractSubcollections } from '../hooks/useContractSubcollections';
+import { notificationService } from '../../../core/services/notificationService';
 
 import ContractStatusBadge from './ContractStatusBadge';
 import ContractTypeBadge from './ContractTypeBadge';
@@ -225,13 +226,7 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full">
 
-      {/* ─── HEADER STICKY ──────────────────────────────────────────
-          Layout en 3 zonas verticales:
-            1. Header (badges + meta) — sticky top-0
-            2. Alertas (vencimiento) — inline
-            3. Tabs — sticky justo debajo del header
-          Esto resuelve el bug donde los tabs se perdían al hacer scroll.
-      */}
+      {/* ─── HEADER STICKY ────────────────────────────────────────── */}
       <div
         ref={headerRef}
         className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-3 border-b"
@@ -332,12 +327,7 @@ export default function ContractDetail({ contract, onClose, onUpdated }) {
         </div>
       )}
 
-      {/* ─── TABS STICKY ────────────────────────────────────────────
-          • Sticky justo debajo del header (top: ~96px del header sticky).
-          • Indicador animado con layoutId para transición suave entre tabs.
-          • Scroll horizontal en móvil sin scrollbar visible.
-          • Active tab usa color-inner-card para diferenciarse del fondo.
-      */}
+      {/* ─── TABS STICKY ──────────────────────────────────────────── */}
       <div
         className="sticky z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-3 border-b"
         style={{
@@ -764,9 +754,41 @@ function StagesPane({ contract, milestones, currentStage, currentUser, onUpdated
           <div className="space-y-2">
             {milestones.map((m) => (
               <div key={m.id} className="flex items-center gap-3 p-2.5 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <button onClick={() => milestoneService.markDone(contract.id, m.id, currentUser?.email)
-                  .then(() => toast.success('Hito completado'))
-                  .catch(() => toast.error('Error'))}
+                <button
+                  onClick={async () => {
+                    try {
+                      await milestoneService.markDone(contract.id, m.id, currentUser?.email);
+                      toast.success('Hito completado');
+                      // ── NUEVO: Notificar al cliente y al agente ──
+                      try {
+                        const milestoneLabel = m.label || getStageLabel(m.key);
+                        if (contract.clientEmail) {
+                          await notificationService.createNotification({
+                            userId: contract.clientEmail,
+                            type: 'milestone_completed',
+                            title: '✅ Hito completado',
+                            message: `El hito "${milestoneLabel}" del contrato de "${contract.propertyName}" ha sido completado.`,
+                            relatedId: contract.id,
+                            actionUrl: '/portal',
+                          });
+                        }
+                        if (contract.agentEmail && contract.agentEmail !== contract.clientEmail) {
+                          await notificationService.createNotification({
+                            userId: contract.agentEmail,
+                            type: 'milestone_completed',
+                            title: '✅ Hito completado',
+                            message: `El hito "${milestoneLabel}" del contrato de "${contract.propertyName}" fue completado.`,
+                            relatedId: contract.id,
+                            actionUrl: '/contratos',
+                          });
+                        }
+                      } catch (notifErr) {
+                        console.warn('Error notificando hito completado:', notifErr);
+                      }
+                    } catch {
+                      toast.error('Error al completar el hito');
+                    }
+                  }}
                   disabled={m.status === MILESTONE_STATUS.DONE}
                   className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0
                     ${m.status === MILESTONE_STATUS.DONE
