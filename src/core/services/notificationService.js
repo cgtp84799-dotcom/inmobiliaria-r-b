@@ -411,7 +411,15 @@ const saveTokenToDatabase = async (userEmail, token) => {
     const userRef  = doc(db, 'users', userEmail);
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) return;
+
+    const data = userSnap.data();
+    const existing = Array.isArray(data.fcmTokens) && data.fcmTokens.length > 0
+      ? data.fcmTokens
+      : data.fcmToken ? [data.fcmToken] : [];
+    const updated = Array.from(new Set([...existing, token])).slice(-5);
+
     await updateDoc(userRef, {
+      fcmTokens:            updated,
       fcmToken:             token,
       lastTokenUpdate:      serverTimestamp(),
       notificationsEnabled: true,
@@ -665,7 +673,32 @@ export const disableNotifications = async (userEmail) => {
     const userRef  = doc(db, 'users', userEmail);
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) return;
-    await updateDoc(userRef, { notificationsEnabled: false, fcmToken: null });
+
+    const data = userSnap.data();
+    let currentToken = null;
+
+    try {
+      const messaging = await messagingReady;
+      if (messaging) {
+        const swReg = await getOrRegisterSW();
+        const tokenOptions = { vapidKey: VAPID_KEY };
+        if (swReg) tokenOptions.serviceWorkerRegistration = swReg;
+        currentToken = await getToken(messaging, tokenOptions).catch(() => null);
+      }
+    } catch (_) {
+      currentToken = null;
+    }
+
+    const existingTokens = Array.isArray(data.fcmTokens) ? data.fcmTokens : [];
+    const updatedTokens = currentToken
+      ? existingTokens.filter((t) => t !== currentToken)
+      : [];
+
+    await updateDoc(userRef, {
+      fcmTokens:            updatedTokens,
+      fcmToken:             updatedTokens[updatedTokens.length - 1] ?? null,
+      notificationsEnabled: updatedTokens.length > 0,
+    });
   } catch (error) {
     console.error('[notificationService] disableNotifications:', error);
   }
