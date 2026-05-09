@@ -254,7 +254,7 @@
     console.log(`[${tag}] Email enviado → ${to} — ${subject}`);
   }
   // ─── Helper de push notifications ────────────────────────────────────────────
-  // Envía una notificación push al dispositivo del usuario (si tiene token FCM).
+  // Envía una notificación push a TODOS los dispositivos del usuario.
   // Se llama automáticamente desde el trigger onNotificationCreated.
   async function sendPushToUser(userEmail, notification) {
     if (!userEmail) return;
@@ -268,10 +268,13 @@
 
       if (!userDoc.exists) return;
 
-      const fcmToken = userDoc.data().fcmToken;
-      if (!fcmToken) return;
+      const data = userDoc.data();
+      const tokens = Array.isArray(data.fcmTokens) && data.fcmTokens.length > 0
+        ? data.fcmTokens
+        : data.fcmToken ? [data.fcmToken] : [];
 
-      // URL final a abrir
+      if (tokens.length === 0) return;
+
       const finalUrl = notification.actionUrl
         ? (
             notification.actionUrl.startsWith("http")
@@ -280,9 +283,7 @@
           )
         : `${SITE_URL}/`;
 
-      await admin.messaging().send({
-        token: fcmToken,
-
+      const messagePayload = {
         notification: {
           title: notification.title || "Nueva notificación",
           body: notification.message || "",
@@ -304,7 +305,6 @@
               soundUrl: `${SITE_URL}/notification-sound.mp3`,
             },
           },
-
           fcmOptions: {
             link: finalUrl,
           },
@@ -314,7 +314,6 @@
           priority: "high",
           notification: {
             sound: "default",
-            clickAction: "FLUTTER_NOTIFICATION_CLICK",
             channelId: "ryb_default",
           },
         },
@@ -327,27 +326,47 @@
             },
           },
         },
+      };
+
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens,
+        ...messagePayload,
       });
 
-      console.log(`[PUSH] Enviado a ${userEmail}: ${notification.title}`);
+      console.log(
+        `[PUSH] Enviado a ${userEmail} (${tokens.length} device${tokens.length > 1 ? "s" : ""}): ${notification.title}` +
+        ` | ok=${response.successCount} fail=${response.failureCount}`
+      );
 
-    } catch (error) {
+      const invalidTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          const code = resp.error?.code;
+          if (
+            code === "messaging/invalid-registration-token" ||
+            code === "messaging/registration-token-not-registered"
+          ) {
+            invalidTokens.push(tokens[idx]);
+          }
+        }
+      });
 
-      // Limpiar token inválido
-      if (
-        error.code === "messaging/invalid-registration-token" ||
-        error.code === "messaging/registration-token-not-registered"
-      ) {
+      if (invalidTokens.length > 0) {
+        const cleanedTokens = tokens.filter((t) => !invalidTokens.includes(t));
         await admin
           .firestore()
           .collection("users")
           .doc(userEmail)
           .update({
-            fcmToken: admin.firestore.FieldValue.delete(),
+            fcmTokens: cleanedTokens,
+            fcmToken: cleanedTokens.length > 0
+              ? cleanedTokens[cleanedTokens.length - 1]
+              : admin.firestore.FieldValue.delete(),
           })
           .catch(() => {});
       }
 
+    } catch (error) {
       console.error(
         `[PUSH] Error enviando a ${userEmail}:`,
         error.message
